@@ -10,7 +10,6 @@ from numpy import pad
 #from ..types.time import Time
 #from ..types.buffer import SeriesBuffer
 #from ..types.offset import OFFSET_RATE
-#from ligo import segments
 from .time import Time
 from .buffer import *
 import numpy as np
@@ -149,15 +148,15 @@ class Audioadapter:
         Return the full segment of all the available samples in the adapter
         """
         if self.offset is None:
-            return segments.segment(0, 0)
+            return (0, 0)
         else:
-            return segments.segment(self.offset, self.end_offset)
+            return (self.offset, self.end_offset)
 
     def get_available_segment(self):
         """
         Return the full segment of all the available samples in the adapter
         """
-        return segments.segment(self.starttime, self.endtime)
+        return (self.starttime, self.endtime)
 
     def samples_remaining(self, buf, start_sample=None):
         """
@@ -367,16 +366,17 @@ class Audioadapter:
         self.cat_data = None
         self.cat_gaps = None
 
-    def flush_samples_by_end_offset_segment(self, offset_segment):
+    def flush_samples_by_end_offset_segment(self, end_offset_segment):
         """
         Flush nsamples from the head of the deque up to the end of the offset segment
         """
-        assert offset_segment in self.get_available_offset_segment(), (
+        avail = self.get_available_offset_segment()
+        assert avail[0] <= end_offset_segment <= avail[1], (
             f"offset segment outside of available segment"
-            f"{offset_segment} {self.get_available_offset_segment()}"
+            f"{end_offset_segment} {avail}"
         )
 
-        nsamples = (offset_segment[1] - self.offset) / (OFFSET_RATE / self.sample_rate)
+        nsamples = (end_offset_segment - self.offset) / (OFFSET_RATE / self.sample_rate)
         assert nsamples == int(nsamples), "number of samples is not an integer"
         nsamples = int(nsamples)
 
