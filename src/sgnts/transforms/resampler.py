@@ -92,17 +92,54 @@ class Resample(TransformElement):
 
         return vecs.reshape(1,-1)
 
-    def resample(self, data0, output_length, channels):
+    def upkernel(self, factor: float):
+        """
+        Compute the kernel for upsampling
+        """
+        factor = int(factor)
+
+        kernel_length = int(2 * self.half_length * factor + 1)
+        sub_kernel_length = int(2 * self.half_length + 1)
+
+        # the domain should be the kernel_length divided by two
+        c = kernel_length // 2
+
+        out = self.zeros(shape=(kernel_length,))
+        for i in range(kernel_length):
+            x = int(i - c)
+            if x == 0:
+                out[i] = 1
+            else:
+                x1 = self.PI * x / factor
+                x2 = self.PI * x / c
+                out[i] = self.sin(x1) / (x1) * self.sin(x2) / (x2)
+
+        vecs = self.zeros(shape=(int(factor), sub_kernel_length))
+        for j in range(factor):
+            for i in range(sub_kernel_length):
+                index = int(i * factor + j)
+                if index < kernel_length:
+                    vecs[j][sub_kernel_length - i - 1] = out[index]
+
+        return vecs.reshape(int(factor),1,sub_kernel_length)
+
+
+    def resample(self, data0, output_shape):
         data = data0.reshape(-1, data0.shape[-1])
 
         if self.factor > 1:
             # upsample
-            pass
+            os = []
+            for i in range(int(self.factor)):
+                os.append(correlate(data, self.thiskernel[i], mode='valid'))
+            out = np.vstack(os)
+            out = np.moveaxis(out, -1, -2)
         else:
+            # downsample
             # FIXME: implement a strided correlation, rather than doing unnecessary calculations
             out = correlate(data, self.thiskernel, mode='valid')[...,::int(1/self.factor)]
 
-        out = out.reshape(channels+(output_length,))
+        out = out.reshape(output_shape)
 
         return out
 
@@ -174,7 +211,7 @@ class Resample(TransformElement):
             # TODO: check what happens when buffer size is a half integer number
             flush_nsamples = asize - self.half_length * 2
             self.pad_length = -min(0, flush_nsamples)
-            out = self.resample(inputs_padded, output_length, channels)
+            out = self.resample(inputs_padded, channels+(output_length,))
 
             # flush samples from audioadapter 
             # leave some leftover samples to pad infront of next buffer
