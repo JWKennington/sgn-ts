@@ -12,7 +12,7 @@ def test_resampler(capsys):
     #              \  
     #           H1  \
     #           ------------    
-    #          | Resample   |
+    #          | Resampler  |
     #           ------------   
     #                 \
     #             H1   \
@@ -31,7 +31,7 @@ def test_resampler(capsys):
                signal_type = 'sin',
              )
 
-    pipeline.Resample(
+    pipeline.Resampler(
                name = "trans1",
                source_pad_names = ("H1",),
                sink_pad_names = ("H1",),
