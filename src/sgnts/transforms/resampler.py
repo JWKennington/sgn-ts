@@ -5,7 +5,7 @@ import numpy as np
 from scipy.signal import correlate
 
 @dataclass
-class Resample(TransformElement):
+class Resampler(TransformElement):
     """
     Up/down samples time-series data
     """
@@ -152,7 +152,12 @@ class Resample(TransformElement):
         inbuf = self.inbuf[self.sink_pads[0]]
 
         EOS = any(b.EOS for b in self.inbuf.values())
-        metadata = {"cnt:%s" % b.metadata['name']:b.metadata['cnt'] for b in self.inbuf.values()}
+        metadata = inbuf.metadata
+        #if metadata is None:
+        metadata = {}
+        for b in self.inbuf.values():
+            metadata["cnt:%s" % b.metadata['name']] = b.metadata['cnt']
+            metadata["cnt"] = b.metadata['cnt']
         metadata["name"] = "%s -> '%s'" % ("+".join(b.metadata["name"] for b in self.inbuf.values()), pad.name)
 
         if inbuf.duration == 0:
@@ -222,4 +227,4 @@ class Resample(TransformElement):
             ), f"{outbuf.sample_rate}, {self.outrate}"
             return outbuf
 
-transforms_registry += ("Resample",)
+transforms_registry += ("Resampler",)
