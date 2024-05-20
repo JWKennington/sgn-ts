@@ -40,6 +40,14 @@ class DumpSeriesSink(SinkElement):
         self.at_eos = {p:False for p in self.sink_pads}
         self.f = open(self.fname, "w")
 
+    def write_to_file(self, buf):
+        t0 = buf.t0
+        duration = buf.duration
+        data = buf.data
+        ts = np.linspace(t0/Time.SECONDS,(t0+duration)/Time.SECONDS,data.shape[-1],endpoint=False)
+        out = np.vstack([ts, data]).T
+        np.savetxt(self.f, out)
+
     def get_buffer(self, pad, buf):
         """
         getting the buffer on the pad just modifies the name to show this final
@@ -52,12 +60,7 @@ class DumpSeriesSink(SinkElement):
             return
         else:
             print ("buffer flow: ", "%s -> '%s' offset %d time %d shape %s" % (self.inbuf.metadata["name"], pad.name, self.inbuf.offset, self.inbuf.t0, self.inbuf.data.shape))
-            t0 = buf.t0
-            duration = buf.duration
-            data = buf.data
-            ts = np.linspace(t0/Time.SECONDS,(t0+duration)/Time.SECONDS,data.shape[-1],endpoint=False)
-            out = np.vstack([ts, data]).T
-            np.savetxt(self.f, out)
+            self.write_to_file(buf)
 
     @property
     def EOS(self):
