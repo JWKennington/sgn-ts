@@ -4,16 +4,9 @@ The audioadapter stores buffers of data into a deque
 from collections import deque
 import numpy as np
 from numpy import pad
-#import torch
-#from torch.nn.functional import pad as tpad
 
-#from ..types.time import Time
-#from ..types.buffer import SeriesBuffer
-#from ..types.offset import OFFSET_RATE
 from .time import Time
 from .buffer import *
-import numpy as np
-
 
 class Audioadapter:
     """
@@ -55,9 +48,16 @@ class Audioadapter:
         else:
             return None
 
+    def pad_func(self, data, pad_samples):
+        npad = [(0, 0)] * data.ndim
+        npad[-1] = (pad_samples, 0)
+        return np.pad(data, npad, "constant")
 
     def cat(self, xs, axis):
         return np.concatenate(xs, axis=axis)
+
+    def zero_func(self):
+        return np.zeros(1)
 
     def concatenate_data(self):
         """
@@ -125,7 +125,7 @@ class Audioadapter:
 
         if self.zero is None:
             #self.zero = torch.zeros(1, device=data.device, dtype=data.dtype)
-            self.zero = np.zeros(1)
+            self.zero = self.zero_func()
 
         is_gap = buf.is_gap
         self.is_gaps.append(np.broadcast_to(is_gap, nsamples))
@@ -269,7 +269,7 @@ class Audioadapter:
 
         out, copied_gap, copied_nongap = self.copy_samples(nsamples, start_sample=ni)
         if pad_samples > 0:
-            out = pad(out, (pad_samples, 0), "constant")
+            out = self.pad_func(out, pad_samples)
 
         return out, copied_gap, copied_nongap
 
