@@ -15,9 +15,6 @@ class Resampler(TransformElement):
     def __post_init__(self):
         self.inbuf = {}
 
-        self.PI = np.pi
-        self.sin = np.sin
-        self.norm = np.linalg.norm
 
         factor = self.outrate / self.inrate
         self.factor = factor
@@ -41,9 +38,6 @@ class Resampler(TransformElement):
 
     def get_buffer(self, pad, buf):
         self.inbuf[pad] = buf
-
-    def zeros(self, shape):
-        return np.zeros(shape)
 
     def zeros_buffer(self, shape):
         return np.zeros(shape)
@@ -75,19 +69,9 @@ class Resampler(TransformElement):
 
         # the domain should be the kernel_length divided by two
         c = kernel_length // 2
-
-        vecs = self.zeros(shape=(kernel_length,))
-        for i in range(kernel_length):
-            x = int(i - c)
-            if x == 0:
-                vecs[i] = 1
-            else:
-                x1 = self.PI * x * factor
-                x2 = self.PI * x / c
-                vecs[i] = self.sin(x1) / (x1) * self.sin(x2) / (x2)
-
-        norm = self.norm(vecs) / factor**0.5
-
+        x = np.arange(-c,c+1)
+        vecs = np.sinc(x * factor) * np.sinc(x/c)
+        norm = np.linalg.norm(vecs) / factor**0.5
         vecs = vecs / norm
 
         return vecs.reshape(1,-1)
@@ -103,23 +87,11 @@ class Resampler(TransformElement):
 
         # the domain should be the kernel_length divided by two
         c = kernel_length // 2
-
-        out = self.zeros(shape=(kernel_length,))
-        for i in range(kernel_length):
-            x = int(i - c)
-            if x == 0:
-                out[i] = 1
-            else:
-                x1 = self.PI * x / factor
-                x2 = self.PI * x / c
-                out[i] = self.sin(x1) / (x1) * self.sin(x2) / (x2)
-
-        vecs = self.zeros(shape=(int(factor), sub_kernel_length))
-        for j in range(factor):
-            for i in range(sub_kernel_length):
-                index = int(i * factor + j)
-                if index < kernel_length:
-                    vecs[j][sub_kernel_length - i - 1] = out[index]
+        x = np.arange(-c,c+1)
+        out = np.sinc(x / factor) * np.sinc(x/c)
+        out = np.pad(out,(0,factor-1))
+        # FIXME: check if interleave same as no interleave
+        vecs = out.reshape(-1,factor).T[:,::-1]
 
         return vecs.reshape(int(factor),1,sub_kernel_length)
 
