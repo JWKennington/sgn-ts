@@ -21,14 +21,18 @@ def test_resampler(capsys):
     #             ---------
 
     
+    inrate = 32
+    outrate = 64
+    duration = 1
     
     pipeline.FakeSeriesSrc(
                name = "src1",
                source_pad_names = ("H1",),
                num_buffers = 2,
-               shape = (256,),
-               duration = 1,
+               shape = (int(inrate*duration),),
+               duration = duration,
                signal_type = 'sin',
+               fsin = 3,
              )
 
     pipeline.Resampler(
@@ -36,8 +40,8 @@ def test_resampler(capsys):
                source_pad_names = ("H1",),
                sink_pad_names = ("H1",),
                link_map = {"trans1:sink:H1":"src1:src:H1"},
-               inrate = 256,
-               outrate = 64
+               inrate = inrate,
+               outrate = outrate 
             )
 
     pipeline.DumpSeriesSink(
