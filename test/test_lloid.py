@@ -5,7 +5,7 @@ import numpy as np
 def test_resampler(capsys): 
 
     pipeline = Pipeline()
-    
+
     #
     #       ----------   H1   -------------
     #      | src1     | ---- | downsample  |
@@ -41,7 +41,7 @@ def test_resampler(capsys):
 
     
     
-    pipeline.RandomSeriesSrc(
+    pipeline.FakeSeriesSrc(
                name = "src1",
                source_pad_names = ("H1",),
                num_buffers = 2,

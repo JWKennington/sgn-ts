@@ -8,21 +8,21 @@ def test_resampler(capsys):
     #
     #       ----------   H1   -------
     #      | src1     | ---- | snk2  |
-    #       ----------        -------
+    #       ----------   SR1  -------
     #              \  
-    #           H1  \
+    #           H1  \ SR2
     #           ------------    
     #          | Resampler  |
     #           ------------   
     #                 \
-    #             H1   \
+    #             H1   \ SR2
     #             ---------
     #            | snk1    |
     #             ---------
 
     
     
-    pipeline.RandomSeriesSrc(
+    pipeline.FakeSeriesSrc(
                name = "src1",
                source_pad_names = ("H1",),
                num_buffers = 2,

@@ -17,7 +17,7 @@ def test_tsgraph(capsys):
 
     
     
-    pipeline.RandomSeriesSrc(
+    pipeline.FakeSeriesSrc(
                name = "src1",
                source_pad_names = ("H1",),
                num_buffers = 2,

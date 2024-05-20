@@ -3,20 +3,25 @@ from .. base import *
 import numpy as np
 
 @dataclass
-class RandomSeriesSrc(SourceElement):
+class FakeSeriesSrc(SourceElement):
     """
-    A time-series source that generates random data in one second buffers.
+    A time-series source that generates fake data in fixed-size buffers.
 
     Parameters:
     -----------
     num_buffers: int 
         is required and sets how many buffers will be created before setting "EOS"
     shape: tuple
-        the shape of the data array
+        the shape of the data array the buffers will carry
     duration: float
         duration of the data buffer, in seconds
-
+    signal_type: str
+        currently supported types: (1) 'white': white noise data. (2) 'sin' or 'sine':
+        sine wave data
+    fsin: float
+        frequency of the sine wave is signal_type = 'sin'
     """
+
     num_buffers: int = 0
     shape: tuple = (2048,)
     duration: float = 1
@@ -59,4 +64,4 @@ class RandomSeriesSrc(SourceElement):
         return outbuf
 
 
-sources_registry += ("RandomSeriesSrc",)
+sources_registry += ("FakeSeriesSrc",)
