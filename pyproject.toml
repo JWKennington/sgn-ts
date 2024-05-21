@@ -1,0 +1,27 @@
+[build-system]
+requires = [
+    "setuptools>=42",
+    "setuptools_scm[toml]>=3.4.3",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "sgn-ts"
+version = "0.0.1"
+authors = [
+  { name="Yun-Jing Huang", email="yzh5436@psu.edu" },
+]
+description = "Streaming Graph Navigator - Time Series. A framework to help navigate time-series buffers through a graph. The buffers must flow."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://git.ligo.org/greg/sgn-ts"
+Issues = "https://git.ligo.org/greg/sgn-ts/issues"
