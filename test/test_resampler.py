@@ -21,7 +21,7 @@ def test_resampler(capsys):
     #             ---------
 
     
-    inrate = 32
+    inrate = 256
     outrate = 64
     duration = 1
     
