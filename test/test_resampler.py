@@ -33,18 +33,14 @@ def test_resampler(capsys):
                duration = duration,
                signal_type = 'sin',
                fsin = 3,
-             )
-
-    pipeline.Resampler(
+             ).Resampler(
                name = "trans1",
                source_pad_names = ("H1",),
                sink_pad_names = ("H1",),
                link_map = {"trans1:sink:H1":"src1:src:H1"},
                inrate = inrate,
                outrate = outrate 
-            )
-
-    pipeline.DumpSeriesSink(
+             ).DumpSeriesSink(
                name = "snk1",
                sink_pad_names = ("H1",),
                link_map = {"snk1:sink:H1":"trans1:src:H1"},
