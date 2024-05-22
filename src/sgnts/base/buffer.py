@@ -40,7 +40,10 @@ class SeriesBuffer(Buffer):
 
     @property
     def size(self):
-        return self.data.shape[-1]
+        if self.data is None:
+            return None
+        else:
+            return self.data.shape[-1]
 
     @property
     def sample_rate(self):

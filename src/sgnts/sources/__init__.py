@@ -20,6 +20,8 @@ class FakeSeriesSrc(SourceElement):
         sine wave data
     fsin: float
         frequency of the sine wave is signal_type = 'sin'
+    t0: float
+        start time of first buffer, in seconds
     """
 
     num_buffers: int = 0
@@ -27,11 +29,12 @@ class FakeSeriesSrc(SourceElement):
     duration: float = 1
     signal_type: str = 'white'
     fsin: float = 5
+    t0: float = 0
 
     def __post_init__(self):
         super().__post_init__()
         self.cnt = {p:0 for p in self.source_pads}
-        self.offset = {p:0 for p in self.source_pads}
+        self.offset = {p:Offset.sec2offset(self.t0) for p in self.source_pads}
 
     def create_data(self, offset):
         if self.signal_type == 'white':
