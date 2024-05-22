@@ -27,7 +27,8 @@ def test_tsgraph(capsys):
              ).FakeSeriesSink(
                name = "snk1",
                sink_pad_names = ("H1",),
-               link_map = {"snk1:sink:H1":"src1:src:H1"}
+               link_map = {"snk1:sink:H1":"src1:src:H1"},
+               print_message = "f' shape {self.inbuf.data.shape}'"
              )
     
     

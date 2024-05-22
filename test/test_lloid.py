@@ -97,6 +97,7 @@ def test_resampler(capsys):
                 name = "snk1",
                 sink_pad_names = ("H1",),
                 link_map = {"snk1:sink:H1":"add:src:H1"},
+                print_message = "f' shape {self.inbuf.data.shape}'"
             )
 
     
