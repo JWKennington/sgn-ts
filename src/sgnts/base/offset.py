@@ -1,6 +1,5 @@
-from .time import *
+from .time import Time
 
-#
 # OFFSET_RATE: the number of offsets in one second.
 # The OFFSET_RATE serves as a global clock that is a power of 2.
 #

@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-from sgnts.apps import Pipeline
+
 import numpy as np
+
+from sgnts.apps import Pipeline
+from sgnts.sinks import FakeSeriesSink
+from sgnts.sources import FakeSeriesSrc
+from sgnts.transforms import Adder, Correlate, Matmul, Resampler
 
 
 def test_resampler(capsys):

@@ -1,8 +1,10 @@
-from . import *
-from ..base import *
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
+
 import numpy as np
+
+from ..base import SeriesBuffer, TransformElement
 
 
 @dataclass

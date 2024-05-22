@@ -1,7 +1,10 @@
-from sgn.base import *
-from .offset import *
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
+
+from sgn.base import Buffer
+
+from .offset import Offset
 
 
 @dataclass

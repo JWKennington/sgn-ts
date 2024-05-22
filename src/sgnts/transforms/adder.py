@@ -1,5 +1,8 @@
-from . import *
-from ..base import *
+from dataclasses import dataclass, field
+
+from sgn.base import TransformElement
+
+from ..base import Audioadapter, SeriesBuffer
 
 
 @dataclass

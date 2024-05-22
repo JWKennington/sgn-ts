@@ -1,6 +1,9 @@
-from sgn.sources import *
-from ..base import *
+from dataclasses import dataclass
+
 import numpy as np
+from sgn.base import SourceElement
+
+from ..base import OFFSET_RATE, Offset, SeriesBuffer
 
 
 @dataclass

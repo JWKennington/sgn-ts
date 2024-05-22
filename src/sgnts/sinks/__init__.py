@@ -1,6 +1,9 @@
-from sgn.sinks import *
-from ..base import Time
+from dataclasses import dataclass
+
 import numpy as np
+from sgn.sinks import SinkElement
+
+from ..base import Time
 
 
 @dataclass

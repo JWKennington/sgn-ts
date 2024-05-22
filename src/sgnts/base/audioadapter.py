@@ -3,11 +3,13 @@ The audioadapter stores buffers of data into a deque
 """
 
 from collections import deque
+
 import numpy as np
 from numpy import pad
 
+from .buffer import SeriesBuffer
+from .offset import OFFSET_RATE
 from .time import Time
-from .buffer import *
 
 
 class Audioadapter:

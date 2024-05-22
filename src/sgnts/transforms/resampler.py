@@ -1,8 +1,9 @@
-from . import *
-from ..base import *
-from ..base.audioadapter import Audioadapter
+from dataclasses import dataclass
+
 import numpy as np
 from scipy.signal import correlate
+
+from ..base import OFFSET_RATE, Audioadapter, SeriesBuffer, TransformElement
 
 
 @dataclass
