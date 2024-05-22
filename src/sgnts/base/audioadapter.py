@@ -1,12 +1,14 @@
 """
 The audioadapter stores buffers of data into a deque
 """
+
 from collections import deque
 import numpy as np
 from numpy import pad
 
 from .time import Time
 from .buffer import *
+
 
 class Audioadapter:
     """
@@ -29,8 +31,8 @@ class Audioadapter:
         self.cat_data = None
         self.cat_gaps = None
         self.channels = None
-        #self.device = None
-        #self.dtype = None
+        # self.device = None
+        # self.dtype = None
         self.SECONDS = Time.SECONDS
         self.zero = None
 
@@ -64,7 +66,7 @@ class Audioadapter:
         Concatenate all the data and gaps info in the buffers, and save as attribute
         """
         if self.size > 0:
-            #self.cat_data = torch.cat([b.data for b in self.buffers], dim=-1)
+            # self.cat_data = torch.cat([b.data for b in self.buffers], dim=-1)
             self.cat_data = self.cat([b.data for b in self.buffers], axis=-1)
             if self.cat_gaps is None and self.gap_size > 0 and self.nongap_size > 0:
                 # mixture of gaps and nongaps
@@ -109,18 +111,17 @@ class Audioadapter:
         nsamples = buf.size
         self.size += nsamples
         data = buf.data
-        #if self.device is None:
+        # if self.device is None:
         #    self.device = data.device
 
-        #if self.dtype is None:
+        # if self.dtype is None:
         #    self.dtype = data.dtype
-        
 
         if self.channels is None:
             self.channels = data.shape[:-1]
 
         if self.zero is None:
-            #self.zero = torch.zeros(1, device=data.device, dtype=data.dtype)
+            # self.zero = torch.zeros(1, device=data.device, dtype=data.dtype)
             self.zero = self.zero_func()
 
         is_gap = buf.is_gap
@@ -199,9 +200,9 @@ class Audioadapter:
         # copy data
         if copy_data is True:
             if self.cat_data is None:
-                #out = torch.cat([b.data for b in self.buffers], dim=-1)[
+                # out = torch.cat([b.data for b in self.buffers], dim=-1)[
                 #    ..., i0 : i0 + nsamples
-                #]
+                # ]
                 out = self.cat([b.data for b in self.buffers], axis=-1)[
                     ..., i0 : i0 + nsamples
                 ]
@@ -422,4 +423,3 @@ class Audioadapter:
         else:
             gaps = np.concatenate(self.is_gaps)
             return gaps.all().item()
-

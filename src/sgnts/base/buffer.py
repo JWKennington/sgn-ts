@@ -3,6 +3,7 @@ from .offset import *
 from collections.abc import Sequence
 from typing import Any
 
+
 @dataclass
 class SeriesBuffer(Buffer):
     """Timeseries buffer with associated metadata.
@@ -21,6 +22,7 @@ class SeriesBuffer(Buffer):
         The timeseries data.
 
     """
+
     offset: int = None
     noffset: int = None
     offset_ref_t0: int = None
@@ -48,4 +50,3 @@ class SeriesBuffer(Buffer):
     @property
     def sample_rate(self):
         return int(self.size / Offset.offset2sec(self.noffset))
-
