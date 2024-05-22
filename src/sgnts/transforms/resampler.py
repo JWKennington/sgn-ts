@@ -182,7 +182,7 @@ class Resampler(TransformElement):
         if audioadapter.is_gap() is True:
             # Produce a single gap buffer
             data = self.zeros_buffer(channels + (output_length,))
-            flush_nsample = asize - self.half_length * 2
+            flush_nsamples = asize - self.half_length * 2
             self.pad_length = -min(0, flush_nsamples)
             audioadapter.flush_samples(flush_nsamples)
 
