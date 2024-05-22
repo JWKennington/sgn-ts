@@ -7,7 +7,7 @@ from ..base import Audioadapter, SeriesBuffer
 
 @dataclass
 class Adder(TransformElement):
-    addslice: slice = slice(None)
+    addslice: slice = field(default_factory=lambda: slice(None))
     rescale: float = 1
     frombuf_pad: str = None
     tobuf_pad: str = None
