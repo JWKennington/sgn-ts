@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
-from sgnts.apps import Pipeline
+from sgn.apps import Pipeline
+
+from sgnts.sinks import FakeSeriesSink
+from sgnts.transforms import Sync
+from sgnts.sources import FakeSeriesSrc
 
 
 def test_sync(capsys):
@@ -37,59 +41,65 @@ def test_sync(capsys):
             "f' duration {self.inbuf.duration} data_is_none {self.inbuf.data is None}'"
         )
 
-    pipeline.FakeSeriesSrc(
-        name="src1",
-        source_pad_names=("H1",),
-        num_buffers=num_buffers,
-        shape=(int(inrate * duration),),
-        duration=duration,
-        t0=H1_t0,
-    ).Sync(
-        name="trans1",
-        source_pad_names=("H1", "L1", "V1"),
-        sink_pad_names=("H1", "L1", "V1"),
-        link_map={"trans1:sink:H1": "src1:src:H1"},
-        internal_link_map={
-            "trans1:src:H1": "trans1:sink:H1",
-            "trans1:src:L1": "trans1:sink:L1",
-            "trans1:src:V1": "trans1:sink:V1",
-        },
-        mode=mode,
-    ).FakeSeriesSink(
-        name="snk1",
-        sink_pad_names=("H1",),
-        link_map={"snk1:sink:H1": "trans1:src:H1"},
-        print_message=print_message,
-    )
-
-    pipeline.FakeSeriesSrc(
-        name="src2",
-        source_pad_names=("L1",),
-        link_map={"trans1:sink:L1": "src2:src:L1"},
-        num_buffers=num_buffers,
-        shape=(int(inrate * duration),),
-        duration=duration,
-        t0=L1_t0,
-    ).FakeSeriesSink(
-        name="snk2",
-        sink_pad_names=("L1",),
-        link_map={"snk2:sink:L1": "trans1:src:L1"},
-        print_message=print_message,
-    )
-
-    pipeline.FakeSeriesSrc(
-        name="src3",
-        source_pad_names=("V1",),
-        link_map={"trans1:sink:V1": "src3:src:V1"},
-        num_buffers=num_buffers,
-        shape=(int(inrate * duration),),
-        duration=duration,
-        t0=V1_t0,
-    ).FakeSeriesSink(
-        name="snk3",
-        sink_pad_names=("V1",),
-        link_map={"snk3:sink:V1": "trans1:src:V1"},
-        print_message=print_message,
+    pipeline.insert(
+        FakeSeriesSrc(
+            name="src1",
+            source_pad_names=("H1",),
+            num_buffers=num_buffers,
+            shape=(int(inrate * duration),),
+            duration=duration,
+            t0=H1_t0,
+        ),
+        Sync(
+            name="trans1",
+            source_pad_names=("H1", "L1", "V1"),
+            sink_pad_names=("H1", "L1", "V1"),
+            internal_link_map={
+                "trans1:src:H1": "trans1:sink:H1",
+                "trans1:src:L1": "trans1:sink:L1",
+                "trans1:src:V1": "trans1:sink:V1",
+            },
+            mode=mode,
+        ),
+        FakeSeriesSink(
+            name="snk1",
+            sink_pad_names=("H1",),
+            print_message=print_message,
+        ),
+        FakeSeriesSrc(
+            name="src2",
+            source_pad_names=("L1",),
+            num_buffers=num_buffers,
+            shape=(int(inrate * duration),),
+            duration=duration,
+            t0=L1_t0,
+        ),
+        FakeSeriesSink(
+            name="snk2",
+            sink_pad_names=("L1",),
+            print_message=print_message,
+        ),
+        FakeSeriesSrc(
+            name="src3",
+            source_pad_names=("V1",),
+            num_buffers=num_buffers,
+            shape=(int(inrate * duration),),
+            duration=duration,
+            t0=V1_t0,
+        ),
+        FakeSeriesSink(
+            name="snk3",
+            sink_pad_names=("V1",),
+            print_message=print_message,
+        ),
+        link_map={
+            "trans1:sink:H1": "src1:src:H1",
+            "snk1:sink:H1": "trans1:src:H1",
+            "trans1:sink:L1": "src2:src:L1",
+            "snk2:sink:L1": "trans1:src:L1",
+            "trans1:sink:V1": "src3:src:V1",
+            "snk3:sink:V1": "trans1:src:V1",
+        }
     )
 
     pipeline.run()

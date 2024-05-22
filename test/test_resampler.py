@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from sgnts.apps import Pipeline
+from sgn.apps import Pipeline
+
 from sgnts.sinks import DumpSeriesSink
 from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Resampler
@@ -29,33 +30,38 @@ def test_resampler(capsys):
     outrate = 64
     duration = 1
 
-    pipeline.FakeSeriesSrc(
-        name="src1",
-        source_pad_names=("H1",),
-        num_buffers=2,
-        shape=(int(inrate * duration),),
-        duration=duration,
-        signal_type="sin",
-        fsin=3,
-    ).Resampler(
-        name="trans1",
-        source_pad_names=("H1",),
-        sink_pad_names=("H1",),
-        link_map={"trans1:sink:H1": "src1:src:H1"},
-        inrate=inrate,
-        outrate=outrate,
-    ).DumpSeriesSink(
-        name="snk1",
-        sink_pad_names=("H1",),
-        link_map={"snk1:sink:H1": "trans1:src:H1"},
-        fname="out.txt",
-    )
-
-    pipeline.DumpSeriesSink(
-        name="snk2",
-        sink_pad_names=("H1",),
-        link_map={"snk2:sink:H1": "src1:src:H1"},
-        fname="in.txt",
+    pipeline.insert(
+        FakeSeriesSrc(
+            name="src1",
+            source_pad_names=("H1",),
+            num_buffers=2,
+            shape=(int(inrate * duration),),
+            duration=duration,
+            signal_type="sin",
+            fsin=3,
+        ),
+        Resampler(
+            name="trans1",
+            source_pad_names=("H1",),
+            sink_pad_names=("H1",),
+            inrate=inrate,
+            outrate=outrate,
+        ),
+        DumpSeriesSink(
+            name="snk1",
+            sink_pad_names=("H1",),
+            fname="out.txt",
+        ),
+        DumpSeriesSink(
+            name="snk2",
+            sink_pad_names=("H1",),
+            fname="in.txt",
+        ),
+        link_map={
+            "trans1:sink:H1": "src1:src:H1",
+            "snk1:sink:H1": "trans1:src:H1",
+            "snk2:sink:H1": "src1:src:H1",
+        },
     )
 
     pipeline.run()

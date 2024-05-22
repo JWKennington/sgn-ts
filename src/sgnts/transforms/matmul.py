@@ -49,6 +49,3 @@ class Matmul(TransformElement):
             metadata=metadata,
             EOS=EOS,
         )
-
-
-transforms_registry += ("Matmul",)

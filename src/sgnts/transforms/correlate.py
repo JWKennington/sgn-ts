@@ -83,6 +83,3 @@ class Correlate(TransformElement):
             metadata=metadata,
             EOS=EOS,
         )
-
-
-transforms_registry += ("Correlate",)

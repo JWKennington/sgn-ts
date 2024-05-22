@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from sgnts.apps import Pipeline
+from sgn.apps import Pipeline
+
 from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
 
@@ -19,15 +20,20 @@ def test_tsgraph(capsys):
     #          | snk1      |
     #           ------------
 
-    pipeline.FakeSeriesSrc(
-        name="src1",
-        source_pad_names=("H1",),
-        num_buffers=2,
-        shape=(2048,),
-        duration=1,
-        signal_type="white",
-    ).FakeSeriesSink(
-        name="snk1", sink_pad_names=("H1",), link_map={"snk1:sink:H1": "src1:src:H1"}
+    pipeline.insert(
+        FakeSeriesSrc(
+            name="src1",
+            source_pad_names=("H1",),
+            num_buffers=2,
+            shape=(2048,),
+            duration=1,
+            signal_type="white",
+        ),
+        FakeSeriesSink(
+            name="snk1",
+            sink_pad_names=("H1",),
+        ),
+        link_map={"snk1:sink:H1": "src1:src:H1"},
     )
 
     pipeline.run()

@@ -222,6 +222,3 @@ class Resampler(TransformElement):
                 outbuf.sample_rate == self.outrate
             ), f"{outbuf.sample_rate}, {self.outrate}"
             return outbuf
-
-
-transforms_registry += ("Resampler",)

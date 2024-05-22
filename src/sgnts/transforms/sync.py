@@ -4,7 +4,7 @@ import numpy as np
 
 from sgn.base import TransformElement
 
-from ..base import Audioadapter, SeriesBuffer
+from ..base import Audioadapter, Offset, SeriesBuffer
 
 
 @dataclass
@@ -159,6 +159,3 @@ class Sync(TransformElement):
         outbuf = self.outbufs[sink_pad]
         self.outbufs.pop(sink_pad)
         return outbuf
-
-
-transforms_registry += ("Sync",)

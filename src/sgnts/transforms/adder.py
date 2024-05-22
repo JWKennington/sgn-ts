@@ -125,6 +125,3 @@ class Adder(TransformElement):
             toA.flush_samples_by_end_offset_segment(overlap_segment[1])
 
             return outbuf
-
-
-transforms_registry += ("Adder",)

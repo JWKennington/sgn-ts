@@ -73,6 +73,3 @@ class FakeSeriesSrc(SourceElement):
         self.offset[pad] += noffset
 
         return outbuf
-
-
-sources_registry += ("FakeSeriesSrc",)
