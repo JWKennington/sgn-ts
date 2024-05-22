@@ -7,6 +7,8 @@ class FakeSeriesSink(SinkElement):
     """
     A fake sink element
     """
+    print_message: str = "''"
+
     def __post_init__(self):
         self.inbuf = None
         super().__post_init__()
@@ -19,7 +21,8 @@ class FakeSeriesSink(SinkElement):
         """
         self.inbuf = buf
         self.at_eos[pad] = self.inbuf.EOS
-        print ("buffer flow: ", "%s -> '%s' offset %d time %d shape %s" % (self.inbuf.metadata["name"], pad.name, self.inbuf.offset, self.inbuf.t0, self.inbuf.data.shape))
+        print ("buffer flow: ", "%s -> '%s' offset %d time %d" % (self.inbuf.metadata["name"], pad.name, self.inbuf.offset, self.inbuf.t0,),end="")
+        print (eval(self.print_message))
     @property
     def EOS(self):
         """

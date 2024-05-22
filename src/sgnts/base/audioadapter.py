@@ -117,11 +117,7 @@ class Audioadapter:
         
 
         if self.channels is None:
-            #if data.dim() == 1:
-            if len(data.shape) == 1:
-                self.channels = None
-            else:
-                self.channels = data.shape[:-1]
+            self.channels = data.shape[:-1]
 
         if self.zero is None:
             #self.zero = torch.zeros(1, device=data.device, dtype=data.dtype)
