@@ -42,9 +42,9 @@ def test_tsgraph(capsys):
         assert (
             captured.out.strip()
             == """
-buffer flow:  'src1:src:H1' -> 'snk1:sink:H1' offset 0 time 0 shape (2048,)
-buffer flow:  'src1:src:H1' -> 'snk1:sink:H1' offset 16384 time 1000000000 shape (2048,)
-buffer flow:  'src1:src:H1' -> 'snk1:sink:H1' offset 32768 time 2000000000 shape (2048,)
+buffer flow:  'src1:src:H1' -> 'snk1:sink:H1' offset 0 time 0
+buffer flow:  'src1:src:H1' -> 'snk1:sink:H1' offset 16384 time 1000000000
+buffer flow:  'src1:src:H1' -> 'snk1:sink:H1' offset 32768 time 2000000000
 """.strip()
         )
 

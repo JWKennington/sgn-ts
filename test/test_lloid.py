@@ -123,9 +123,9 @@ def test_resampler(capsys):
         assert (
             captured.out.strip()
             == """
-buffer flow:  'src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1' -> 'add:src:H1' -> 'snk1:sink:H1' offset 0 time 0 shape (1000, 1888)
-buffer flow:  'src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1' -> 'add:src:H1' -> 'snk1:sink:H1' offset 15104 time 921875000 shape (1000, 2048)
-buffer flow:  'src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1' -> 'add:src:H1' -> 'snk1:sink:H1' offset 31488 time 1921875000 shape (1000, 2048)
+buffer flow:  'src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1' -> 'add:src:H1' -> 'snk1:sink:H1' offset 0 time 0
+buffer flow:  'src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1' -> 'add:src:H1' -> 'snk1:sink:H1' offset 15104 time 921875000
+buffer flow:  'src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1' -> 'add:src:H1' -> 'snk1:sink:H1' offset 31488 time 1921875000
 """.strip()
         )
 
