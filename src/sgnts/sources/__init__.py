@@ -1,6 +1,10 @@
-from sgn.sources import *
-from .. base import *
+from dataclasses import dataclass
+
 import numpy as np
+from sgn.base import SourceElement
+
+from ..base import OFFSET_RATE, Offset, SeriesBuffer
+
 
 @dataclass
 class FakeSeriesSrc(SourceElement):
@@ -9,7 +13,7 @@ class FakeSeriesSrc(SourceElement):
 
     Parameters:
     -----------
-    num_buffers: int 
+    num_buffers: int
         is required and sets how many buffers will be created before setting "EOS"
     shape: tuple
         the shape of the data array the buffers will carry
@@ -27,24 +31,26 @@ class FakeSeriesSrc(SourceElement):
     num_buffers: int = 0
     shape: tuple = (2048,)
     duration: float = 1
-    signal_type: str = 'white'
+    signal_type: str = "white"
     fsin: float = 5
     t0: float = 0
 
     def __post_init__(self):
         super().__post_init__()
-        self.cnt = {p:0 for p in self.source_pads}
-        self.offset = {p:Offset.sec2offset(self.t0) for p in self.source_pads}
+        self.cnt = {p: 0 for p in self.source_pads}
+        self.offset = {p: Offset.sec2offset(self.t0) for p in self.source_pads}
 
     def create_data(self, offset):
-        if self.signal_type == 'white':
+        if self.signal_type == "white":
             return np.random.rand(*self.shape)
-        elif self.signal_type == 'sin' or self.signal_type == 'sine':
+        elif self.signal_type == "sin" or self.signal_type == "sine":
             t0 = Offset.offset2sec(offset)
-            return np.sin(self.fsin*np.linspace(t0,t0+self.duration,self.shape[-1],endpoint=False))
+            return np.sin(
+                self.fsin
+                * np.linspace(t0, t0 + self.duration, self.shape[-1], endpoint=False)
+            )
         else:
             raise ValueError("Unknown signal type")
-
 
     def new_buffer(self, pad):
         """
@@ -53,18 +59,17 @@ class FakeSeriesSrc(SourceElement):
         number of buffers.
         """
         self.cnt[pad] += 1
-        noffset = int(OFFSET_RATE*self.duration)
+        noffset = int(OFFSET_RATE * self.duration)
         data = self.create_data(self.offset[pad])
-        outbuf = SeriesBuffer(offset = self.offset[pad],
-                noffset = noffset,
-                offset_ref_t0 = 0,
-                data = data, 
-                metadata = {"cnt": self.cnt, "name":"'%s'" % pad.name},
-                EOS =  self.cnt[pad] > self.num_buffers )
+        outbuf = SeriesBuffer(
+            offset=self.offset[pad],
+            noffset=noffset,
+            offset_ref_t0=0,
+            data=data,
+            metadata={"cnt": self.cnt, "name": "'%s'" % pad.name},
+            EOS=self.cnt[pad] > self.num_buffers,
+        )
 
         self.offset[pad] += noffset
 
         return outbuf
-
-
-sources_registry += ("FakeSeriesSrc",)

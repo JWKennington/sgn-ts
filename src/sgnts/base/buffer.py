@@ -1,7 +1,11 @@
-from sgn.base import *
-from .offset import *
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
+
+from sgn.base import Buffer
+
+from .offset import Offset
+
 
 @dataclass
 class SeriesBuffer(Buffer):
@@ -21,6 +25,7 @@ class SeriesBuffer(Buffer):
         The timeseries data.
 
     """
+
     offset: int = None
     noffset: int = None
     offset_ref_t0: int = None
@@ -48,4 +53,3 @@ class SeriesBuffer(Buffer):
     @property
     def sample_rate(self):
         return int(self.size / Offset.offset2sec(self.noffset))
-
