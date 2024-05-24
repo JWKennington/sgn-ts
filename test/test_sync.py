@@ -35,10 +35,10 @@ def test_sync(capsys):
     V1_t0 = 5
     print(f"{mode=} {H1_t0=}, {L1_t0=}, {V1_t0=}")
     if mode == "pad":
-        print_message = "f' duration {self.inbuf.duration} data_is_all_zeros {not np.any(self.inbuf.data)}'"
+        print_message = "f' duration {bufs[-1].duration} data_is_all_zeros {not np.any(bufs[-1].data)}'"
     elif mode == "drop":
         print_message = (
-            "f' duration {self.inbuf.duration} data_is_none {self.inbuf.data is None}'"
+            "f' duration {bufs[-1].duration} data_is_none {bufs[-1].data is None}'"
         )
 
     pipeline.insert(
