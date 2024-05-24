@@ -26,29 +26,32 @@ class Sync(TransformElement):
     internal_link_map: dict[str, str] = None
 
     def __post_init__(self):
-        self.inbuf = {}
+        self.inbufs = {}
         self.audioadapters = {}
         self.segments = {}
         self.outbufs = {}
 
         super().__post_init__()
+        for sink_pad in self.sink_pads:
+            self.audioadapters[sink_pad] = Audioadapter()
+        self.offset_ref_t0 = None
 
-    def get_buffer(self, pad, buf):
-        self.inbuf[pad] = buf
-        if pad not in self.audioadapters:
-            self.audioadapters[pad] = Audioadapter()
-        self.audioadapters[pad].push(buf)
+    def pull(self, pad, bufs):
+        self.inbufs[pad] = bufs
+        for buf in bufs:
+            self.audioadapters[pad].push(buf)
         self.segments[pad] = self.audioadapters[pad].get_available_offset_segment()
-        self.offset_ref_t0 = buf.offset_ref_t0
+        if self.offset_ref_t0 is None:
+            self.offset_ref_t0 = bufs[0].offset_ref_t0
 
-    def transform_buffer(self, pad):
-        EOS = any(b.EOS for b in self.inbuf.values())
+    def transform(self, pad):
+        EOS = any(b[-1].EOS for b in self.inbufs.values())
         metadata = {
-            "cnt:%s" % b.metadata["name"]: b.metadata["cnt"]
-            for b in self.inbuf.values()
+            "cnt:%s" % b[-1].metadata["name"]: b[-1].metadata["cnt"]
+            for b in self.inbufs.values()
         }
         metadata["name"] = "%s -> '%s'" % (
-            "+".join(b.metadata["name"] for b in self.inbuf.values()),
+            "+".join(b[-1].metadata["name"] for b in self.inbufs.values()),
             pad.name,
         )
 
@@ -158,4 +161,4 @@ class Sync(TransformElement):
                 raise ValueError("Unknown mode")
         outbuf = self.outbufs[sink_pad]
         self.outbufs.pop(sink_pad)
-        return outbuf
+        return [outbuf]

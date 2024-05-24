@@ -10,42 +10,52 @@ from ..base import SeriesBuffer, TransformElement
 @dataclass
 class Matmul(TransformElement):
     """
-    A fake transform element.
+    Performs matrix multiplication with provided matrix.
+
+    Parameters:
+    -----------
+    matrix: Sequence[Any]
+        the matrix to multiple the data with
     """
 
     matrix: Sequence[Any] = None
 
     def __post_init__(self):
-        self.inbuf = {}
         super().__post_init__()
 
-    def get_buffer(self, pad, buf):
-        self.inbuf[pad] = buf
+    def pull(self, pad, bufs):
+        """
+        Assumes there is only one sink pad, if the user wants 
+        to matmul multitple channels of data, 
+        connect multiple matmul elements
+        """
+        self.inbufs = bufs
 
-    def transform_buffer(self, pad):
+    def transform(self, pad):
         """
         The transform buffer just update the name to show the graph history.
         Useful for proving it works.  "EOS" is set if any input buffers are at EOS.
         """
-        EOS = any(b.EOS for b in self.inbuf.values())
+        inbufs = self.inbufs
+        EOS = inbufs[-1].EOS
+        #metadata = inbufs.metadata
+        # if metadata is None:
         metadata = {}
-        for b in self.inbuf.values():
-            metadata["cnt:%s" % b.metadata["name"]] = b.metadata["cnt"]
-            metadata["cnt"] = b.metadata["cnt"]
+        metadata["cnt:%s" % inbufs[-1].metadata["name"]] = inbufs[-1].metadata["cnt"]
+        metadata["cnt"] = inbufs[-1].metadata["cnt"]
         metadata["name"] = "%s -> '%s'" % (
-            "+".join(b.metadata["name"] for b in self.inbuf.values()),
+            inbufs[-1].metadata["name"],
             pad.name,
         )
 
-        b = self.inbuf[self.sink_pads[0]]
-        data = b.data
-
+        # transform all the input data
+        data = np.concatenate([b.data for b in inbufs],axis=-1)
         data = np.matmul(self.matrix, data)
-        return SeriesBuffer(
-            offset=b.offset,
-            noffset=b.noffset,
+        return [SeriesBuffer(
+            offset=inbufs[0].offset,
+            noffset=sum(b.noffset for b in inbufs),
             data=data,
-            offset_ref_t0=b.offset_ref_t0,
+            offset_ref_t0=inbufs[0].offset_ref_t0,
             metadata=metadata,
             EOS=EOS,
-        )
+        )]

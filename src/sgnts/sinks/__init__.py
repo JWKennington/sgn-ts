@@ -15,25 +15,23 @@ class FakeSeriesSink(SinkElement):
     print_message: str = "''"
 
     def __post_init__(self):
-        self.inbuf = None
         super().__post_init__()
         self.at_eos = {p: False for p in self.sink_pads}
 
-    def get_buffer(self, pad, buf):
+    def pull(self, pad, bufs):
         """
         getting the buffer on the pad just modifies the name to show this final
         graph point and the prints it to prove it all works.
         """
-        self.inbuf = buf
-        self.at_eos[pad] = self.inbuf.EOS
+        self.at_eos[pad] = bufs[-1].EOS
         print(
             "buffer flow: ",
             "%s -> '%s' offset %d time %d"
             % (
-                self.inbuf.metadata["name"],
+                bufs[-1].metadata["name"],
                 pad.name,
-                self.inbuf.offset,
-                self.inbuf.t0,
+                bufs[-1].offset,
+                bufs[-1].t0,
             ),
             end='',
         )
@@ -56,7 +54,6 @@ class DumpSeriesSink(SinkElement):
     fname: str = "out.txt"
 
     def __post_init__(self):
-        self.inbuf = None
         super().__post_init__()
         self.at_eos = {p: False for p in self.sink_pads}
         self.f = open(self.fname, "w")
@@ -74,22 +71,21 @@ class DumpSeriesSink(SinkElement):
         out = np.vstack([ts, data]).T
         np.savetxt(self.f, out)
 
-    def get_buffer(self, pad, buf):
+    def pull(self, pad, bufs):
         """
         getting the buffer on the pad just modifies the name to show this final
         graph point and the prints it to prove it all works.
         """
-        self.inbuf = buf
-        self.at_eos[pad] = self.inbuf.EOS
-        if self.inbuf.data is None:
+        self.at_eos[pad] = bufs[-1].EOS
+        if bufs[-1].data is None:
             print(
                 "buffer flow: ",
                 "%s -> '%s' offset %d time %d "
                 % (
-                    self.inbuf.metadata["name"],
+                    bufs[-1].metadata["name"],
                     pad.name,
-                    self.inbuf.offset,
-                    self.inbuf.t0,
+                    bufs[-1].offset,
+                    bufs[-1].t0,
                 ),
             )
             return
@@ -98,14 +94,14 @@ class DumpSeriesSink(SinkElement):
                 "buffer flow: ",
                 "%s -> '%s' offset %d time %d shape %s"
                 % (
-                    self.inbuf.metadata["name"],
+                    bufs[-1].metadata["name"],
                     pad.name,
-                    self.inbuf.offset,
-                    self.inbuf.t0,
-                    self.inbuf.data.shape,
+                    bufs[-1].offset,
+                    bufs[-1].t0,
+                    bufs[-1].data.shape,
                 ),
             )
-            self.write_to_file(buf)
+            self.write_to_file(bufs[-1])
 
     @property
     def EOS(self):
