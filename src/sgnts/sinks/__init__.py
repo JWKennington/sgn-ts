@@ -77,31 +77,32 @@ class DumpSeriesSink(SinkElement):
         graph point and the prints it to prove it all works.
         """
         self.at_eos[pad] = bufs[-1].EOS
-        if bufs[-1].data is None:
-            print(
-                "buffer flow: ",
-                "%s -> '%s' offset %d time %d "
-                % (
-                    bufs[-1].metadata["name"],
-                    pad.name,
-                    bufs[-1].offset,
-                    bufs[-1].t0,
-                ),
-            )
-            return
-        else:
-            print(
-                "buffer flow: ",
-                "%s -> '%s' offset %d time %d shape %s"
-                % (
-                    bufs[-1].metadata["name"],
-                    pad.name,
-                    bufs[-1].offset,
-                    bufs[-1].t0,
-                    bufs[-1].data.shape,
-                ),
-            )
-            self.write_to_file(bufs[-1])
+        for buf in bufs:
+            if buf.data is None:
+                print(
+                    "buffer flow: ",
+                    "%s -> '%s' offset %d time %d "
+                    % (
+                        buf.metadata["name"],
+                        pad.name,
+                        buf.offset,
+                        buf.t0,
+                    ),
+                )
+                return
+            else:
+                print(
+                    "buffer flow: ",
+                    "%s -> '%s' offset %d time %d shape %s"
+                    % (
+                        buf.metadata["name"],
+                        pad.name,
+                        buf.offset,
+                        buf.t0,
+                        buf.data.shape,
+                    ),
+                )
+                self.write_to_file(buf)
 
     @property
     def EOS(self):
