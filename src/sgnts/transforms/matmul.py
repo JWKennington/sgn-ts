@@ -30,7 +30,7 @@ class Matmul(TransformElement):
 
     def __post_init__(self):
         super().__post_init__()
-        assert len(self.sink_pads) == 1, (
+        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
         "only one sink_pad and one source_pad is allowed")
 
     def pull(self, pad, bufs):
