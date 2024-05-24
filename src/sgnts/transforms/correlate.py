@@ -12,12 +12,16 @@ from ..base import Audioadapter, Offset, SeriesBuffer
 @dataclass
 class Correlate(TransformElement):
     """
-    Correlates input data with a filter
+    Correlates input data with filters
 
     Parameters:
     -----------
     filters: Sequence[Any]
         the filter to correlate over
+
+    Assumptions:
+    ------------
+    - There is only one sink pad and one source pad
     """
 
     filters: Sequence[Any] = None
@@ -26,7 +30,7 @@ class Correlate(TransformElement):
         assert self.filters is not None
         self.audioadapter = Audioadapter()
         super().__post_init__()
-        assert len(self.sink_pads) == 1, (
+        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
         "only one sink_pad and one source_pad is allowed")
 
     def pull(self, pad, bufs):
@@ -36,10 +40,10 @@ class Correlate(TransformElement):
         connect multiple correlate elements
         """
         self.inbufs = bufs
-        self.nnew = 0
+        self.nnew = 0 # len of the new data
         for buf in bufs:
             self.audioadapter.push(buf)
-            self.nnew += buf.data.shape[-1]
+            self.nnew += buf.size
         offset0 = bufs[0].offset
         offset1 = bufs[-1].offset + bufs[-1].noffset
 
@@ -51,13 +55,10 @@ class Correlate(TransformElement):
 
     def transform(self, pad):
         """
-        The transform buffer just update the name to show the graph history.
-        Useful for proving it works.  "EOS" is set if any input buffers are at EOS.
+        Correlates data with filters
         """
         inbufs = self.inbufs
         EOS = inbufs[-1].EOS
-        #metadata = inbufs.metadata
-        # if metadata is None:
         metadata = {}
         metadata["cnt:%s" % inbufs[-1].metadata["name"]] = inbufs[-1].metadata["cnt"]
         metadata["cnt"] = inbufs[-1].metadata["cnt"]
