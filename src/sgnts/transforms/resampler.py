@@ -10,14 +10,23 @@ from ..base import OFFSET_RATE, Audioadapter, SeriesBuffer, TransformElement
 class Resampler(TransformElement):
     """
     Up/down samples time-series data
+
+    Parameters:
+    -----------
+    inrate: int
+        sample rate of input data
+    outrate: int
+        sample rate of output data
+
+    Assumptions:
+    ------------
+    - There is only one sink pad and one source pad
     """
 
     inrate: int = None
     outrate: int = None
 
     def __post_init__(self):
-        self.inbuf = {}
-
         factor = self.outrate / self.inrate
         self.factor = factor
         self.next_out_offset = None
@@ -35,11 +44,32 @@ class Resampler(TransformElement):
             self.thiskernel = self.upkernel(factor)
 
         self.pad_length = self.half_length
+        self.offset_ref_t0 = None
 
         super().__post_init__()
+        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
+        "only one sink_pad and one source_pad is allowed")
 
-    def get_buffer(self, pad, buf):
-        self.inbuf[pad] = buf
+    def pull(self, pad, bufs):
+        """
+        assumes there is only one sink pad, if the user wants 
+        to resample multitple channels of data, 
+        connect multiple resampler elements
+        """
+        self.inbufs = bufs
+        for buf in bufs:
+            assert buf.sample_rate == self.inrate, (
+                f"data sample rate: {buf.sample_rate}"
+                f" does not match resampler sample rate: {self.inrate}"
+            )
+            self.audioadapter.push(buf)
+            if self.next_out_offset is None:
+                # start offset counter with the offset of the very first buffer
+                self.next_out_offset = buf.offset
+
+            if self.offset_ref_t0 is None:
+                # start offset counter with the offset of the very first buffer
+                self.offset_ref_t0 = buf.offset_ref_t0
 
     def zeros_buffer(self, shape):
         return np.zeros(shape)
@@ -49,14 +79,15 @@ class Resampler(TransformElement):
         npad[-1] = (self.pad_length, 0)
         return np.pad(inputs_padded, npad, "constant")
 
-    def get_output_length(self, samps: int, factor: float):
+    def get_output_length(self):
         """
-        Needs half_length of data on each side
+        Needs half_length of data on each side, will use all the samples available 
+        in the audioadapter
         """
         # Pretend that we have a half_length set of samples if we are at a discont
         pretend_samps = self.pad_length
         numinsamps = self.audioadapter.size + pretend_samps
-        nout = int((numinsamps - self.kernel_length + 1) * factor)
+        nout = int((numinsamps - self.kernel_length + 1) * self.factor)
         if nout < 0:
             nout = 0
 
@@ -117,86 +148,74 @@ class Resampler(TransformElement):
 
         return out
 
-    def transform_buffer(self, pad):
+    def transform(self, pad):
         """
-        The transform buffer just update the name to show the graph history.
-        Useful for proving it works.  "EOS" is set if any input buffers are at EOS.
+        Up/down samples buffers
         """
-        inbuf = self.inbuf[self.sink_pads[0]]
+        inbufs = self.inbufs
 
-        EOS = any(b.EOS for b in self.inbuf.values())
-        metadata = inbuf.metadata
+        EOS = inbufs[-1].EOS
+        #metadata = inbufs.metadata
         # if metadata is None:
         metadata = {}
-        for b in self.inbuf.values():
-            metadata["cnt:%s" % b.metadata["name"]] = b.metadata["cnt"]
-            metadata["cnt"] = b.metadata["cnt"]
+        metadata["cnt:%s" % inbufs[-1].metadata["name"]] = inbufs[-1].metadata["cnt"]
+        metadata["cnt"] = inbufs[-1].metadata["cnt"]
         metadata["name"] = "%s -> '%s'" % (
-            "+".join(b.metadata["name"] for b in self.inbuf.values()),
+            inbufs[-1].metadata["name"],
             pad.name,
         )
 
-        if inbuf.duration == 0:
-            inbuf.metadata = metadata
-            inbuf.EOS = EOS
-            return inbuf
-
-        assert inbuf.sample_rate == self.inrate, (
-            f"data sample rate: {inbuf.sample_rate}"
-            f" does not match resampler sample rate: {self.inrate}"
-        )
+        #if inbuf.duration == 0:
+        #    inbuf.metadata = metadata
+        #    inbuf.EOS = EOS
+        #    return inbuf
 
         # if inbuf.data.dim() == 1:
         #    inbuf.data = inbuf.data.unsqueeze(0)
 
-        audioadapter = self.audioadapter
-        audioadapter.push(inbuf)
-
-        channels = inbuf.data.shape[:-1]
-
-        if self.next_out_offset is None:
-            self.next_out_offset = inbuf.offset
-
-        # metadata = inbuf.metadata
+        A = self.audioadapter
+        channels = A.channels
         out_offset = self.next_out_offset
-        offset_ref_t0 = inbuf.offset_ref_t0
 
         # If it's the first data segment, pad with zeros in front.
-        sampsin, output_length = self.get_output_length(inbuf.size, self.factor)
+        sampsin, output_length = self.get_output_length()
 
         if output_length == 0:
             # TODO: consider more general cases
-            return SeriesBuffer(
+            return [SeriesBuffer(
                 offset=out_offset,
                 noffset=0,
-                offset_ref_t0=offset_ref_t0,
+                offset_ref_t0=self.offset_ref_t0,
                 data=None,
                 metadata=metadata,
                 is_gap=True,
                 EOS=EOS,
-            )
+            )]
 
         noffset = int(output_length * OFFSET_RATE / self.outrate)
+
+        # shift the next output buffer's offset starting point
         self.next_out_offset += noffset
-        asize = audioadapter.size
-        if audioadapter.is_gap() is True:
+
+        asize = A.size
+        if A.is_gap() is True:
             # Produce a single gap buffer
             data = self.zeros_buffer(channels + (output_length,))
             flush_nsamples = asize - self.half_length * 2
             self.pad_length = -min(0, flush_nsamples)
-            audioadapter.flush_samples(flush_nsamples)
+            A.flush_samples(flush_nsamples)
 
-            return SeriesBuffer(
+            return [SeriesBuffer(
                 offset=out_offset,
                 noffset=noffset,
-                offset_ref_t0=offset_ref_t0,
+                offset_ref_t0=self.offset_ref_t0,
                 data=data,
                 metadata=metadata,
                 is_gap=True,
                 EOS=EOS,
-            )
+            )]
         else:
-            inputs_padded, _, copied_nongap = audioadapter.copy_samples(asize)
+            inputs_padded, _, copied_nongap = A.copy_samples(asize)
             if self.pad_length > 0:
                 # if we need to pad half length of zeros in front
                 inputs_padded = self.pad_func(inputs_padded)
@@ -208,11 +227,11 @@ class Resampler(TransformElement):
 
             # flush samples from audioadapter
             # leave some leftover samples to pad infront of next buffer
-            audioadapter.flush_samples(flush_nsamples)
+            A.flush_samples(flush_nsamples)
             outbuf = SeriesBuffer(
                 offset=out_offset,
                 noffset=noffset,
-                offset_ref_t0=offset_ref_t0,
+                offset_ref_t0=self.offset_ref_t0,
                 data=out,
                 metadata=metadata,
                 is_gap=(not copied_nongap),
@@ -221,4 +240,4 @@ class Resampler(TransformElement):
             assert (
                 outbuf.sample_rate == self.outrate
             ), f"{outbuf.sample_rate}, {self.outrate}"
-            return outbuf
+            return [outbuf]

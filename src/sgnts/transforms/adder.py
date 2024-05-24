@@ -7,45 +7,48 @@ from ..base import Audioadapter, SeriesBuffer
 
 @dataclass
 class Adder(TransformElement):
-    addslice: slice = field(default_factory=lambda: slice(None))
-    rescale: float = 1
+    """
+    Add frombuf.data to tobuf.data
+
+    Parameters:
+    -----------
+    frombuf_pad: str
+        The pad name from which data will be added.
+        Data on the "frombuf_pad" will be added to the data on the "tobuf_pad".
+    tobuf_pad: str
+        The pad name to which data will be added.
+    rescale: float
+        Rescale factor of frombuf data. tobuf.data += rescale*frombuf.data
+    addslice: slice
+        Used when the user only wants to add to a subset of channels in tobuf.data,
+        frombuf.data is only added to tobuf.data[addslice,...]
+    """
     frombuf_pad: str = None
     tobuf_pad: str = None
+    rescale: float = 1
+    addslice: slice = field(default_factory=lambda: slice(None))
 
     def __post_init__(self):
-        self.inbuf = {}
+        self.inbufs = {}
         self.audioadapters = {}
-
         super().__post_init__()
+        for sink_pad in self.sink_pads:
+            self.audioadapters[sink_pad] = Audioadapter()
 
-    def get_buffer(self, pad, buf):
-        self.inbuf[pad] = buf
-        # self.inbuf[pad].metadata = {'name':pad.name,'cnt':{pad.name:1}}
-        if pad not in self.audioadapters:
-            self.audioadapters[pad] = Audioadapter()
-        self.audioadapters[pad].push(buf)
+    def pull(self, pad, bufs):
+        self.inbufs[pad] = bufs
+        for buf in bufs:
+            # There is a list of bufs, push sequentially
+            self.audioadapters[pad].push(buf)
 
-    def transform_buffer(self, pad):
-        """
-        Add frombuf.data to tobuf.data
-
-        Arguments:
-        ----------
-        frombuf: SeriesBuffer
-            The buffer to add from
-        tobuf: SeriesBuffer
-            The buffer to add to
-        """
-        # frombuf = self.inbuf[self.frombuf_pad]
-        # tobuf = self.inbuf[self.tobuf_pad]
-
-        EOS = any(b.EOS for b in self.inbuf.values())
+    def transform(self, pad):
+        EOS = any(b[-1].EOS for b in self.inbufs.values())
         metadata = {
-            "cnt:%s" % b.metadata["name"]: b.metadata["cnt"]
-            for b in self.inbuf.values()
+            "cnt:%s" % b[-1].metadata["name"]: b[-1].metadata["cnt"]
+            for b in self.inbufs.values()
         }
-        metadata["name"] = "%s -> '%s'" % (
-            "+".join(b.metadata["name"] for b in self.inbuf.values()),
+        metadata["name"] = "(%s) -> '%s'" % (
+            "+".join(b[-1].metadata["name"] for b in self.inbufs.values()),
             pad.name,
         )
 
@@ -65,7 +68,7 @@ class Adder(TransformElement):
             # FIXME
             return
         elif noffset == 0:
-            return SeriesBuffer(
+            return [SeriesBuffer(
                 offset=offset,
                 noffset=0,
                 offset_ref_t0=offset_ref_t0,
@@ -73,25 +76,25 @@ class Adder(TransformElement):
                 is_gap=True,
                 metadata=metadata,
                 EOS=EOS,
-            )
+            )]
         else:
-
             # Check if all gaps
             if fromA.is_gap() and toA.is_gap():
-                return SeriesBuffer(
+                return [SeriesBuffer(
                     offset=offset,
                     noffset=noffset,
                     offset_ref_t0=offset_ref_t0,
                     data=None,
+                    # FIXME: should we output zeros array?
                     is_gap=True,
                     metadata=metadata,
                     EOS=EOS,
-                )
+                )]
             elif fromA.is_gap():
-                # FIXME
+                # FIXME: just output toA
                 return
             elif toA.is_gap():
-                # FIXME
+                # FIXME: just output fromA
                 return
 
             fromdata, _, _ = fromA.copy_samples_by_offset_segment(overlap_segment)
@@ -110,6 +113,7 @@ class Adder(TransformElement):
             #    # actually allocate memory of expanded tensor
             #    tobuf.data = tobuf.data.clone()
             # tobuf.data[self.addslice,  -fromshape[-1] :] += fromdata * self.rescale
+            # FIXME: figure out how to make addslice more general
             todata += fromdata * self.rescale
 
             outbuf = SeriesBuffer(
@@ -124,4 +128,4 @@ class Adder(TransformElement):
             fromA.flush_samples_by_end_offset_segment(overlap_segment[1])
             toA.flush_samples_by_end_offset_segment(overlap_segment[1])
 
-            return outbuf
+            return [outbuf]

@@ -12,45 +12,64 @@ from ..base import Audioadapter, Offset, SeriesBuffer
 @dataclass
 class Correlate(TransformElement):
     """
-    A fake transform element.
+    Correlates input data with filters
+
+    Parameters:
+    -----------
+    filters: Sequence[Any]
+        the filter to correlate over
+
+    Assumptions:
+    ------------
+    - There is only one sink pad and one source pad
     """
 
     filters: Sequence[Any] = None
 
     def __post_init__(self):
-        self.inbuf = {}
-        self.audioadapters = {}
         assert self.filters is not None
+        self.audioadapter = Audioadapter()
         super().__post_init__()
+        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
+        "only one sink_pad and one source_pad is allowed")
 
-    def get_buffer(self, pad, buf):
-        self.inbuf[pad] = buf
-        if pad not in self.audioadapters:
-            self.audioadapters[pad] = Audioadapter()
-        self.audioadapters[pad].push(buf)
-        self.nnew = buf.data.shape[-1]
-        self.this_segment = (buf.offset, buf.offset + buf.noffset)
-        self.this_noffset = buf.noffset
-        self.sample_rate = buf.sample_rate
-        self.offset_ref_t0 = buf.offset_ref_t0
+    def pull(self, pad, bufs):
+        """
+        Assumes there is only one sink pad, if the user wants 
+        to correltate multitple channels of data, 
+        connect multiple correlate elements
+        """
+        self.inbufs = bufs
+        self.nnew = 0 # len of the new data
+        for buf in bufs:
+            self.audioadapter.push(buf)
+            self.nnew += buf.size
+        offset0 = bufs[0].offset
+        offset1 = bufs[-1].offset + bufs[-1].noffset
 
-    def transform_buffer(self, pad):
+        # the offset segment we want to produce
+        self.this_segment = (offset0, offset1)
+        self.this_noffset = offset1 - offset0
+        self.sample_rate = bufs[0].sample_rate
+        self.offset_ref_t0 = bufs[0].offset_ref_t0
+
+    def transform(self, pad):
         """
-        The transform buffer just update the name to show the graph history.
-        Useful for proving it works.  "EOS" is set if any input buffers are at EOS.
+        Correlates data with filters
         """
-        EOS = any(b.EOS for b in self.inbuf.values())
+        inbufs = self.inbufs
+        EOS = inbufs[-1].EOS
         metadata = {}
-        for b in self.inbuf.values():
-            metadata["cnt:%s" % b.metadata["name"]] = b.metadata["cnt"]
-            metadata["cnt"] = b.metadata["cnt"]
+        metadata["cnt:%s" % inbufs[-1].metadata["name"]] = inbufs[-1].metadata["cnt"]
+        metadata["cnt"] = inbufs[-1].metadata["cnt"]
         metadata["name"] = "%s -> '%s'" % (
-            "+".join(b.metadata["name"] for b in self.inbuf.values()),
+            inbufs[-1].metadata["name"],
             pad.name,
         )
+
         nfilter_samples = self.filters.shape[-1]
 
-        A = self.audioadapters[self.sink_pads[0]]
+        A = self.audioadapter
 
         shift = Offset.nsamples2offset(nfilter_samples - 1, self.sample_rate)
 
@@ -75,11 +94,11 @@ class Correlate(TransformElement):
         if next_offset > A.get_available_offset_segment()[0]:
             A.flush_samples_by_end_offset_segment(request_segment[1] - shift)
 
-        return SeriesBuffer(
+        return [SeriesBuffer(
             offset=self.this_segment[0],
             noffset=self.this_noffset,
             data=out,
             offset_ref_t0=self.offset_ref_t0,
             metadata=metadata,
             EOS=EOS,
-        )
+        )]
