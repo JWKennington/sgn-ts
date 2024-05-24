@@ -12,16 +12,26 @@ class Matmul(TransformElement):
     """
     Performs matrix multiplication with provided matrix.
 
+    If a pad receives more then one buffer, matmul will be performed 
+    on the list of buffers one by one. The source pad will also output
+    a list of buffers.
+
     Parameters:
     -----------
     matrix: Sequence[Any]
-        the matrix to multiple the data with
+        the matrix to multiply the data with, out = matrix x data
+
+    Assumptions:
+    ------------
+    - There is only one sink pad and one source pad
     """
 
     matrix: Sequence[Any] = None
 
     def __post_init__(self):
         super().__post_init__()
+        assert len(self.sink_pads) == 1, (
+        "only one sink_pad and one source_pad is allowed")
 
     def pull(self, pad, bufs):
         """
@@ -33,29 +43,40 @@ class Matmul(TransformElement):
 
     def transform(self, pad):
         """
-        The transform buffer just update the name to show the graph history.
-        Useful for proving it works.  "EOS" is set if any input buffers are at EOS.
+        Matmul over list of buffers
         """
         inbufs = self.inbufs
-        EOS = inbufs[-1].EOS
-        #metadata = inbufs.metadata
-        # if metadata is None:
-        metadata = {}
-        metadata["cnt:%s" % inbufs[-1].metadata["name"]] = inbufs[-1].metadata["cnt"]
-        metadata["cnt"] = inbufs[-1].metadata["cnt"]
-        metadata["name"] = "%s -> '%s'" % (
-            inbufs[-1].metadata["name"],
-            pad.name,
-        )
+        outbufs = []
+        # loop over the input data, only perform matmul on non-gaps
+        for inbuf in inbufs:
+            is_gap = inbuf.is_gap
+            EOS = inbufs[-1].EOS
+            metadata = {}
+            metadata["cnt:%s" % inbufs[-1].metadata["name"]] = inbufs[-1].metadata["cnt"]
+            metadata["cnt"] = inbufs[-1].metadata["cnt"]
+            metadata["name"] = "%s -> '%s'" % (
+                inbufs[-1].metadata["name"],
+                pad.name,
+            )
 
-        # transform all the input data
-        data = np.concatenate([b.data for b in inbufs],axis=-1)
-        data = np.matmul(self.matrix, data)
-        return [SeriesBuffer(
-            offset=inbufs[0].offset,
-            noffset=sum(b.noffset for b in inbufs),
-            data=data,
-            offset_ref_t0=inbufs[0].offset_ref_t0,
-            metadata=metadata,
-            EOS=EOS,
-        )]
+            if is_gap:
+                # produce a zeros buffer
+                if inbuf.data is None:
+                    data = None
+                else:
+                    data = np.zeros(self.matrix.shape[:-1]+(inbuf.size,))
+            else:
+                data = np.matmul(self.matrix, inbuf.data)
+
+            outbuf = SeriesBuffer(
+                offset=inbuf.offset,
+                noffset=inbuf.noffset,
+                data=data,
+                offset_ref_t0=inbuf.offset_ref_t0,
+                is_gap = inbuf.is_gap,
+                metadata=metadata,
+                EOS=EOS,
+            )
+            outbufs.append(outbuf)
+
+        return outbufs
