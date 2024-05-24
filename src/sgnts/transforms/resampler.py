@@ -10,14 +10,23 @@ from ..base import OFFSET_RATE, Audioadapter, SeriesBuffer, TransformElement
 class Resampler(TransformElement):
     """
     Up/down samples time-series data
+
+    Parameters:
+    -----------
+    inrate: int
+        sample rate of input data
+    outrate: int
+        sample rate of output data
+
+    Assumptions:
+    ------------
+    - There is only one sink pad and one source pad
     """
 
     inrate: int = None
     outrate: int = None
 
     def __post_init__(self):
-        self.inbufs = {}
-
         factor = self.outrate / self.inrate
         self.factor = factor
         self.next_out_offset = None
@@ -38,7 +47,7 @@ class Resampler(TransformElement):
         self.offset_ref_t0 = None
 
         super().__post_init__()
-        assert len(self.sink_pads) == 1, (
+        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
         "only one sink_pad and one source_pad is allowed")
 
     def pull(self, pad, bufs):
@@ -141,8 +150,7 @@ class Resampler(TransformElement):
 
     def transform(self, pad):
         """
-        The transform buffer just update the name to show the graph history.
-        Useful for proving it works.  "EOS" is set if any input buffers are at EOS.
+        Up/down samples buffers
         """
         inbufs = self.inbufs
 
@@ -177,7 +185,7 @@ class Resampler(TransformElement):
             return [SeriesBuffer(
                 offset=out_offset,
                 noffset=0,
-                offset_ref_t0=offset_ref_t0,
+                offset_ref_t0=self.offset_ref_t0,
                 data=None,
                 metadata=metadata,
                 is_gap=True,
@@ -200,7 +208,7 @@ class Resampler(TransformElement):
             return [SeriesBuffer(
                 offset=out_offset,
                 noffset=noffset,
-                offset_ref_t0=offset_ref_t0,
+                offset_ref_t0=self.offset_ref_t0,
                 data=data,
                 metadata=metadata,
                 is_gap=True,
