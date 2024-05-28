@@ -15,8 +15,10 @@ class FakeSeriesSrc(SourceElement):
     -----------
     num_buffers: int
         is required and sets how many buffers will be created before setting "EOS"
-    shape: tuple
-        the shape of the data array the buffers will carry
+    rate: int
+        the sample rate of the data
+    channels: tuple
+        the channels of the data
     duration: float
         duration of the data buffer, in seconds
     signal_type: str
@@ -29,7 +31,8 @@ class FakeSeriesSrc(SourceElement):
     """
 
     num_buffers: int = 0
-    shape: tuple = (2048,)
+    rate: int = 2048
+    channels: tuple = ()
     duration: float = 1
     signal_type: str = "white"
     fsin: float = 5
@@ -39,6 +42,7 @@ class FakeSeriesSrc(SourceElement):
         super().__post_init__()
         self.cnt = {p: 0 for p in self.source_pads}
         self.offset = {p: Offset.sec2offset(self.t0) for p in self.source_pads}
+        self.shape = self.channels + (int(self.rate * self.duration),)
 
     def create_data(self, offset):
         if self.signal_type == "white":
