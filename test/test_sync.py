@@ -41,24 +41,21 @@ def test_sync(capsys):
             "f' duration {bufs[-1].duration} data_is_none {bufs[-1].data is None}'"
         )
 
+    H1_duration = 1
+    L1_duration = 1
+    V1_duration = 1
     pipeline.insert(
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
             num_buffers=num_buffers,
-            shape=(int(inrate * duration),),
-            duration=duration,
+            rate=inrate,
+            duration=H1_duration,
             t0=H1_t0,
         ),
         Sync(
             name="trans1",
-            source_pad_names=("H1", "L1", "V1"),
-            sink_pad_names=("H1", "L1", "V1"),
-            internal_link_map={
-                "trans1:src:H1": "trans1:sink:H1",
-                "trans1:src:L1": "trans1:sink:L1",
-                "trans1:src:V1": "trans1:sink:V1",
-            },
+            pad_names_map={"H1":"H1","L1":"L1","V1":"V1"},
             mode=mode,
         ),
         FakeSeriesSink(
@@ -70,8 +67,8 @@ def test_sync(capsys):
             name="src2",
             source_pad_names=("L1",),
             num_buffers=num_buffers,
-            shape=(int(inrate * duration),),
-            duration=duration,
+            rate=inrate,
+            duration=L1_duration,
             t0=L1_t0,
         ),
         FakeSeriesSink(
@@ -83,8 +80,8 @@ def test_sync(capsys):
             name="src3",
             source_pad_names=("V1",),
             num_buffers=num_buffers,
-            shape=(int(inrate * duration),),
-            duration=duration,
+            rate=inrate,
+            duration=V1_duration,
             t0=V1_t0,
         ),
         FakeSeriesSink(

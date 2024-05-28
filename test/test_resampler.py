@@ -35,7 +35,7 @@ def test_resampler(capsys):
             name="src1",
             source_pad_names=("H1",),
             num_buffers=2,
-            shape=(int(inrate * duration),),
+            rate=inrate,
             duration=duration,
             signal_type="sin",
             fsin=3,
