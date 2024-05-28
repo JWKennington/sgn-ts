@@ -18,18 +18,25 @@ class Sync(TransformElement):
         Supports the following modes:
         (1) pad: pads missing data to match the oldest data across buffers
         (2) drop: drop old data, only data common to all buffers will be produced
-    internal_link_map: dict
-        link map between source pad and sink pad within this transform
+    pad_names_map: dict
+        link map between source pad and sink pad within this transform,
+        pad_names_map = {'src1_pad':'sink1_pad','src2_pad':'sink2_pad',...}
     """
 
     mode: str = None
-    internal_link_map: dict[str, str] = None
+    pad_names_map: dict[str, str] = None
 
     def __post_init__(self):
         self.inbufs = {}
         self.audioadapters = {}
         self.segments = {}
         self.outbufs = {}
+        self.source_pad_names = self.pad_names_map.keys()
+        self.sink_pad_names = self.pad_names_map.values()
+        self.pad_map = {}
+        # rename pad_map
+        for k, v in self.pad_names_map.items():
+            self.pad_map["%s:src:%s" % (self.name, k)] = "%s:sink:%s" % (self.name, v)
 
         super().__post_init__()
         for sink_pad in self.sink_pads:
@@ -55,7 +62,7 @@ class Sync(TransformElement):
             pad.name,
         )
 
-        sink_pad = self.internal_link_map[pad]
+        sink_pad = self.pad_map[pad]
 
         # Check if buffers are aligned in time
         oldsegs = [seg[0] for seg in self.segments.values()]
