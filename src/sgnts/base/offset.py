@@ -3,6 +3,8 @@ from .time import Time
 # OFFSET_RATE: the number of offsets in one second.
 # The OFFSET_RATE serves as a global clock that is a power of 2.
 #
+# offset: An offset is a time unit that equals 1/OFFSET_RATE seconds.
+#
 # Assumptions: (1) all the sample rates in the buffers are
 # powers of 2. (2) the OFFSET_RATE is at least as large as
 # the highest sample rate, so that OFFSET_RATE/sample_rate
