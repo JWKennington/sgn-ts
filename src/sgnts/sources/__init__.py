@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from sgn.base import SourceElement
 
-from ..base import OFFSET_RATE, Offset, SeriesBuffer
+from ..base import OFFSET_RATE, Offset, SeriesBuffer, TSFrame
 
 
 @dataclass
@@ -70,10 +70,12 @@ class FakeSeriesSrc(SourceElement):
             noffset=noffset,
             offset_ref_t0=0,
             data=data,
-            metadata={"cnt": self.cnt, "name": "'%s'" % pad.name},
-            EOS=self.cnt[pad] > self.num_buffers,
         )
 
         self.offset[pad] += noffset
 
-        return [outbuf]
+        return TSFrame(
+            buffers=[outbuf],
+            metadata={"cnt": self.cnt, "name": "'%s'" % pad.name},
+            EOS=self.cnt[pad] > self.num_buffers,
+        )

@@ -2,13 +2,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sgn.base import Buffer
+from sgn.base import Frame
 
 from .offset import Offset
 
 
 @dataclass
-class SeriesBuffer(Buffer):
+class SeriesBuffer:
     """Timeseries buffer with associated metadata.
 
     Parameters
@@ -53,3 +53,24 @@ class SeriesBuffer(Buffer):
     @property
     def sample_rate(self):
         return int(self.size / Offset.offset2sec(self.noffset))
+
+
+
+@dataclass
+class TSFrame(Frame):
+    """An sgn Frame object that holds a list of buffers
+
+    Parameters
+    ----------
+    buffers : list
+        List of SeriesBuffers
+
+    """
+
+    buffers: int = None
+
+    def __getitem__(self, item):
+        return self.buffers[item]
+
+    def __iter__(self):
+        return iter(self.buffers)

@@ -14,21 +14,18 @@ class FakeSeriesSink(SinkElement):
 
     print_message: str = "''"
 
-    def __post_init__(self):
-        super().__post_init__()
-        self.at_eos = {p: False for p in self.sink_pads}
-
     def pull(self, pad, bufs):
         """
         getting the buffer on the pad just modifies the name to show this final
         graph point and the prints it to prove it all works.
         """
-        self.at_eos[pad] = bufs[-1].EOS
+        if bufs.EOS:
+            self.mark_eos(pad)
         print(
             "buffer flow: ",
             "%s -> '%s' offset %d time %d"
             % (
-                bufs[-1].metadata["name"],
+                bufs.metadata["name"],
                 pad.name,
                 bufs[-1].offset,
                 bufs[-1].t0,
@@ -55,7 +52,6 @@ class DumpSeriesSink(SinkElement):
 
     def __post_init__(self):
         super().__post_init__()
-        self.at_eos = {p: False for p in self.sink_pads}
         self.f = open(self.fname, "w")
 
     def write_to_file(self, buf):
@@ -76,14 +72,16 @@ class DumpSeriesSink(SinkElement):
         getting the buffer on the pad just modifies the name to show this final
         graph point and the prints it to prove it all works.
         """
-        self.at_eos[pad] = bufs[-1].EOS
+        if bufs.EOS:
+            self.mark_eos(pad)
+
         for buf in bufs:
             if buf.data is None:
                 print(
                     "buffer flow: ",
                     "%s -> '%s' offset %d time %d "
                     % (
-                        buf.metadata["name"],
+                        bufs.metadata["name"],
                         pad.name,
                         buf.offset,
                         buf.t0,
@@ -95,7 +93,7 @@ class DumpSeriesSink(SinkElement):
                     "buffer flow: ",
                     "%s -> '%s' offset %d time %d shape %s"
                     % (
-                        buf.metadata["name"],
+                        bufs.metadata["name"],
                         pad.name,
                         buf.offset,
                         buf.t0,
