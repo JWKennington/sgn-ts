@@ -4,7 +4,7 @@ import numpy as np
 
 from sgn.base import TransformElement
 
-from ..base import Audioadapter, Offset, SeriesBuffer
+from ..base import Audioadapter, Offset, SeriesBuffer, TSFrame
 
 
 @dataclass
@@ -40,29 +40,29 @@ class Sync(TransformElement):
 
         super().__post_init__()
         for sink_pad in self.sink_pads:
-            self.audioadapters[sink_pad] = Audioadapter()
+            self.audioadapters[sink_pad.name] = Audioadapter()
         self.offset_ref_t0 = None
 
     def pull(self, pad, bufs):
         self.inbufs[pad] = bufs
         for buf in bufs:
-            self.audioadapters[pad].push(buf)
-        self.segments[pad] = self.audioadapters[pad].get_available_offset_segment()
+            self.audioadapters[pad.name].push(buf)
+        self.segments[pad.name] = self.audioadapters[pad.name].get_available_offset_segment()
         if self.offset_ref_t0 is None:
             self.offset_ref_t0 = bufs[0].offset_ref_t0
 
     def transform(self, pad):
-        EOS = any(b[-1].EOS for b in self.inbufs.values())
+        EOS = any(b.EOS for b in self.inbufs.values())
         metadata = {
-            "cnt:%s" % b[-1].metadata["name"]: b[-1].metadata["cnt"]
+            "cnt:%s" % b.metadata["name"]: b.metadata["cnt"]
             for b in self.inbufs.values()
         }
         metadata["name"] = "%s -> '%s'" % (
-            "+".join(b[-1].metadata["name"] for b in self.inbufs.values()),
+            "+".join(b.metadata["name"] for b in self.inbufs.values()),
             pad.name,
         )
 
-        sink_pad = self.pad_map[pad]
+        sink_pad = self.pad_map[pad.name]
 
         # Check if buffers are aligned in time
         oldsegs = [seg[0] for seg in self.segments.values()]
@@ -83,8 +83,6 @@ class Sync(TransformElement):
                 offset_ref_t0=self.offset_ref_t0,
                 data=data,
                 is_gap=not copied_nongap,
-                metadata=metadata,
-                EOS=EOS,
             )
             self.audioadapters[sink_pad].flush_samples_by_end_offset_segment(overlap[1])
         else:
@@ -110,8 +108,6 @@ class Sync(TransformElement):
                         offset_ref_t0=self.offset_ref_t0,
                         data=data,
                         is_gap=True,
-                        metadata=metadata,
-                        EOS=EOS,
                     )
                 else:
                     data, copied_gap, copied_nongap = self.audioadapters[
@@ -123,8 +119,6 @@ class Sync(TransformElement):
                         offset_ref_t0=self.offset_ref_t0,
                         data=data,
                         is_gap=not copied_nongap,
-                        metadata=metadata,
-                        EOS=EOS,
                     )
                     self.audioadapters[sink_pad].flush_samples_by_end_offset_segment(
                         overlap[1]
@@ -140,8 +134,6 @@ class Sync(TransformElement):
                         offset_ref_t0=self.offset_ref_t0,
                         data=None,
                         is_gap=True,
-                        metadata=metadata,
-                        EOS=EOS,
                     )
                 else:
                     seg = self.segments[sink_pad]
@@ -158,8 +150,6 @@ class Sync(TransformElement):
                         offset_ref_t0=self.offset_ref_t0,
                         data=data,
                         is_gap=not copied_nongap,
-                        metadata=metadata,
-                        EOS=EOS,
                     )
                     self.audioadapters[sink_pad].flush_samples_by_end_offset_segment(
                         overlap[1]
@@ -168,4 +158,4 @@ class Sync(TransformElement):
                 raise ValueError("Unknown mode")
         outbuf = self.outbufs[sink_pad]
         self.outbufs.pop(sink_pad)
-        return [outbuf]
+        return TSFrame(buffers=[outbuf], metadata=metadata, EOS=EOS)

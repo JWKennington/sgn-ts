@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from ..base import SeriesBuffer, TransformElement
+from ..base import SeriesBuffer, TransformElement, TSFrame
 
 
 @dataclass
@@ -48,16 +48,16 @@ class Matmul(TransformElement):
         inbufs = self.inbufs
         outbufs = []
         # loop over the input data, only perform matmul on non-gaps
+        EOS = inbufs.EOS
+        metadata = {}
+        metadata["cnt:%s" % inbufs.metadata["name"]] = inbufs.metadata["cnt"]
+        metadata["cnt"] = inbufs.metadata["cnt"]
+        metadata["name"] = "%s -> '%s'" % (
+            inbufs.metadata["name"],
+            pad.name,
+        )
         for inbuf in inbufs:
             is_gap = inbuf.is_gap
-            EOS = inbufs[-1].EOS
-            metadata = {}
-            metadata["cnt:%s" % inbufs[-1].metadata["name"]] = inbufs[-1].metadata["cnt"]
-            metadata["cnt"] = inbufs[-1].metadata["cnt"]
-            metadata["name"] = "%s -> '%s'" % (
-                inbufs[-1].metadata["name"],
-                pad.name,
-            )
 
             if is_gap:
                 # produce a zeros buffer
@@ -74,9 +74,7 @@ class Matmul(TransformElement):
                 data=data,
                 offset_ref_t0=inbuf.offset_ref_t0,
                 is_gap = inbuf.is_gap,
-                metadata=metadata,
-                EOS=EOS,
             )
             outbufs.append(outbuf)
 
-        return outbufs
+        return TSFrame(buffers=outbufs, metadata=metadata, EOS=EOS)

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 from sgn.base import TransformElement
 
-from ..base import Audioadapter, SeriesBuffer
+from ..base import Audioadapter, SeriesBuffer, TSFrame
 
 
 @dataclass
@@ -33,22 +33,22 @@ class Adder(TransformElement):
         self.audioadapters = {}
         super().__post_init__()
         for sink_pad in self.sink_pads:
-            self.audioadapters[sink_pad] = Audioadapter()
+            self.audioadapters[sink_pad.name] = Audioadapter()
 
     def pull(self, pad, bufs):
         self.inbufs[pad] = bufs
         for buf in bufs:
             # There is a list of bufs, push sequentially
-            self.audioadapters[pad].push(buf)
+            self.audioadapters[pad.name].push(buf)
 
     def transform(self, pad):
-        EOS = any(b[-1].EOS for b in self.inbufs.values())
+        EOS = any(b.EOS for b in self.inbufs.values())
         metadata = {
-            "cnt:%s" % b[-1].metadata["name"]: b[-1].metadata["cnt"]
+            "cnt:%s" % b.metadata["name"]: b.metadata["cnt"]
             for b in self.inbufs.values()
         }
         metadata["name"] = "(%s) -> '%s'" % (
-            "+".join(b[-1].metadata["name"] for b in self.inbufs.values()),
+            "+".join(b.metadata["name"] for b in self.inbufs.values()),
             pad.name,
         )
 
@@ -68,28 +68,24 @@ class Adder(TransformElement):
             # FIXME
             return
         elif noffset == 0:
-            return [SeriesBuffer(
+            return TSFrame(buffers=[SeriesBuffer(
                 offset=offset,
                 noffset=0,
                 offset_ref_t0=offset_ref_t0,
                 data=None,
                 is_gap=True,
-                metadata=metadata,
-                EOS=EOS,
-            )]
+            )], metadata=metadata, EOS=EOS)
         else:
             # Check if all gaps
             if fromA.is_gap() and toA.is_gap():
-                return [SeriesBuffer(
+                return TSFrame(buffers=[SeriesBuffer(
                     offset=offset,
                     noffset=noffset,
                     offset_ref_t0=offset_ref_t0,
                     data=None,
                     # FIXME: should we output zeros array?
                     is_gap=True,
-                    metadata=metadata,
-                    EOS=EOS,
-                )]
+                )], metadata=metadata, EOS=EOS)
             elif fromA.is_gap():
                 # FIXME: just output toA
                 return
@@ -116,16 +112,13 @@ class Adder(TransformElement):
             # FIXME: figure out how to make addslice more general
             todata += fromdata * self.rescale
 
-            outbuf = SeriesBuffer(
+            fromA.flush_samples_by_end_offset_segment(overlap_segment[1])
+            toA.flush_samples_by_end_offset_segment(overlap_segment[1])
+
+            return TSFrame(buffers=[SeriesBuffer(
                 offset=offset,
                 noffset=noffset,
                 offset_ref_t0=offset_ref_t0,
                 data=todata,
-                metadata=metadata,
-                EOS=EOS,
-            )
+            )], metadata=metadata, EOS=EOS)
 
-            fromA.flush_samples_by_end_offset_segment(overlap_segment[1])
-            toA.flush_samples_by_end_offset_segment(overlap_segment[1])
-
-            return [outbuf]

@@ -30,6 +30,7 @@ class SeriesBuffer:
     noffset: int = None
     offset_ref_t0: int = None
     data: Sequence[Any] = None
+    is_gap: bool = False
 
     @property
     def t0(self):
