@@ -21,18 +21,11 @@ class FakeSeriesSink(SinkElement):
         """
         if bufs.EOS:
             self.mark_eos(pad)
-        print(
-            "buffer flow: ",
-            "%s -> '%s' offset %d time %d"
-            % (
-                bufs.metadata["name"],
-                pad.name,
-                bufs[-1].offset,
-                bufs[-1].t0,
-            ),
-            end='',
-        )
-        print(eval(self.print_message))
+        print (bufs)
+        #outstr = "%s :: " % bufs.metadata['__graph__']
+        #for buf in bufs:
+        #    outstr += str(buf)
+        #print(outstr)
 
     @property
     def EOS(self):
@@ -101,10 +94,3 @@ class DumpSeriesSink(SinkElement):
                     ),
                 )
                 self.write_to_file(buf)
-
-    @property
-    def EOS(self):
-        """
-        If buffers on any sink pads are End of Stream (EOS), then mark this whole element as EOS
-        """
-        return any(self.at_eos.values())
