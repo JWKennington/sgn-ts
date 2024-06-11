@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.signal import correlate
 
-from ..base import OFFSET_RATE, Audioadapter, SeriesBuffer, TransformElement
+from ..base import OFFSET_RATE, Audioadapter, SeriesBuffer, TransformElement, TSFrame
 
 
 @dataclass
@@ -154,14 +154,14 @@ class Resampler(TransformElement):
         """
         inbufs = self.inbufs
 
-        EOS = inbufs[-1].EOS
+        EOS = inbufs.EOS
         #metadata = inbufs.metadata
         # if metadata is None:
         metadata = {}
-        metadata["cnt:%s" % inbufs[-1].metadata["name"]] = inbufs[-1].metadata["cnt"]
-        metadata["cnt"] = inbufs[-1].metadata["cnt"]
+        metadata["cnt:%s" % inbufs.metadata["name"]] = inbufs.metadata["cnt"]
+        metadata["cnt"] = inbufs.metadata["cnt"]
         metadata["name"] = "%s -> '%s'" % (
-            inbufs[-1].metadata["name"],
+            inbufs.metadata["name"],
             pad.name,
         )
 
@@ -182,15 +182,15 @@ class Resampler(TransformElement):
 
         if output_length == 0:
             # TODO: consider more general cases
-            return [SeriesBuffer(
+            return TSFrame(buffers=[SeriesBuffer(
                 offset=out_offset,
                 noffset=0,
                 offset_ref_t0=self.offset_ref_t0,
                 data=None,
-                metadata=metadata,
                 is_gap=True,
-                EOS=EOS,
-            )]
+            )], metadata=metadata, EOS=EOS)
+
+
 
         noffset = int(output_length * OFFSET_RATE / self.outrate)
 
@@ -205,15 +205,13 @@ class Resampler(TransformElement):
             self.pad_length = -min(0, flush_nsamples)
             A.flush_samples(flush_nsamples)
 
-            return [SeriesBuffer(
+            return TSFrame(buffers=[SeriesBuffer(
                 offset=out_offset,
                 noffset=noffset,
                 offset_ref_t0=self.offset_ref_t0,
                 data=data,
-                metadata=metadata,
                 is_gap=True,
-                EOS=EOS,
-            )]
+            )], metadata=metadata, EOS=EOS)
         else:
             inputs_padded, _, copied_nongap = A.copy_samples(asize)
             if self.pad_length > 0:
@@ -233,11 +231,9 @@ class Resampler(TransformElement):
                 noffset=noffset,
                 offset_ref_t0=self.offset_ref_t0,
                 data=out,
-                metadata=metadata,
                 is_gap=(not copied_nongap),
-                EOS=EOS,
             )
             assert (
                 outbuf.sample_rate == self.outrate
             ), f"{outbuf.sample_rate}, {self.outrate}"
-            return [outbuf]
+            return TSFrame(buffers=[outbuf], metadata=metadata, EOS=EOS)

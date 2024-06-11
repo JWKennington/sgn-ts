@@ -6,7 +6,7 @@ import numpy as np
 import scipy
 from sgn.base import TransformElement
 
-from ..base import Audioadapter, Offset, SeriesBuffer
+from ..base import Audioadapter, Offset, SeriesBuffer, TSFrame
 
 
 @dataclass
@@ -58,12 +58,12 @@ class Correlate(TransformElement):
         Correlates data with filters
         """
         inbufs = self.inbufs
-        EOS = inbufs[-1].EOS
+        EOS = inbufs.EOS
         metadata = {}
-        metadata["cnt:%s" % inbufs[-1].metadata["name"]] = inbufs[-1].metadata["cnt"]
-        metadata["cnt"] = inbufs[-1].metadata["cnt"]
+        metadata["cnt:%s" % inbufs.metadata["name"]] = inbufs.metadata["cnt"]
+        metadata["cnt"] = inbufs.metadata["cnt"]
         metadata["name"] = "%s -> '%s'" % (
-            inbufs[-1].metadata["name"],
+            inbufs.metadata["name"],
             pad.name,
         )
 
@@ -94,11 +94,9 @@ class Correlate(TransformElement):
         if next_offset > A.get_available_offset_segment()[0]:
             A.flush_samples_by_end_offset_segment(request_segment[1] - shift)
 
-        return [SeriesBuffer(
+        return TSFrame(buffers=[SeriesBuffer(
             offset=self.this_segment[0],
             noffset=self.this_noffset,
             data=out,
             offset_ref_t0=self.offset_ref_t0,
-            metadata=metadata,
-            EOS=EOS,
-        )]
+        )], metadata=metadata, EOS=EOS)
