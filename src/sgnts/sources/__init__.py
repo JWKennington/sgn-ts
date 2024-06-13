@@ -1,13 +1,12 @@
 from dataclasses import dataclass
 
 import numpy as np
-from sgn.base import SourceElement
 
-from ..base import OFFSET_RATE, Offset, SeriesBuffer, TSFrame
+from ..base import OFFSET_RATE, Offset, SeriesBuffer, TSFrame, TSSource
 
 
 @dataclass
-class FakeSeriesSrc(SourceElement):
+class FakeSeriesSrc(TSSource):
     """
     A time-series source that generates fake data in fixed-size buffers.
 
@@ -19,29 +18,22 @@ class FakeSeriesSrc(SourceElement):
         the sample rate of the data
     channels: tuple
         the channels of the data
-    duration: float
-        duration of the data buffer, in seconds
     signal_type: str
         currently supported types: (1) 'white': white noise data. (2) 'sin' or 'sine':
         sine wave data
     fsin: float
         frequency of the sine wave is signal_type = 'sin'
-    t0: float
-        start time of first buffer, in seconds
     """
 
     num_buffers: int = 0
     rate: int = 2048
     channels: tuple = ()
-    duration: float = 1
     signal_type: str = "white"
     fsin: float = 5
-    t0: float = 0
 
     def __post_init__(self):
         super().__post_init__()
         self.cnt = {p: 0 for p in self.source_pads}
-        self.offset = {p: Offset.sec2offset(self.t0) for p in self.source_pads}
         self.shape = self.channels + (int(self.rate * self.duration),)
 
     def create_data(self, offset):
@@ -69,6 +61,10 @@ class FakeSeriesSrc(SourceElement):
             offset=self.offset[pad],
             noffset=noffset,
             offset_ref_t0=0,
+            sample_rate=self.rate,
+            num_channels=(
+                1 if len(self.shape) == 1 else self.shape[0]
+            ),  # FIXME IS THIS RIGHT?
             data=data,
         )
 
@@ -79,3 +75,53 @@ class FakeSeriesSrc(SourceElement):
             metadata={"cnt": self.cnt, "name": "'%s'" % pad.name},
             EOS=self.cnt[pad] > self.num_buffers,
         )
+
+
+# @dataclass
+# class SegmentSrc(TSSource):
+#    """
+#
+#    Parameters:
+#    -----------
+#    rate: int
+#        the sample rate of the data
+#    segments: tuple
+#        A tuple of segment tuples
+#    """
+#
+#    rate: int = 2048
+#    segments: tuple = None
+#
+#    def __post_init__(self):
+#        super().__post_init__()
+#        self.segments = sorted(slice(*s) for s in self.segments if s[1] < self.t0)
+#
+#    def new(self, pad):
+#        """
+#        New buffers are created on "pad" with an instance specific count and a
+#        name derived from the pad name. "EOS" is set if we have surpassed the requested
+#        number of buffers.
+#        """
+#        noffset = int(OFFSET_RATE * self.duration)
+#        outbuf = SeriesBuffer(
+#            offset=self.offset[pad],
+#            noffset=noffset,
+#            offset_ref_t0=0,
+#            data=data,
+#        )
+#        intersecting_segments = []
+#        outslice = outbuf.slice
+#        for n, s in self.segments:
+#            if s > outslice:
+#                break
+#            if outslice & s:
+#                intersecting_segments.append(s)
+#        self.segments = self.segments[n:]
+#        # FIXME IMPLEMENT BUFFER SPLITTING BY LIST OF SLICES
+#        outbufs = outbuf.split(intersecting_segments)
+#
+#        self.offset[pad] += noffset
+#
+#        return TSFrame(
+#            buffers=[outbuf],
+#        )
