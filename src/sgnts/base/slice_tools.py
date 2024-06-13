@@ -2,41 +2,232 @@ from dataclasses import dataclass
 
 
 @dataclass
-class TSSlice():
+class TSSlices:
+    slices: tuple
+
+    def __post_init__(self):
+        self.slices = sorted(self.slices)
+
+    def intersection(self):
+        s = TSSlice(self.slices[0].start, self.slices[0].stop)
+        for s2 in self.slices[1:]:
+            s = s & s2
+        return s
+
+
+@dataclass
+class TSSlice:
+    """
+    A class to support operations on an ordered tuple of integers start, stop
+
+
+    Parameters
+    ----------
+    start : int
+        The start of the TSSlice
+    stop : int
+        The stop of the TSSlice
+    """
+
     start: int
     stop: int
 
+    def __post_init__(self):
+        if self.start is None:
+            assert self.stop is None
+        elif self.stop is None:
+            assert self.start is None
+        else:
+            assert isinstance(self.start, int)
+            assert isinstance(self.stop, int)
+            assert self.stop >= self.start
+
     @property
     def slice(self):
+        """
+        Convert to a python slice object with a stride of 1
+        """
         if self:
             return slice(self.start, self.stop, 1)
         else:
-            return slice(-1,-1,1)
+            return slice(-1, -1, 1)
 
     def __and__(self, o):
-        _start,_stop = max(self.start, o.start),min(self.stop, o.stop)
+        """
+        Find the intersection of two TSSlices, e.g.,
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=2, stop=5)
+
+                A&B: TSSlice(start=2, stop=3)
+                B&A: TSSlice(start=2, stop=3)
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=4, stop=6)
+
+                A&B: TSSlice(start=None, stop=None)
+                B&A: TSSlice(start=None, stop=None)
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=None, stop=None)
+
+                A&B: TSSlice(start=None, stop=None)
+                B&A: TSSlice(start=None, stop=None)
+        """
+        if self.start is None or self.stop is None or o.start is None or o.stop is None:
+            return TSSlice(None, None)
+        _start, _stop = max(self.start, o.start), min(self.stop, o.stop)
+        if _start > _stop:
+            return TSSlice(None, None)
         return TSSlice(_start, _stop)
 
     def __or__(self, o):
+        """
+        Find the TSSlice that spans both self and o, e.g.,
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=2, stop=5)
+
+                A|B: TSSlice(start=0, stop=5)
+                B|A: TSSlice(start=0, stop=5)
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=4, stop=6)
+
+                A|B: TSSlice(start=0, stop=6)
+                B|A: TSSlice(start=0, stop=6)
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=None, stop=None)
+
+                A|B: TSSlice(start=None, stop=None)
+                B|A: TSSlice(start=None, stop=None)
+        """
+        if self.start is None or self.stop is None or o.start is None or o.stop is None:
+            return TSSlice(None, None)
         return TSSlice(min(self.start, o.start), max(self.stop, o.stop))
 
     def __bool__(self):
-        return self.start < self.stop
+        """
+        Check the truth value of this TSSlice, e.g.,
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=2, stop=5)
+
+                True if A else False: True
+                True if B else False: True
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=4, stop=6)
+
+                True if A else False: True
+                True if B else False: True
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=None, stop=None)
+
+                True if A else False: True
+                True if B else False: False
+        """
+
+        if self.start is None:
+            assert self.stop is None
+        if self.stop is None:
+            assert self.start is None
+        if self.start is None:
+            return False
+        else:
+            return True
 
     def __add__(self, o):
-        if (self & o):
+        """
+        Add two TSSlices together producing a single TSSlice if they intersect otherwise returning each in a list, e.g.,
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=2, stop=5)
+
+                A+B: [TSSlice(start=0, stop=5)]
+                B+A: [TSSlice(start=0, stop=5)]
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=4, stop=6)
+
+                A+B: [TSSlice(start=0, stop=3), TSSlice(start=4, stop=6)]
+                B+A: [TSSlice(start=0, stop=3), TSSlice(start=4, stop=6)]
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=None, stop=None)
+
+                A+B: [TSSlice(start=0, stop=3), TSSlice(start=None, stop=None)]
+                B+A: [TSSlice(start=None, stop=None), TSSlice(start=0, stop=3)]
+        """
+        if self & o:
             return [self | o]
         else:
-            return [self, o]
+            return sorted([self, o])
+
+    def __gt__(self, o):
+        """
+        Check if a slice is greater than another slice, e.g.,
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=2, stop=5)
+
+                A>B: False
+                B>A: True
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=4, stop=6)
+
+                A>B: False
+                B>A: True
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=None, stop=None)
+
+                A>B: False
+                B>A: False
+
+        """
+        if self.start is None or self.stop is None or o.start is None or o.stop is None:
+            return False
+        return self.start > o.start and self.stop > o.stop
+
+    def __lt__(self, o):
+        if self.start is None or self.stop is None or o.start is None or o.stop is None:
+            return False
+        return self.start < o.start and self.stop < o.stop
+
+    def __ge__(self, o):
+        return self.start >= o.start and self.stop >= o.stop
+
+    def __le__(self, o):
+        return self.start <= o.start and self.stop <= o.stop
 
     def __sub__(self, o):
+        """
+                Find the difference of two overlapping slices, it not overlapping return an empty list, e.g.,
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=2, stop=5)
+
+                A-B: [TSSlice(start=0, stop=2), TSSlice(start=3, stop=5)]
+                B-A: [TSSlice(start=0, stop=2), TSSlice(start=3, stop=5)]
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=4, stop=6)
+
+                A-B: []
+                B-A: []
+
+        A: TSSlice(start=0, stop=3)
+        B: TSSlice(start=None, stop=None)
+
+                A-B: []
+                B-A: []
+
+        """
         b = self | o
         i = self & o
-        return TSSlice(b.start, i.start), TSSlice(i.stop, b.stop)
-
-    @staticmethod
-    def intersection(slices):
-        s = slices[0]
-        for s2 in slices[1:]:
-            s = s & s2
-        return s
+        if not b or not i:
+            return []
+        return sorted([TSSlice(b.start, i.start), TSSlice(i.stop, b.stop)])
