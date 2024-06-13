@@ -5,7 +5,8 @@ import numpy
 
 from sgn.base import Frame
 
-from .offset import Offset
+from .offset import Offset, ALLOWED_RATES
+from .slice_tools import TSSlice
 
 
 @dataclass
@@ -22,25 +23,49 @@ class SeriesBuffer:
         in the buffer. Similar to "duration".
     offset_ref_t0 : int
         The reference time to start the offset counter, in nanoseconds.
+    sample_rate : int
+        The sample rate belonging to the set of ALLOWED_RATES
+    num_channels : int
+        The number of channels in the data
     data : Sequence
-        The timeseries data.
+        The timeseries data or None. If not None, the inferred sample
+        rate must equal the provided sample rate
 
     """
 
     offset: int = None
     noffset: int = None
     offset_ref_t0: int = None
+    sample_rate: int = None
+    num_channels: int = None
     data: Sequence[Any] = None
-    is_gap: bool = None
 
     def __post_init__(self):
         assert isinstance(self.offset, int)
         assert isinstance(self.noffset, int)
         assert isinstance(self.offset_ref_t0, int)
+        assert isinstance(self.num_channels, int)
+        assert self.sample_rate in ALLOWED_RATES
+        if self.data is not None:
+            assert self.__check_data()
 
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
-            return "SeriesBuffer(offset=%d, noffset=%d, offset_ref_t0=%d, size=%d, duration=%d, data=%s)" % (self.offset, self.noffset, self.offset_ref_t0, 0 if self.size is None else self.size, self.duration, self.data)
+            return (
+                "SeriesBuffer(offset=%d, noffset=%d, offset_ref_t0=%d, size=%d, duration=%d, data=%s)"
+                % (
+                    self.offset,
+                    self.noffset,
+                    self.offset_ref_t0,
+                    0 if self.size is None else self.size,
+                    self.duration,
+                    self.data,
+                )
+            )
+
+    @property
+    def slice(self):
+        return TSSlice(self.t0, self.end)
 
     @property
     def t0(self):
@@ -65,9 +90,20 @@ class SeriesBuffer:
         else:
             return self.data.shape[-1]
 
+    def __check_data(self):
+        return (
+            self.sample_rate == int(self.size / Offset.offset2sec(self.noffset))
+        ) and (
+            (self.num_channels == 1 and self.data.ndim == 1)
+            or (self.data.ndim == 2 and self.data.shape[0] == self.num_channels)
+        )
+
     @property
-    def sample_rate(self):
-        return int(self.size / Offset.offset2sec(self.noffset))
+    def is_gap(self):
+        if self.data is None:
+            return True
+        else:
+            return False
 
     def __contains__(self, item):
         if isinstance(item, int):
@@ -85,20 +121,45 @@ class SeriesBuffer:
 
     def __ge__(self, item):
         if isinstance(item, int):
-            return self.end > item
+            return self.t0 >= item
+
+    def __gt__(self, item):
+        if isinstance(item, int):
+            return self.t0 > item
+
+    def pad_buffer(self, t0, data=None):
+        assert t0 < self.t0
+        delta_offset = int(round(Offset.ns2offset(t0 - self.t0)))
+        new_offset = int(round(Offset.ns2offset(t0 - self.offset_ref_t0)))
+        new_noffset = int(round(Offset.ns2offset(self.t0 - t0)))
+        return SeriesBuffer(
+            offset=new_offset,
+            noffset=new_noffset,
+            offset_ref_t0=self.offset_ref_t0,
+            sample_rate=self.sample_rate,
+            num_channels=self.num_channels,
+            data=data,
+        )
 
     def split(self, ts):
         assert self.t0 <= ts < self.end
         midoffset = int(round(Offset.ns2offset(ts - self.t0)))
         midsamples = int(round(Offset.offset2nsamples(midoffset, self.sample_rate)))
-        return SeriesBuffer(offset = self.offset, noffset = midoffset, offset_ref_t0 = self.offset_ref_t0, is_gap = self.is_gap, data = None if self.data is None else self.data[:midsamples,], metadata = self.metadata), SeriesBuffer(offset = self.offset + midoffset, noffset = self.noffset - midoffset, offset_ref_t0 = self.offset_ref_t0, is_gap = self.is_gap, data = None if self.data is None else self.data[midsamples:,], metadata = self.metadata)
-
-    def pad_buffer(self, t0, is_gap = True, data = None):
-        assert t0 < self.t0
-        delta_offset = int(round(Offset.ns2offset(t0 - self.t0)))
-        new_offset = int(round(Offset.ns2offset(t0 - self.offset_ref_t0)))
-        new_noffset = int(round(Offset.ns2offset(self.t0 - t0)))
-        return SeriesBuffer(offset = new_offset, noffset = new_noffset, offset_ref_t0 = self.offset_ref_t0, is_gap = is_gap, data = data)
+        return SeriesBuffer(
+            offset=self.offset,
+            noffset=midoffset,
+            offset_ref_t0=self.offset_ref_t0,
+            sample_rate=self.sample_rate,
+            num_channels=self.num_channels,
+            data=None if self.data is None else self.data[:midsamples,],
+        ), SeriesBuffer(
+            offset=self.offset + midoffset,
+            noffset=self.noffset - midoffset,
+            offset_ref_t0=self.offset_ref_t0,
+            sample_rate=self.sample_rate,
+            num_channels=self.num_channels,
+            data=None if self.data is None else self.data[midsamples:,],
+        )
 
 
 @dataclass
