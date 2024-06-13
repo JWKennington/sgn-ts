@@ -52,6 +52,7 @@ def test_sync(capsys):
             rate=inrate,
             duration=H1_duration,
             t0=H1_t0,
+            random_seed=1234
         ),
         Sync(
             name="trans1",
@@ -70,6 +71,7 @@ def test_sync(capsys):
             rate=inrate,
             duration=L1_duration,
             t0=L1_t0,
+            random_seed=1234
         ),
         FakeSeriesSink(
             name="snk2",
@@ -83,6 +85,7 @@ def test_sync(capsys):
             rate=inrate,
             duration=V1_duration,
             t0=V1_t0,
+            random_seed=1234
         ),
         FakeSeriesSink(
             name="snk3",
@@ -107,27 +110,48 @@ def test_sync(capsys):
                 captured.out.strip()
                 == """
 mode='pad' H1_t0=0, L1_t0=3, V1_t0=5
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:H1' -> 'snk1:sink:H1' offset 0 time 0 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:L1' -> 'snk2:sink:L1' offset 0 time 0 duration 1000000000 data_is_all_zeros True
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:V1' -> 'snk3:sink:V1' offset 0 time 0 duration 1000000000 data_is_all_zeros True
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:H1' -> 'snk1:sink:H1' offset 16384 time 1000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:L1' -> 'snk2:sink:L1' offset 16384 time 1000000000 duration 1000000000 data_is_all_zeros True
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:V1' -> 'snk3:sink:V1' offset 16384 time 1000000000 duration 1000000000 data_is_all_zeros True
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:H1' -> 'snk1:sink:H1' offset 32768 time 2000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:L1' -> 'snk2:sink:L1' offset 32768 time 2000000000 duration 1000000000 data_is_all_zeros True
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:V1' -> 'snk3:sink:V1' offset 32768 time 2000000000 duration 1000000000 data_is_all_zeros True
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:H1' -> 'snk1:sink:H1' offset 49152 time 3000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:L1' -> 'snk2:sink:L1' offset 49152 time 3000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:V1' -> 'snk3:sink:V1' offset 49152 time 3000000000 duration 1000000000 data_is_all_zeros True
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:H1' -> 'snk1:sink:H1' offset 65536 time 4000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:L1' -> 'snk2:sink:L1' offset 65536 time 4000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:V1' -> 'snk3:sink:V1' offset 65536 time 4000000000 duration 1000000000 data_is_all_zeros True
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:H1' -> 'snk1:sink:H1' offset 81920 time 5000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:L1' -> 'snk2:sink:L1' offset 81920 time 5000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:V1' -> 'snk3:sink:V1' offset 81920 time 5000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:H1' -> 'snk1:sink:H1' offset 98304 time 6000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:L1' -> 'snk2:sink:L1' offset 98304 time 6000000000 duration 1000000000 data_is_all_zeros False
-buffer flow:  'src1:src:H1'+'src2:src:L1'+'src3:src:V1' -> 'trans1:src:V1' -> 'snk3:sink:V1' offset 98304 time 6000000000 duration 1000000000 data_is_all_zeros False
+-> trans1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=0, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.19151945 ... 0.65887349])
+-> trans1:src:L1 -> snk2:sink:L1  ::
+	SeriesBuffer(offset=0, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+-> trans1:src:V1 -> snk3:sink:V1  ::
+	SeriesBuffer(offset=0, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+-> trans1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=16384, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.24485884 ... 0.5190297 ])
+-> trans1:src:L1 -> snk2:sink:L1  ::
+	SeriesBuffer(offset=16384, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+-> trans1:src:V1 -> snk3:sink:V1  ::
+	SeriesBuffer(offset=16384, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+-> trans1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=32768, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.11613839 ... 0.26775275])
+-> trans1:src:L1 -> snk2:sink:L1  ::
+	SeriesBuffer(offset=32768, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+-> trans1:src:V1 -> snk3:sink:V1  ::
+	SeriesBuffer(offset=32768, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+-> trans1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=49152, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.39056079 ... 0.11577097])
+-> trans1:src:L1 -> snk2:sink:L1  ::
+	SeriesBuffer(offset=49152, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.18326635 ... 0.47626848])
+-> trans1:src:V1 -> snk3:sink:V1  ::
+	SeriesBuffer(offset=49152, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+-> trans1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=65536, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.49628163 ... 0.10578275])
+-> trans1:src:L1 -> snk2:sink:L1  ::
+	SeriesBuffer(offset=65536, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.71015328 ... 0.86965315])
+-> trans1:src:V1 -> snk3:sink:V1  ::
+	SeriesBuffer(offset=65536, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+-> trans1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=81920, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.94153153 ... 0.88689441])
+-> trans1:src:L1 -> snk2:sink:L1  ::
+	SeriesBuffer(offset=81920, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.03053277 ... 0.72562624])
+-> trans1:src:V1 -> snk3:sink:V1  ::
+	SeriesBuffer(offset=81920, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.16926449 ... 0.92509941])
+-> trans1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=98304, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.81652232 ... 0.46941576])
+-> trans1:src:L1 -> snk2:sink:L1  ::
+	SeriesBuffer(offset=98304, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.78178969 ... 0.7388422 ])
+-> trans1:src:V1 -> snk3:sink:V1  ::
+	SeriesBuffer(offset=98304, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.08769087 ... 0.70981567])
 """.strip()
             )
 
