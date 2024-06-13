@@ -10,16 +10,17 @@ from .offset import *
 from .time import *
 from .slice_tools import *
 
+
 @dataclass
-class _TSTransSink():
+class _TSTransSink:
 
     def __post_init__(self):
         self._is_aligned = False
-        self.inbufs = {p:deque() for p in self.sink_pads}
-        self.preparedframes = {p:None for p in self.sink_pads}
+        self.inbufs = {p: deque() for p in self.sink_pads}
+        self.preparedframes = {p: None for p in self.sink_pads}
         self.at_EOS = False
-        self._last_ts = {p:None for p in self.sink_pads}
-        self._last_offset = {p:None for p in self.sink_pads}
+        self._last_ts = {p: None for p in self.sink_pads}
+        self._last_offset = {p: None for p in self.sink_pads}
 
     def pull(self, pad, bufs):
         self.at_EOS |= bufs.EOS
@@ -33,7 +34,19 @@ class _TSTransSink():
 
         # put in heartbeat buffer if not aligned
         if not self._is_aligned:
-            self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers = [SeriesBuffer(offset=0, noffset=0, offset_ref_t0=self.earliest, data=None, is_gap=True)])
+            self.preparedframes[pad] = TSFrame(
+                EOS=self.at_EOS,
+                buffers=[
+                    SeriesBuffer(
+                        offset=0,
+                        noffset=0,
+                        offset_ref_t0=self.earliest,
+                        sample_rate=bufs[0].sample_rate,
+                        num_channels=bufs[0].num_channels,
+                        data=None,
+                    )
+                ],
+            )
         # Else pack all the buffers
         else:
             out = []
@@ -41,14 +54,14 @@ class _TSTransSink():
             for b in tuple(self.inbufs[pad]):
                 if b <= min_latest:
                     out.append(self.inbufs[pad].popleft())
-            if ( buf := self.inbufs[pad].popleft() ) is not None:
+            if (buf := self.inbufs[pad].popleft()) is not None:
                 if buf.t0 < min_latest:
-                    l,r = buf.split(min_latest)
+                    l, r = buf.split(min_latest)
                     self.inbufs[pad].appendleft(r)
                     out.append(l)
-                else:# Yes this condition is silly
+                else:  # Yes this condition is silly
                     self.inbufs[pad].appendleft(buf)
-            self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers = out)
+            self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers=out)
 
         if self.timeout(pad):
             raise ValueError("pad %s has timed out" % pad.name)
@@ -66,17 +79,19 @@ class _TSTransSink():
             if len(inbufs) > 0:
                 return TSSlice(inbufs[0].t0, inbufs[-1].end)
             else:
-                return TSSlice(-1,-1)
+                return TSSlice(-1, -1)
 
-        def __can_align(self = self):
-            return TSSlice.intersection([slice_from_pad(self.inbufs[p]) for p in self.inbufs])
+        def __can_align(self=self):
+            return TSSlices(
+                [slice_from_pad(self.inbufs[p]) for p in self.inbufs]
+            ).intersection()
 
         if not self._is_aligned and __can_align():
             self._is_aligned = True
             old = self.earliest
             for p in self.inbufs:
-                if self.inbufs[p][0].t0 != old: 
-                    buf = self.inbufs[p][0].pad_buffer(t0 = old)
+                if self.inbufs[p][0].t0 != old:
+                    buf = self.inbufs[p][0].pad_buffer(t0=old)
                     self.inbufs[p].appendleft(buf)
 
     def timeout(self, pad):
@@ -101,6 +116,7 @@ class _TSTransSink():
     def min_latest(self):
         return min(self.latest_by_pad(n) for n in self.inbufs)
 
+
 @dataclass
 class TSTransform(TransformElement, _TSTransSink):
 
@@ -112,7 +128,8 @@ class TSTransform(TransformElement, _TSTransSink):
         _TSTransSink.__post_init__(self)
 
     def transform(self, pad):
-        raise NotImplementedError 
+        raise NotImplementedError
+
 
 @dataclass
 class TSSink(SinkElement, _TSTransSink):
@@ -124,3 +141,23 @@ class TSSink(SinkElement, _TSTransSink):
         SinkElement.__post_init__(self)
         _TSTransSink.__post_init__(self)
 
+
+@dataclass
+class TSSource(SourceElement):
+    """
+    A time-series source that generates data in fixed-size buffers.
+
+    Parameters:
+    -----------
+    duration: float
+        duration of the data buffer, in seconds
+    t0: float
+        start time of first buffer, in seconds
+    """
+
+    duration: float = 1
+    t0: float = 0
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.offset = {p: Offset.sec2offset(self.t0) for p in self.source_pads}
