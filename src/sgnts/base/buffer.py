@@ -25,8 +25,10 @@ class SeriesBuffer:
         The reference time to start the offset counter, in nanoseconds.
     sample_rate : int
         The sample rate belonging to the set of ALLOWED_RATES
-    num_channels : int
-        The number of channels in the data
+    channels : tuple
+        The channels in the data, can be multi-dimensional. If channels =
+        (A, B), and the size of data is N, the shape of the data array is
+        (A, B, N).
     data : Sequence
         The timeseries data or None. If not None, the inferred sample
         rate must equal the provided sample rate
@@ -37,14 +39,14 @@ class SeriesBuffer:
     noffset: int = None
     offset_ref_t0: int = None
     sample_rate: int = None
-    num_channels: int = None
+    channels: tuple = None
     data: Sequence[Any] = None
 
     def __post_init__(self):
         assert isinstance(self.offset, int)
         assert isinstance(self.noffset, int)
         assert isinstance(self.offset_ref_t0, int)
-        assert isinstance(self.num_channels, int)
+        assert isinstance(self.channels, tuple)
         assert self.sample_rate in ALLOWED_RATES
         if self.data is not None:
             assert self.__check_data()
@@ -57,7 +59,7 @@ class SeriesBuffer:
                     self.offset,
                     self.noffset,
                     self.offset_ref_t0,
-                    0 if self.size is None else self.size,
+                    self.size,
                     self.duration,
                     self.data,
                 )
@@ -86,7 +88,7 @@ class SeriesBuffer:
     @property
     def size(self):
         if self.data is None:
-            return None
+            return int(self.sample_rate * Offset.offset2sec(self.noffset))
         else:
             return self.data.shape[-1]
 
@@ -94,8 +96,7 @@ class SeriesBuffer:
         return (
             self.sample_rate == int(self.size / Offset.offset2sec(self.noffset))
         ) and (
-            (self.num_channels == 1 and self.data.ndim == 1)
-            or (self.data.ndim == 2 and self.data.shape[0] == self.num_channels)
+            (self.channels == self.data.shape[:-1])
         )
 
     @property
@@ -104,6 +105,17 @@ class SeriesBuffer:
             return True
         else:
             return False
+
+    @property
+    def shape(self):
+        return self.channels + (self.size,)
+
+    @property
+    def filleddata(self):
+        if self.data is not None:
+            return self.data
+        else:
+            return numpy.zeros(self.shape)
 
     def __contains__(self, item):
         if isinstance(item, int):
@@ -137,7 +149,7 @@ class SeriesBuffer:
             noffset=new_noffset,
             offset_ref_t0=self.offset_ref_t0,
             sample_rate=self.sample_rate,
-            num_channels=self.num_channels,
+            channels=self.channels,
             data=data,
         )
 
@@ -150,14 +162,14 @@ class SeriesBuffer:
             noffset=midoffset,
             offset_ref_t0=self.offset_ref_t0,
             sample_rate=self.sample_rate,
-            num_channels=self.num_channels,
+            channels=self.channels,
             data=None if self.data is None else self.data[:midsamples,],
         ), SeriesBuffer(
             offset=self.offset + midoffset,
             noffset=self.noffset - midoffset,
             offset_ref_t0=self.offset_ref_t0,
             sample_rate=self.sample_rate,
-            num_channels=self.num_channels,
+            channels=self.channels,
             data=None if self.data is None else self.data[midsamples:,],
         )
 
