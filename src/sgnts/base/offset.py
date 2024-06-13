@@ -1,4 +1,5 @@
 from .time import Time
+import numpy
 
 # OFFSET_RATE: the number of offsets in one second.
 # The OFFSET_RATE serves as a global clock that is a power of 2.
@@ -25,7 +26,11 @@ from .time import Time
 # to be a power of 2, and at least as large as the highest sample
 # rate the buffers will carry.
 #
+# The ALLOWED_RATES will vary from 1 to OFFSET_RATE by powers of 2.
+
+
 OFFSET_RATE = 16384
+ALLOWED_RATES = set(2**x for x in range(1 + int(numpy.log2(OFFSET_RATE))))
 
 
 class Offset:
