@@ -23,6 +23,12 @@ class FakeSeriesSrc(TSSource):
         sine wave data
     fsin: float
         frequency of the sine wave is signal_type = 'sin'
+    ngap: int
+        Frequency of gap buffers, will generate a gap buffer every ngap buffers.
+        ngap=0: do not generate gap buffers.
+        ngap=-1: generates gap buffers randomly.
+    random_seed: int
+        set the random seed, used for signal_type = 'white'
     """
 
     num_buffers: int = 0
@@ -30,11 +36,15 @@ class FakeSeriesSrc(TSSource):
     channels: tuple = ()
     signal_type: str = "white"
     fsin: float = 5
+    ngap: int = 0
+    random_seed: int = None
 
     def __post_init__(self):
         super().__post_init__()
         self.cnt = {p: 0 for p in self.source_pads}
         self.shape = self.channels + (int(self.rate * self.duration),)
+        if self.signal_type == "white" and self.random_seed is not None:
+            np.random.seed(self.random_seed)
 
     def create_data(self, offset):
         if self.signal_type == "white":
@@ -56,15 +66,18 @@ class FakeSeriesSrc(TSSource):
         """
         self.cnt[pad] += 1
         noffset = int(OFFSET_RATE * self.duration)
-        data = self.create_data(self.offset[pad])
+        ngap = self.ngap
+        if (ngap == -1 and np.random.rand(1) > 0.5) or (ngap > 0 and self.cnt[pad] % ngap == 0):
+            data = None
+        else:
+            data = self.create_data(self.offset[pad])
+
         outbuf = SeriesBuffer(
             offset=self.offset[pad],
             noffset=noffset,
             offset_ref_t0=0,
             sample_rate=self.rate,
-            num_channels=(
-                1 if len(self.shape) == 1 else self.shape[0]
-            ),  # FIXME IS THIS RIGHT?
+            channels=self.channels,
             data=data,
         )
 
