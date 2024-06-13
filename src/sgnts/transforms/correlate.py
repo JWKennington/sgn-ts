@@ -59,13 +59,6 @@ class Correlate(TransformElement):
         """
         inbufs = self.inbufs
         EOS = inbufs.EOS
-        metadata = {}
-        metadata["cnt:%s" % inbufs.metadata["name"]] = inbufs.metadata["cnt"]
-        metadata["cnt"] = inbufs.metadata["cnt"]
-        metadata["name"] = "%s -> '%s'" % (
-            inbufs.metadata["name"],
-            pad.name,
-        )
 
         nfilter_samples = self.filters.shape[-1]
 
@@ -85,6 +78,7 @@ class Correlate(TransformElement):
             data = np.pad(data, (nworkspace - ndata, 0), "constant")
 
         os = []
+        # FIXME: Are there multi-channel correlation in numpy or scipy?
         for i in range(self.filters.shape[0]):
             os.append(scipy.signal.correlate(data, self.filters[i], mode="valid"))
         out = np.vstack(os)
@@ -92,11 +86,13 @@ class Correlate(TransformElement):
         next_offset = request_segment[1] - shift
 
         if next_offset > A.get_available_offset_segment()[0]:
-            A.flush_samples_by_end_offset_segment(request_segment[1] - shift)
+            A.flush_samples_by_end_offset_segment(next_offset)
 
         return TSFrame(buffers=[SeriesBuffer(
             offset=self.this_segment[0],
             noffset=self.this_noffset,
-            data=out,
             offset_ref_t0=self.offset_ref_t0,
-        )], metadata=metadata, EOS=EOS)
+            data=out,
+            sample_rate=inbufs[-1].sample_rate,
+            channels=self.filters.shape[:-1]
+        )], EOS=EOS)
