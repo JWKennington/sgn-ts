@@ -29,34 +29,33 @@ import numpy
 # The ALLOWED_RATES will vary from 1 to OFFSET_RATE by powers of 2.
 
 
-OFFSET_RATE = 16384
-ALLOWED_RATES = set(2**x for x in range(1 + int(numpy.log2(OFFSET_RATE))))
-
 
 class Offset:
 
     offset_ref_t0 = 0
+    OFFSET_RATE = 16384
+    ALLOWED_RATES = set(2**x for x in range(1 + int(numpy.log2(OFFSET_RATE))))
 
     @staticmethod
     def offset2sec(offset):
-        return offset / OFFSET_RATE
+        return offset / Offset.OFFSET_RATE
 
     @staticmethod
     def offset2ns(offset):
-        return int(offset / OFFSET_RATE * Time.SECONDS)
+        return int(offset / Offset.OFFSET_RATE * Time.SECONDS)
 
     @staticmethod
     def sec2offset(seconds):
-        return seconds * OFFSET_RATE
+        return seconds * Offset.OFFSET_RATE
 
     @staticmethod
     def ns2offset(nanoseconds):
-        return nanoseconds / Time.SECONDS * OFFSET_RATE
+        return nanoseconds / Time.SECONDS * Offset.OFFSET_RATE
 
     @staticmethod
     def offset2nsamples(offset, sample_rate):
-        return int(offset / OFFSET_RATE * sample_rate)
+        return int(offset / Offset.OFFSET_RATE * sample_rate)
 
     @staticmethod
     def nsamples2offset(nsamples, sample_rate):
-        return int(nsamples / sample_rate * OFFSET_RATE)
+        return int(nsamples / sample_rate * Offset.OFFSET_RATE)
