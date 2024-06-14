@@ -58,7 +58,6 @@ class Adder(TSTransform):
         return TSFrame(buffers=[SeriesBuffer(
             offset=offset,
             noffset=noffset,
-            offset_ref_t0=offset_ref_t0,
             data=out,
             sample_rate=self.sample_rate,
             channels=self.channels

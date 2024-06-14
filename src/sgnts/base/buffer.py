@@ -17,12 +17,10 @@ class SeriesBuffer:
     ----------
     offset : int
         The number of offset samples (defined at sample rate OFFSET_RATE)
-        since offset_ref_t0. Similar to "t0".
+        since Offset.offset_ref_t0. Similar to "t0".
     noffset : int
         The number of offset samples (defined at sample rate OFFSET_RATE)
         in the buffer. Similar to "duration".
-    offset_ref_t0 : int
-        The reference time to start the offset counter, in nanoseconds.
     sample_rate : int
         The sample rate belonging to the set of ALLOWED_RATES
     channels : tuple
@@ -37,7 +35,6 @@ class SeriesBuffer:
 
     offset: int = None
     noffset: int = None
-    offset_ref_t0: int = None
     sample_rate: int = None
     channels: tuple = None
     data: Sequence[Any] = None
@@ -45,7 +42,6 @@ class SeriesBuffer:
     def __post_init__(self):
         assert isinstance(self.offset, int)
         assert isinstance(self.noffset, int)
-        assert isinstance(self.offset_ref_t0, int)
         assert isinstance(self.channels, tuple)
         assert self.sample_rate in ALLOWED_RATES
         if self.data is not None:
@@ -54,11 +50,10 @@ class SeriesBuffer:
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
             return (
-                "SeriesBuffer(offset=%d, noffset=%d, offset_ref_t0=%d, size=%d, duration=%d, data=%s)"
+                "SeriesBuffer(offset=%d, noffset=%d, size=%d, duration=%d, data=%s)"
                 % (
                     self.offset,
                     self.noffset,
-                    self.offset_ref_t0,
                     self.size,
                     self.duration,
                     self.data,
@@ -71,7 +66,7 @@ class SeriesBuffer:
 
     @property
     def t0(self):
-        return self.offset_ref_t0 + Offset.offset2ns(self.offset)
+        return Offset.offset_ref_t0 + Offset.offset2ns(self.offset)
 
     @property
     def duration(self):
@@ -142,12 +137,11 @@ class SeriesBuffer:
     def pad_buffer(self, t0, data=None):
         assert t0 < self.t0
         delta_offset = int(round(Offset.ns2offset(t0 - self.t0)))
-        new_offset = int(round(Offset.ns2offset(t0 - self.offset_ref_t0)))
+        new_offset = int(round(Offset.ns2offset(t0 - Offset.offset_ref_t0)))
         new_noffset = int(round(Offset.ns2offset(self.t0 - t0)))
         return SeriesBuffer(
             offset=new_offset,
             noffset=new_noffset,
-            offset_ref_t0=self.offset_ref_t0,
             sample_rate=self.sample_rate,
             channels=self.channels,
             data=data,
@@ -160,14 +154,12 @@ class SeriesBuffer:
         return SeriesBuffer(
             offset=self.offset,
             noffset=midoffset,
-            offset_ref_t0=self.offset_ref_t0,
             sample_rate=self.sample_rate,
             channels=self.channels,
             data=None if self.data is None else self.data[:midsamples,],
         ), SeriesBuffer(
             offset=self.offset + midoffset,
             noffset=self.noffset - midoffset,
-            offset_ref_t0=self.offset_ref_t0,
             sample_rate=self.sample_rate,
             channels=self.channels,
             data=None if self.data is None else self.data[midsamples:,],

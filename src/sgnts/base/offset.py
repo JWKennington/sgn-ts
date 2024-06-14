@@ -34,6 +34,9 @@ ALLOWED_RATES = set(2**x for x in range(1 + int(numpy.log2(OFFSET_RATE))))
 
 
 class Offset:
+
+    offset_ref_t0 = 0
+
     @staticmethod
     def offset2sec(offset):
         return offset / OFFSET_RATE

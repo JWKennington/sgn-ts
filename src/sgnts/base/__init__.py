@@ -40,7 +40,6 @@ class _TSTransSink:
                     SeriesBuffer(
                         offset=0,
                         noffset=0,
-                        offset_ref_t0=self.earliest,
                         sample_rate=bufs[0].sample_rate,
                         channels=bufs[0].channels,
                         data=None,
@@ -160,4 +159,4 @@ class TSSource(SourceElement):
 
     def __post_init__(self):
         super().__post_init__()
-        self.offset = {p: Offset.sec2offset(self.t0) for p in self.source_pads}
+        self.offset = {p: Offset.sec2offset(self.t0 - Offset.offset_ref_t0) for p in self.source_pads}

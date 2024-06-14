@@ -75,7 +75,6 @@ class FakeSeriesSrc(TSSource):
         outbuf = SeriesBuffer(
             offset=self.offset[pad],
             noffset=noffset,
-            offset_ref_t0=0,
             sample_rate=self.rate,
             channels=self.channels,
             data=data,
