@@ -60,7 +60,6 @@ class Matmul(TransformElement):
             outbuf = SeriesBuffer(
                 offset=inbuf.offset,
                 noffset=inbuf.noffset,
-                offset_ref_t0=inbuf.offset_ref_t0,
                 data=data,
                 sample_rate=inbufs[-1].sample_rate,
                 channels=self.matrix.shape[:-1]

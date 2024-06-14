@@ -71,29 +71,29 @@ def test_resampler(capsys):
             captured.out.strip()
             == """
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=0, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[0.         ... 0.15271153])
+	SeriesBuffer(offset=0, noffset=16384, size=256, duration=1000000000, data=[0.         ... 0.15271153])
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=0, noffset=8192, offset_ref_t0=0, size=32, duration=500000000, data=[0.00452957 ... 0.99831967])
+	SeriesBuffer(offset=0, noffset=8192, size=32, duration=500000000, data=[0.00452957 ... 0.99831967])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=16384, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+	SeriesBuffer(offset=16384, noffset=16384, size=256, duration=1000000000, data=None)
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=8192, noffset=16384, offset_ref_t0=0, size=64, duration=1000000000, data=[ 1.00275514e+00 ... -1.57143307e-05])
+	SeriesBuffer(offset=8192, noffset=16384, size=64, duration=1000000000, data=[ 1.00275514e+00 ... -1.57143307e-05])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=32768, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[-0.2794155  ...  0.42276725])
+	SeriesBuffer(offset=32768, noffset=16384, size=256, duration=1000000000, data=[-0.2794155  ...  0.42276725])
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=24576, noffset=16384, offset_ref_t0=0, size=64, duration=1000000000, data=[7.40148683e-17 ... 9.25553230e-01])
+	SeriesBuffer(offset=24576, noffset=16384, size=64, duration=1000000000, data=[7.40148683e-17 ... 9.25553230e-01])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=49152, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+	SeriesBuffer(offset=49152, noffset=16384, size=256, duration=1000000000, data=None)
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=40960, noffset=16384, offset_ref_t0=0, size=64, duration=1000000000, data=[ 9.42946394e-01 ... -4.20381775e-05])
+	SeriesBuffer(offset=40960, noffset=16384, size=64, duration=1000000000, data=[ 9.42946394e-01 ... -4.20381775e-05])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=65536, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=[-0.53657292 ...  0.65914558])
+	SeriesBuffer(offset=65536, noffset=16384, size=256, duration=1000000000, data=[-0.53657292 ...  0.65914558])
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=57344, noffset=16384, offset_ref_t0=0, size=64, duration=1000000000, data=[-7.40148683e-17 ...  7.79057752e-01])
+	SeriesBuffer(offset=57344, noffset=16384, size=64, duration=1000000000, data=[-7.40148683e-17 ...  7.79057752e-01])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=81920, noffset=16384, offset_ref_t0=0, size=256, duration=1000000000, data=None)
+	SeriesBuffer(offset=81920, noffset=16384, size=256, duration=1000000000, data=None)
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=73728, noffset=16384, offset_ref_t0=0, size=64, duration=1000000000, data=[ 8.08023076e-01 ... -6.50132872e-05])
+	SeriesBuffer(offset=73728, noffset=16384, size=64, duration=1000000000, data=[ 8.08023076e-01 ... -6.50132872e-05])
 """.strip()
         )
 

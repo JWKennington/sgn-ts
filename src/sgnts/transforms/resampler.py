@@ -44,7 +44,6 @@ class Resampler(TSTransform):
             self.thiskernel = self.upkernel(factor)
 
         self.pad_length = self.half_length
-        self.offset_ref_t0 = None
 
         super().__post_init__()
         assert (
@@ -67,10 +66,6 @@ class Resampler(TSTransform):
             if self.next_out_offset is None:
                 # start offset counter with the offset of the very first buffer
                 self.next_out_offset = buf.offset
-
-            if self.offset_ref_t0 is None:
-                # start offset counter with the offset of the very first buffer
-                self.offset_ref_t0 = buf.offset_ref_t0
 
     def pad_func(self, data):
         npad = [(0, 0)] * data.ndim
@@ -196,7 +191,6 @@ class Resampler(TSTransform):
         outbuf = SeriesBuffer(
             offset=self.next_out_offset,
             noffset=noffset,
-            offset_ref_t0=self.offset_ref_t0,
             data=outdata,
             sample_rate=self.outrate,
             channels=channels,

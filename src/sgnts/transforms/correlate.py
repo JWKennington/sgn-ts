@@ -51,7 +51,6 @@ class Correlate(TransformElement):
         self.this_segment = (offset0, offset1)
         self.this_noffset = offset1 - offset0
         self.sample_rate = bufs[0].sample_rate
-        self.offset_ref_t0 = bufs[0].offset_ref_t0
 
     def transform(self, pad):
         """
@@ -91,7 +90,6 @@ class Correlate(TransformElement):
         return TSFrame(buffers=[SeriesBuffer(
             offset=self.this_segment[0],
             noffset=self.this_noffset,
-            offset_ref_t0=self.offset_ref_t0,
             data=out,
             sample_rate=inbufs[-1].sample_rate,
             channels=self.filters.shape[:-1]
