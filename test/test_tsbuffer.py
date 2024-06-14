@@ -28,6 +28,7 @@ def test_tsgraph(capsys):
             rate=2048,
             duration=1,
             signal_type="white",
+            random_seed=1234
         ),
         FakeSeriesSink(
             name="snk1",
@@ -42,9 +43,12 @@ def test_tsgraph(capsys):
         assert (
             captured.out.strip()
             == """
-buffer flow:  'src1:src:H1' -> 'snk1:sink:H1' offset 0 time 0
-buffer flow:  'src1:src:H1' -> 'snk1:sink:H1' offset 16384 time 1000000000
-buffer flow:  'src1:src:H1' -> 'snk1:sink:H1' offset 32768 time 2000000000
+-> src1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=0, noffset=16384, offset_ref_t0=0, size=2048, duration=1000000000, data=[0.19151945 ... 0.72562624])
+-> src1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=16384, noffset=16384, offset_ref_t0=0, size=2048, duration=1000000000, data=[0.5880075  ... 0.88689441])
+-> src1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=32768, noffset=16384, offset_ref_t0=0, size=2048, duration=1000000000, data=[0.93690654 ... 0.04236331])
 """.strip()
         )
 

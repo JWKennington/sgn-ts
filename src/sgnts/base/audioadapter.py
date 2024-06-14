@@ -33,10 +33,7 @@ class Audioadapter:
         self.cat_data = None
         self.cat_gaps = None
         self.channels = None
-        # self.device = None
-        # self.dtype = None
         self.SECONDS = Time.SECONDS
-        self.zero = None
 
     @property
     def endtime(self):
@@ -57,19 +54,15 @@ class Audioadapter:
         npad[-1] = (pad_samples, 0)
         return np.pad(data, npad, "constant")
 
-    def cat(self, xs, axis):
+    def cat_func(self, xs, axis):
         return np.concatenate(xs, axis=axis)
-
-    def zero_func(self):
-        return np.zeros(1)
 
     def concatenate_data(self):
         """
         Concatenate all the data and gaps info in the buffers, and save as attribute
         """
         if self.size > 0:
-            # self.cat_data = torch.cat([b.data for b in self.buffers], dim=-1)
-            self.cat_data = self.cat([b.data for b in self.buffers], axis=-1)
+            self.cat_data = self.cat_func([b.filleddata for b in self.buffers], axis=-1)
             if self.cat_gaps is None and self.gap_size > 0 and self.nongap_size > 0:
                 # mixture of gaps and nongaps
                 self.cat_gaps = np.concatenate(self.is_gaps)
@@ -78,20 +71,23 @@ class Audioadapter:
         """
         Push buffer into the deque
         """
+        tb = type(buf)
+        assert tb is SeriesBuffer, (
+            f"Buffers should be of type SeriesBuffer, instead got {tb}"
+        )
+
         if buf.duration == 0:
             return
 
-        tb = type(buf)
-        if tb is SeriesBuffer:
-            sample_rate = buf.sample_rate
+        sample_rate = buf.sample_rate
+        if self.sample_rate is None:
+            self.sample_rate = sample_rate
         else:
-            raise ValueError(
-                f"Buffers should be of type SeriesBuffer, instead got {tb}"
-            )
-
-        if self.sample_rate is not None:
             # buffers in the audioadapter must be the same sample rate
             assert sample_rate == self.sample_rate, f"{sample_rate} {self.sample_rate}"
+
+        if self.channels is None:
+            self.channels = buf.channels
 
         # Check if the start time is as expected
         # FIXME should we support discontinuities?
@@ -110,22 +106,9 @@ class Audioadapter:
         self.next_starttime = buf.t0 + buf.duration
         self.next_offset = buf.offset + buf.noffset
 
+        # Store gap information
         nsamples = buf.size
         self.size += nsamples
-        data = buf.data
-        # if self.device is None:
-        #    self.device = data.device
-
-        # if self.dtype is None:
-        #    self.dtype = data.dtype
-
-        if self.channels is None:
-            self.channels = data.shape[:-1]
-
-        if self.zero is None:
-            # self.zero = torch.zeros(1, device=data.device, dtype=data.dtype)
-            self.zero = self.zero_func()
-
         is_gap = buf.is_gap
         self.is_gaps.append(np.broadcast_to(is_gap, nsamples))
         if is_gap is True:
@@ -139,7 +122,6 @@ class Audioadapter:
 
         if self.starttime is None or len(self.buffers) == 1:
             self.starttime = buf.t0
-            self.sample_rate = sample_rate
             self.offset = buf.offset
 
     def get_available_offset_segment(self):
@@ -171,7 +153,7 @@ class Audioadapter:
 
     def copy_samples(self, nsamples, start_sample=0):
         """
-        Copy nsamples from the head of the deque to dst
+        Copy nsamples from the start_sample of the deque
         """
         assert nsamples > 0, f"{nsamples=} {self.sample_rate=}"
         assert nsamples == int(nsamples), f"{nsamples=} must be an integer"
@@ -181,7 +163,7 @@ class Audioadapter:
 
         i0 = self.skip + start_sample
 
-        # check gaps
+        # check gaps before copying
         copy_data = False
         if self.gap_size == 0:
             # no gaps in buffer
@@ -205,16 +187,13 @@ class Audioadapter:
                 # out = torch.cat([b.data for b in self.buffers], dim=-1)[
                 #    ..., i0 : i0 + nsamples
                 # ]
-                out = self.cat([b.data for b in self.buffers], axis=-1)[
+                out = self.cat_func([b.filleddata for b in self.buffers], axis=-1)[
                     ..., i0 : i0 + nsamples
                 ]
             else:
                 out = self.cat_data[..., i0 : i0 + nsamples]
         else:
-            if self.channels is None:
-                out = self.zero.expand(nsamples)
-            else:
-                out = self.zero.expand(self.channels + (nsamples,))
+            out = None
 
         return out, copied_gap, copied_nongap
 
@@ -267,7 +246,7 @@ class Audioadapter:
             nsamples -= pad_samples
 
         out, copied_gap, copied_nongap = self.copy_samples(nsamples, start_sample=ni)
-        if pad_samples > 0:
+        if pad_samples > 0 and out is not None:
             out = self.pad_func(out, pad_samples)
 
         return out, copied_gap, copied_nongap
@@ -317,7 +296,7 @@ class Audioadapter:
             nsamples -= pad_samples
 
         out, copied_gap, copied_nongap = self.copy_samples(nsamples, start_sample=ni)
-        if pad_samples > 0:
+        if pad_samples > 0 and out is not None:
             out = pad(out, (pad_samples, 0), "constant")
 
         return out, copied_gap, copied_nongap
@@ -344,7 +323,6 @@ class Audioadapter:
                     self.gap_size -= nsamples
                 else:
                     self.nongap_size -= nsamples
-
                 break
             self.skip = 0
             self.size -= n

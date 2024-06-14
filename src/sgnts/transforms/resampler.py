@@ -3,11 +3,11 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.signal import correlate
 
-from ..base import OFFSET_RATE, Audioadapter, SeriesBuffer, TransformElement, TSFrame
+from ..base import OFFSET_RATE, Audioadapter, SeriesBuffer, TSTransform, TSFrame, Offset
 
 
 @dataclass
-class Resampler(TransformElement):
+class Resampler(TSTransform):
     """
     Up/down samples time-series data
 
@@ -47,13 +47,14 @@ class Resampler(TransformElement):
         self.offset_ref_t0 = None
 
         super().__post_init__()
-        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
-        "only one sink_pad and one source_pad is allowed")
+        assert (
+            len(self.sink_pads) == 1 and len(self.source_pads) == 1
+        ), "only one sink_pad and one source_pad is allowed"
 
     def pull(self, pad, bufs):
         """
-        assumes there is only one sink pad, if the user wants 
-        to resample multitple channels of data, 
+        assumes there is only one sink pad, if the user wants
+        to resample multitple channels of data,
         connect multiple resampler elements
         """
         self.inbufs = bufs
@@ -71,17 +72,14 @@ class Resampler(TransformElement):
                 # start offset counter with the offset of the very first buffer
                 self.offset_ref_t0 = buf.offset_ref_t0
 
-    def zeros_buffer(self, shape):
-        return np.zeros(shape)
-
-    def pad_func(self, inputs_padded):
-        npad = [(0, 0)] * inputs_padded.ndim
+    def pad_func(self, data):
+        npad = [(0, 0)] * data.ndim
         npad[-1] = (self.pad_length, 0)
-        return np.pad(inputs_padded, npad, "constant")
+        return np.pad(data, npad, "constant")
 
     def get_output_length(self):
         """
-        Needs half_length of data on each side, will use all the samples available 
+        Needs half_length of data on each side, will use all the samples available
         in the audioadapter
         """
         # Pretend that we have a half_length set of samples if we are at a discont
@@ -152,88 +150,57 @@ class Resampler(TransformElement):
         """
         Up/down samples buffers
         """
-        inbufs = self.inbufs
-
-        EOS = inbufs.EOS
-        #metadata = inbufs.metadata
-        # if metadata is None:
-        metadata = {}
-        metadata["cnt:%s" % inbufs.metadata["name"]] = inbufs.metadata["cnt"]
-        metadata["cnt"] = inbufs.metadata["cnt"]
-        metadata["name"] = "%s -> '%s'" % (
-            inbufs.metadata["name"],
-            pad.name,
-        )
-
-        #if inbuf.duration == 0:
-        #    inbuf.metadata = metadata
-        #    inbuf.EOS = EOS
-        #    return inbuf
+        EOS = self.inbufs.EOS
 
         # if inbuf.data.dim() == 1:
         #    inbuf.data = inbuf.data.unsqueeze(0)
 
         A = self.audioadapter
+        assert self.next_out_offset == A.offset + Offset.nsamples2offset(
+            self.half_length - self.pad_length, self.inrate
+        ), (
+            f"offset mismatch: {self.next_out_offset=}, {A.offset=}, "
+            f"{self.half_length=}, {self.pad_length=}, "
+            f"{Offset.nsamples2offset(self.half_length-self.pad_length,self.inrate)=}"
+        )
+
         channels = A.channels
-        out_offset = self.next_out_offset
-
-        # If it's the first data segment, pad with zeros in front.
         sampsin, output_length = self.get_output_length()
-
-        if output_length == 0:
-            # TODO: consider more general cases
-            return TSFrame(buffers=[SeriesBuffer(
-                offset=out_offset,
-                noffset=0,
-                offset_ref_t0=self.offset_ref_t0,
-                data=None,
-                is_gap=True,
-            )], metadata=metadata, EOS=EOS)
-
-
-
         noffset = int(output_length * OFFSET_RATE / self.outrate)
 
-        # shift the next output buffer's offset starting point
-        self.next_out_offset += noffset
-
-        asize = A.size
-        if A.is_gap() is True:
-            # Produce a single gap buffer
-            data = self.zeros_buffer(channels + (output_length,))
-            flush_nsamples = asize - self.half_length * 2
-            self.pad_length = -min(0, flush_nsamples)
-            A.flush_samples(flush_nsamples)
-
-            return TSFrame(buffers=[SeriesBuffer(
-                offset=out_offset,
-                noffset=noffset,
-                offset_ref_t0=self.offset_ref_t0,
-                data=data,
-                is_gap=True,
-            )], metadata=metadata, EOS=EOS)
+        if output_length == 0:
+            outdata = None
         else:
-            inputs_padded, _, copied_nongap = A.copy_samples(asize)
-            if self.pad_length > 0:
-                # if we need to pad half length of zeros in front
-                inputs_padded = self.pad_func(inputs_padded)
-
-            # TODO: check what happens when buffer size is a half integer number
-            flush_nsamples = asize - self.half_length * 2
-            self.pad_length = -min(0, flush_nsamples)
-            out = self.resample(inputs_padded, channels + (output_length,))
+            if A.is_gap() is True:
+                # Produce a single gap buffer if all the data in the
+                # audioadapter are gaps
+                outdata = None
+            else:
+                # copy out everything in the audioadapter
+                # we will resample everything that is available
+                outdata, _, copied_nongap = A.copy_samples(A.size)
+                if self.pad_length > 0:
+                    # if we need to pad half length of zeros in front
+                    outdata = self.pad_func(outdata)
+                # resample the data
+                outdata = self.resample(outdata, channels + (output_length,))
 
             # flush samples from audioadapter
             # leave some leftover samples to pad infront of next buffer
+            flush_nsamples = A.size - self.half_length * 2
             A.flush_samples(flush_nsamples)
-            outbuf = SeriesBuffer(
-                offset=out_offset,
-                noffset=noffset,
-                offset_ref_t0=self.offset_ref_t0,
-                data=out,
-                is_gap=(not copied_nongap),
-            )
-            assert (
-                outbuf.sample_rate == self.outrate
-            ), f"{outbuf.sample_rate}, {self.outrate}"
-            return TSFrame(buffers=[outbuf], metadata=metadata, EOS=EOS)
+
+            # update pad_length for the next buffer
+            self.pad_length = -min(0, flush_nsamples)
+
+        outbuf = SeriesBuffer(
+            offset=self.next_out_offset,
+            noffset=noffset,
+            offset_ref_t0=self.offset_ref_t0,
+            data=outdata,
+            sample_rate=self.outrate,
+            channels=channels,
+        )
+        # shift the next output buffer's offset starting point
+        self.next_out_offset += noffset
+        return TSFrame(buffers=[outbuf], EOS=EOS)

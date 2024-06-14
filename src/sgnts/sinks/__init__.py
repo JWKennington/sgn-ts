@@ -21,7 +21,8 @@ class FakeSeriesSink(SinkElement):
         """
         if bufs.EOS:
             self.mark_eos(pad)
-        print (bufs)
+        if bufs.buffers is not None:
+            print (bufs)
         #outstr = "%s :: " % bufs.metadata['__graph__']
         #for buf in bufs:
         #    outstr += str(buf)
@@ -45,7 +46,9 @@ class DumpSeriesSink(SinkElement):
 
     def __post_init__(self):
         super().__post_init__()
-        self.f = open(self.fname, "w")
+        # overwrite existing file
+        with open(self.fname, "w") as f:
+            pass
 
     def write_to_file(self, buf):
         t0 = buf.t0
@@ -58,7 +61,8 @@ class DumpSeriesSink(SinkElement):
             endpoint=False,
         )
         out = np.vstack([ts, data]).T
-        np.savetxt(self.f, out)
+        with open(self.fname, "a") as f:
+            np.savetxt(f, out)
 
     def pull(self, pad, bufs):
         """
@@ -67,30 +71,7 @@ class DumpSeriesSink(SinkElement):
         """
         if bufs.EOS:
             self.mark_eos(pad)
-
+        print (bufs)
         for buf in bufs:
-            if buf.data is None:
-                print(
-                    "buffer flow: ",
-                    "%s -> '%s' offset %d time %d "
-                    % (
-                        bufs.metadata["name"],
-                        pad.name,
-                        buf.offset,
-                        buf.t0,
-                    ),
-                )
-                return
-            else:
-                print(
-                    "buffer flow: ",
-                    "%s -> '%s' offset %d time %d shape %s"
-                    % (
-                        bufs.metadata["name"],
-                        pad.name,
-                        buf.offset,
-                        buf.t0,
-                        buf.data.shape,
-                    ),
-                )
+            if not buf.is_gap:
                 self.write_to_file(buf)

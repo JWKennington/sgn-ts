@@ -49,32 +49,22 @@ class Matmul(TransformElement):
         outbufs = []
         # loop over the input data, only perform matmul on non-gaps
         EOS = inbufs.EOS
-        metadata = {}
-        metadata["cnt:%s" % inbufs.metadata["name"]] = inbufs.metadata["cnt"]
-        metadata["cnt"] = inbufs.metadata["cnt"]
-        metadata["name"] = "%s -> '%s'" % (
-            inbufs.metadata["name"],
-            pad.name,
-        )
         for inbuf in inbufs:
             is_gap = inbuf.is_gap
 
             if is_gap:
-                # produce a zeros buffer
-                if inbuf.data is None:
-                    data = None
-                else:
-                    data = np.zeros(self.matrix.shape[:-1]+(inbuf.size,))
+                data = None
             else:
                 data = np.matmul(self.matrix, inbuf.data)
 
             outbuf = SeriesBuffer(
                 offset=inbuf.offset,
                 noffset=inbuf.noffset,
-                data=data,
                 offset_ref_t0=inbuf.offset_ref_t0,
-                is_gap = inbuf.is_gap,
+                data=data,
+                sample_rate=inbufs[-1].sample_rate,
+                channels=self.matrix.shape[:-1]
             )
             outbufs.append(outbuf)
 
-        return TSFrame(buffers=outbufs, metadata=metadata, EOS=EOS)
+        return TSFrame(buffers=outbufs, EOS=EOS)

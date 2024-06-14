@@ -42,7 +42,7 @@ class _TSTransSink:
                         noffset=0,
                         offset_ref_t0=self.earliest,
                         sample_rate=bufs[0].sample_rate,
-                        num_channels=bufs[0].num_channels,
+                        channels=bufs[0].channels,
                         data=None,
                     )
                 ],
