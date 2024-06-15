@@ -42,7 +42,7 @@ class FakeSeriesSrc(TSSource):
     def __post_init__(self):
         super().__post_init__()
         self.cnt = {p: 0 for p in self.source_pads}
-        self.shape = self.channels + (int(self.rate * self.duration),)
+        self.shape = self.channels + (self.num_samples,)
         if self.signal_type == "white" and self.random_seed is not None:
             np.random.seed(self.random_seed)
 
@@ -51,9 +51,10 @@ class FakeSeriesSrc(TSSource):
             return np.random.rand(*self.shape)
         elif self.signal_type == "sin" or self.signal_type == "sine":
             t0 = Offset.tosec(offset)
+            duration = Offset.tosec(Offset.fromsamples(self.num_samples))
             return np.sin(
                 self.fsin
-                * np.linspace(t0, t0 + self.duration, self.shape[-1], endpoint=False)
+                * np.linspace(t0, t0 + duration, self.shape[-1], endpoint=False)
             )
         else:
             raise ValueError("Unknown signal type")
@@ -65,7 +66,7 @@ class FakeSeriesSrc(TSSource):
         number of buffers.
         """
         self.cnt[pad] += 1
-        noffset = Offset.fromsec(self.duration)
+        noffset = Offset.fromsamples(self.num_samples, self.rate)
         ngap = self.ngap
         if (ngap == -1 and np.random.rand(1) > 0.5) or (ngap > 0 and self.cnt[pad] % ngap == 0):
             data = None
