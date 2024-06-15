@@ -63,7 +63,7 @@ class Correlate(TransformElement):
 
         A = self.audioadapter
 
-        shift = Offset.nsamples2offset(nfilter_samples - 1, self.sample_rate)
+        shift = Offset.fromsamples(nfilter_samples - 1, self.sample_rate)
 
         start = max(0, self.this_segment[0] - shift)
 

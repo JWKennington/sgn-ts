@@ -45,7 +45,7 @@ class Audioadapter:
     @property
     def end_offset(self):
         if self.offset is not None:
-            return int(self.offset + self.size * Offset.OFFSET_RATE / self.sample_rate)
+            return self.offset + Offset.fromsamples(self.size, self.sample_rate)
         else:
             return None
 
@@ -132,12 +132,6 @@ class Audioadapter:
             return (0, 0)
         else:
             return (self.offset, self.end_offset)
-
-    def get_available_segment(self):
-        """
-        Return the full segment of all the available samples in the adapter
-        """
-        return (self.starttime, self.endtime)
 
     def samples_remaining(self, buf, start_sample=None):
         """
@@ -226,13 +220,11 @@ class Audioadapter:
         copied_nongap = False
 
         # find start sample
-        ni = int((offset_segment[0] - self.offset) / (Offset.OFFSET_RATE / self.sample_rate))
+        ni = Offset.tosamples(offset_segment[0] - self.offset, self.sample_rate)
         assert ni == int(ni), "start sample point number is not an integer"
         ni = int(ni)
 
-        nsamples = int(
-            (offset_segment[1] - offset_segment[0]) / (Offset.OFFSET_RATE / self.sample_rate)
-        )
+        nsamples = Offset.tosamples(offset_segment[1] - offset_segment[0], self.sample_rate)
         assert nsamples == int(nsamples), (
             f"nsamples is not an integer, nsamples: {nsamples}, "
             f"segment: {offset_segment}"
@@ -248,56 +240,6 @@ class Audioadapter:
         out, copied_gap, copied_nongap = self.copy_samples(nsamples, start_sample=ni)
         if pad_samples > 0 and out is not None:
             out = self.pad_func(out, pad_samples)
-
-        return out, copied_gap, copied_nongap
-
-    def copy_samples_by_segment(self, segment, pad_zeros=False):
-        """
-        Copy samples within the segment to dst
-
-        Arguments:
-        ----------
-        segment: segments.segment
-            the segment
-        pad_zeros: bool = False
-            pad zeros in front if segment[0] is earlier than the available segment
-        """
-        avail_seg = self.get_available_segment()
-
-        assert segment[1] <= avail_seg[1], (
-            f"rate: {self.sample_rate} requested end segment outside of"
-            f"available segment, requested: {segment}, available: {avail_seg}"
-        )
-
-        if pad_zeros is False:
-            assert segment[0] >= avail_seg[0], (
-                "requested start segment outside of available segment,"
-                f"requested: {segment}, available: {avail_seg}"
-            )
-
-        copied_gap = False
-        copied_nongap = False
-
-        # find start sample
-        ni = (segment[0] - self.starttime) / 1e9 * self.sample_rate
-        assert ni == int(ni), "start sample point number is not an integer"
-        ni = int(ni)
-
-        nsamples = (segment[1] - segment[0]) / 1e9 * self.sample_rate
-        assert nsamples == int(
-            nsamples
-        ), f"nsamples is not an integer, nsamples: {nsamples}, segment: {segment}"
-        nsamples = int(nsamples)
-
-        pad_samples = 0
-        if ni < 0 and pad_zeros is True:
-            pad_samples = -ni
-            ni = 0
-            nsamples -= pad_samples
-
-        out, copied_gap, copied_nongap = self.copy_samples(nsamples, start_sample=ni)
-        if pad_samples > 0 and out is not None:
-            out = pad(out, (pad_samples, 0), "constant")
 
         return out, copied_gap, copied_nongap
 
@@ -338,7 +280,7 @@ class Audioadapter:
             buf0 = self.buffers[0]
             skip_duration = (self.skip / self.sample_rate) * Time.SECONDS
             self.starttime = buf0.t0 + skip_duration
-            self.offset = buf0.offset + int(self.skip * Offset.OFFSET_RATE / self.sample_rate)
+            self.offset = buf0.offset + Offset.fromsamples(self.skip, self.sample_rate)
 
         self.cat_data = None
         self.cat_gaps = None
@@ -353,21 +295,7 @@ class Audioadapter:
             f"{end_offset_segment} {avail}"
         )
 
-        nsamples = (end_offset_segment - self.offset) / (Offset.OFFSET_RATE / self.sample_rate)
-        assert nsamples == int(nsamples), "number of samples is not an integer"
-        nsamples = int(nsamples)
-
-        self.flush_samples(nsamples)
-
-    def flush_samples_by_end_segment(self, segment):
-        """
-        Flush nsamples from the head of the deque up to the end of the segment
-        """
-        assert (
-            segment in self.get_available_segment()
-        ), "segment outside of available segment"
-
-        nsamples = (segment[1] - self.starttime) * self.sample_rate / Time.SECONDS
+        nsamples = Offset.tosamples(end_offset_segment - self.offset, self.sample_rate)
         assert nsamples == int(nsamples), "number of samples is not an integer"
         nsamples = int(nsamples)
 
