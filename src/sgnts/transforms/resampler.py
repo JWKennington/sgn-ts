@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.signal import correlate
 
-from ..base import OFFSET_RATE, Audioadapter, SeriesBuffer, TSTransform, TSFrame, Offset
+from ..base import Audioadapter, SeriesBuffer, TSTransform, TSFrame, Offset
 
 
 @dataclass
@@ -161,7 +161,7 @@ class Resampler(TSTransform):
 
         channels = A.channels
         sampsin, output_length = self.get_output_length()
-        noffset = int(output_length * OFFSET_RATE / self.outrate)
+        noffset = int(output_length * Offset.OFFSET_RATE / self.outrate)
 
         if output_length == 0:
             outdata = None

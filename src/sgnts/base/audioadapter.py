@@ -8,7 +8,7 @@ import numpy as np
 from numpy import pad
 
 from .buffer import SeriesBuffer
-from .offset import OFFSET_RATE
+from .offset import Offset
 from .time import Time
 
 
@@ -45,7 +45,7 @@ class Audioadapter:
     @property
     def end_offset(self):
         if self.offset is not None:
-            return int(self.offset + self.size * OFFSET_RATE / self.sample_rate)
+            return int(self.offset + self.size * Offset.OFFSET_RATE / self.sample_rate)
         else:
             return None
 
@@ -226,12 +226,12 @@ class Audioadapter:
         copied_nongap = False
 
         # find start sample
-        ni = int((offset_segment[0] - self.offset) / (OFFSET_RATE / self.sample_rate))
+        ni = int((offset_segment[0] - self.offset) / (Offset.OFFSET_RATE / self.sample_rate))
         assert ni == int(ni), "start sample point number is not an integer"
         ni = int(ni)
 
         nsamples = int(
-            (offset_segment[1] - offset_segment[0]) / (OFFSET_RATE / self.sample_rate)
+            (offset_segment[1] - offset_segment[0]) / (Offset.OFFSET_RATE / self.sample_rate)
         )
         assert nsamples == int(nsamples), (
             f"nsamples is not an integer, nsamples: {nsamples}, "
@@ -338,7 +338,7 @@ class Audioadapter:
             buf0 = self.buffers[0]
             skip_duration = (self.skip / self.sample_rate) * Time.SECONDS
             self.starttime = buf0.t0 + skip_duration
-            self.offset = buf0.offset + int(self.skip * OFFSET_RATE / self.sample_rate)
+            self.offset = buf0.offset + int(self.skip * Offset.OFFSET_RATE / self.sample_rate)
 
         self.cat_data = None
         self.cat_gaps = None
@@ -353,7 +353,7 @@ class Audioadapter:
             f"{end_offset_segment} {avail}"
         )
 
-        nsamples = (end_offset_segment - self.offset) / (OFFSET_RATE / self.sample_rate)
+        nsamples = (end_offset_segment - self.offset) / (Offset.OFFSET_RATE / self.sample_rate)
         assert nsamples == int(nsamples), "number of samples is not an integer"
         nsamples = int(nsamples)
 

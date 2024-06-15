@@ -5,7 +5,7 @@ import numpy
 
 from sgn.base import Frame
 
-from .offset import Offset, ALLOWED_RATES
+from .offset import Offset
 from .slice_tools import TSSlice
 
 
@@ -43,7 +43,7 @@ class SeriesBuffer:
         assert isinstance(self.offset, int)
         assert isinstance(self.noffset, int)
         assert isinstance(self.channels, tuple)
-        assert self.sample_rate in ALLOWED_RATES
+        assert self.sample_rate in Offset.ALLOWED_RATES
         if self.data is not None:
             assert self.__check_data()
 
@@ -62,7 +62,7 @@ class SeriesBuffer:
 
     @property
     def slice(self):
-        return TSSlice(self.t0, self.end)
+        return TSSlice(self.offset, self.end_offset)
 
     @property
     def t0(self):
@@ -114,42 +114,40 @@ class SeriesBuffer:
 
     def __contains__(self, item):
         if isinstance(item, int):
-            return self.t0 <= item < self.end
+            return self.offset <= item < self.end_offset
         else:
             return False
 
     def __lt__(self, item):
         if isinstance(item, int):
-            return self.end < item
+            return self.end_offset < item
 
     def __le__(self, item):
         if isinstance(item, int):
-            return self.end <= item
+            return self.end_offset <= item
 
     def __ge__(self, item):
         if isinstance(item, int):
-            return self.t0 >= item
+            return self.offset >= item
 
     def __gt__(self, item):
         if isinstance(item, int):
-            return self.t0 > item
+            return self.offset > item
 
-    def pad_buffer(self, t0, data=None):
-        assert t0 < self.t0
-        delta_offset = int(round(Offset.ns2offset(t0 - self.t0)))
-        new_offset = int(round(Offset.ns2offset(t0 - Offset.offset_ref_t0)))
-        new_noffset = int(round(Offset.ns2offset(self.t0 - t0)))
+    def pad_buffer(self, off, data=None):
+        assert off < self.offset
         return SeriesBuffer(
-            offset=new_offset,
-            noffset=new_noffset,
+            offset=off,
+            noffset=self.offset - off,
             sample_rate=self.sample_rate,
             channels=self.channels,
             data=data,
         )
 
-    def split(self, ts):
-        assert self.t0 <= ts < self.end
-        midoffset = int(round(Offset.ns2offset(ts - self.t0)))
+    def split(self, off):
+        assert self.offset <= off < self.end_offset
+        midoffset = off - self.offset
+        # FIXME this should be exact integer math, shouldn't need int or round
         midsamples = int(round(Offset.offset2nsamples(midoffset, self.sample_rate)))
         return SeriesBuffer(
             offset=self.offset,

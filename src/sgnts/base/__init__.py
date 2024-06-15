@@ -54,7 +54,7 @@ class _TSTransSink:
                 if b <= min_latest:
                     out.append(self.inbufs[pad].popleft())
             if (buf := self.inbufs[pad].popleft()) is not None:
-                if buf.t0 < min_latest:
+                if buf.offset < min_latest:
                     l, r = buf.split(min_latest)
                     self.inbufs[pad].appendleft(r)
                     out.append(l)
@@ -76,7 +76,7 @@ class _TSTransSink:
 
         def slice_from_pad(inbufs):
             if len(inbufs) > 0:
-                return TSSlice(inbufs[0].t0, inbufs[-1].end)
+                return TSSlice(inbufs[0].offset, inbufs[-1].end_offset)
             else:
                 return TSSlice(-1, -1)
 
@@ -89,8 +89,8 @@ class _TSTransSink:
             self._is_aligned = True
             old = self.earliest
             for p in self.inbufs:
-                if self.inbufs[p][0].t0 != old:
-                    buf = self.inbufs[p][0].pad_buffer(t0=old)
+                if self.inbufs[p][0].offset != old:
+                    buf = self.inbufs[p][0].pad_buffer(off=old)
                     self.inbufs[p].appendleft(buf)
 
     def timeout(self, pad):
@@ -98,10 +98,10 @@ class _TSTransSink:
         return self.inbufs[pad][-1].end < (self.latest - self.max_age)
 
     def latest_by_pad(self, pad):
-        return self.inbufs[pad][-1].t0 if self.inbufs[pad] else -1
+        return self.inbufs[pad][-1].offset if self.inbufs[pad] else -1
 
     def earliest_by_pad(self, pad):
-        return self.inbufs[pad][0].t0 if self.inbufs[pad] else -1
+        return self.inbufs[pad][0].offset if self.inbufs[pad] else -1
 
     @property
     def latest(self):

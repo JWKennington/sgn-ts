@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..base import OFFSET_RATE, Offset, SeriesBuffer, TSFrame, TSSource
+from ..base import Offset, SeriesBuffer, TSFrame, TSSource
 
 
 @dataclass
@@ -65,7 +65,7 @@ class FakeSeriesSrc(TSSource):
         number of buffers.
         """
         self.cnt[pad] += 1
-        noffset = int(OFFSET_RATE * self.duration)
+        noffset = int(Offset.OFFSET_RATE * self.duration)
         ngap = self.ngap
         if (ngap == -1 and np.random.rand(1) > 0.5) or (ngap > 0 and self.cnt[pad] % ngap == 0):
             data = None
@@ -114,7 +114,7 @@ class FakeSeriesSrc(TSSource):
 #        name derived from the pad name. "EOS" is set if we have surpassed the requested
 #        number of buffers.
 #        """
-#        noffset = int(OFFSET_RATE * self.duration)
+#        noffset = int(Offset.OFFSET_RATE * self.duration)
 #        outbuf = SeriesBuffer(
 #            offset=self.offset[pad],
 #            noffset=noffset,
