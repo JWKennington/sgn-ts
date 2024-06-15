@@ -97,8 +97,6 @@ def test_resampler(capsys):
             name="add",
             source_pad_names=("H1",),
             sink_pad_names=("frombuf", "tobuf"),
-            frombuf_pad="add:sink:frombuf",
-            tobuf_pad="add:sink:tobuf",
         ),
         FakeSeriesSink(
             name="snk1",

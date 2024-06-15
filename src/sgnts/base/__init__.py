@@ -159,4 +159,4 @@ class TSSource(SourceElement):
 
     def __post_init__(self):
         super().__post_init__()
-        self.offset = {p: Offset.sec2offset(self.t0 - Offset.offset_ref_t0) for p in self.source_pads}
+        self.offset = {p: Offset.fromsec(self.t0 - Offset.offset_ref_t0) for p in self.source_pads}

@@ -50,7 +50,7 @@ class FakeSeriesSrc(TSSource):
         if self.signal_type == "white":
             return np.random.rand(*self.shape)
         elif self.signal_type == "sin" or self.signal_type == "sine":
-            t0 = Offset.offset2sec(offset)
+            t0 = Offset.tosec(offset)
             return np.sin(
                 self.fsin
                 * np.linspace(t0, t0 + self.duration, self.shape[-1], endpoint=False)
@@ -65,7 +65,7 @@ class FakeSeriesSrc(TSSource):
         number of buffers.
         """
         self.cnt[pad] += 1
-        noffset = int(Offset.OFFSET_RATE * self.duration)
+        noffset = Offset.fromsec(self.duration)
         ngap = self.ngap
         if (ngap == -1 and np.random.rand(1) > 0.5) or (ngap > 0 and self.cnt[pad] % ngap == 0):
             data = None
@@ -114,7 +114,7 @@ class FakeSeriesSrc(TSSource):
 #        name derived from the pad name. "EOS" is set if we have surpassed the requested
 #        number of buffers.
 #        """
-#        noffset = int(Offset.OFFSET_RATE * self.duration)
+#        noffset = Offset.fromsec(self.duration)
 #        outbuf = SeriesBuffer(
 #            offset=self.offset[pad],
 #            noffset=noffset,

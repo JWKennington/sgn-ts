@@ -22,7 +22,7 @@ class SeriesBuffer:
         The number of offset samples (defined at sample rate OFFSET_RATE)
         in the buffer. Similar to "duration".
     sample_rate : int
-        The sample rate belonging to the set of ALLOWED_RATES
+        The sample rate belonging to the set of Offset.ALLOWED_RATES
     channels : tuple
         The channels in the data, can be multi-dimensional. If channels =
         (A, B), and the size of data is N, the shape of the data array is
@@ -66,11 +66,11 @@ class SeriesBuffer:
 
     @property
     def t0(self):
-        return Offset.offset_ref_t0 + Offset.offset2ns(self.offset)
+        return Offset.offset_ref_t0 + Offset.tons(self.offset)
 
     @property
     def duration(self):
-        return Offset.offset2ns(self.noffset)
+        return Offset.tons(self.noffset)
 
     @property
     def end(self):
@@ -83,13 +83,14 @@ class SeriesBuffer:
     @property
     def size(self):
         if self.data is None:
-            return int(self.sample_rate * Offset.offset2sec(self.noffset))
+            return int(self.sample_rate * Offset.tosec(self.noffset))
+            return Offset.tosamples(self.noffset, self.sample_rate)
         else:
             return self.data.shape[-1]
 
     def __check_data(self):
         return (
-            self.sample_rate == int(self.size / Offset.offset2sec(self.noffset))
+            self.sample_rate == int(self.size / Offset.tosec(self.noffset))
         ) and (
             (self.channels == self.data.shape[:-1])
         )

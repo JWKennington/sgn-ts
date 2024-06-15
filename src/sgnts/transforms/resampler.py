@@ -151,17 +151,17 @@ class Resampler(TSTransform):
         #    inbuf.data = inbuf.data.unsqueeze(0)
 
         A = self.audioadapter
-        assert self.next_out_offset == A.offset + Offset.nsamples2offset(
+        assert self.next_out_offset == A.offset + Offset.fromsamples(
             self.half_length - self.pad_length, self.inrate
         ), (
             f"offset mismatch: {self.next_out_offset=}, {A.offset=}, "
             f"{self.half_length=}, {self.pad_length=}, "
-            f"{Offset.nsamples2offset(self.half_length-self.pad_length,self.inrate)=}"
+            f"{Offset.fromsamples(self.half_length-self.pad_length,self.inrate)=}"
         )
 
         channels = A.channels
         sampsin, output_length = self.get_output_length()
-        noffset = int(output_length * Offset.OFFSET_RATE / self.outrate)
+        noffset = Offset.fromsamples(output_length, self.outrate)
 
         if output_length == 0:
             outdata = None
