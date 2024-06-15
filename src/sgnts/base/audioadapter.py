@@ -87,7 +87,7 @@ class Audioadapter:
             assert sample_rate == self.sample_rate, f"{sample_rate} {self.sample_rate}"
 
         if self.channels is None:
-            self.channels = buf.channels
+            self.channels = buf.shape[:-1]
 
         # Check if the start time is as expected
         # FIXME should we support discontinuities?
@@ -107,7 +107,7 @@ class Audioadapter:
         self.next_offset = buf.offset + buf.noffset
 
         # Store gap information
-        nsamples = buf.size
+        nsamples = buf.samples
         self.size += nsamples
         is_gap = buf.is_gap
         self.is_gaps.append(np.broadcast_to(is_gap, nsamples))
@@ -137,7 +137,7 @@ class Audioadapter:
         """
         The remaining samples in the deque yet to be processed
         """
-        n = buf.size
+        n = buf.samples
         if start_sample is not None:
             assert start_sample <= n
             return n - start_sample

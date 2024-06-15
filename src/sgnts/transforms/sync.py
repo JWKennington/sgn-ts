@@ -110,10 +110,9 @@ class Sync(TransformElement):
                 raise ValueError("Unknown mode")
         outbuf = SeriesBuffer(
             offset=output_segment[0],
-            noffset=max(noffset,0),
-            data=data,
             sample_rate=A.sample_rate,
-            channels=A.channels
+            data=data,
+            shape=A.channels + (Offset.tosamples(max(noffset,0), A.sample_rate),)
         )
         #self.outbufs.pop(sink_pad)
         return TSFrame(buffers=[outbuf], metadata=metadata, EOS=EOS)

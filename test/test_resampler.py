@@ -35,7 +35,7 @@ def test_resampler(capsys):
             source_pad_names=("H1",),
             num_buffers=5,
             rate=inrate,
-            duration=duration,
+            num_samples=256,
             signal_type="sin",
             fsin=3,
             ngap=2,
@@ -71,29 +71,29 @@ def test_resampler(capsys):
             captured.out.strip()
             == """
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=0, noffset=16384, size=256, duration=1000000000, data=[0.         ... 0.15271153])
+	SeriesBuffer(offset=0, offset_end=16384, samples=256, duration=1000000000, data=[0.         ... 0.15271153])
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=0, noffset=8192, size=32, duration=500000000, data=[0.00452957 ... 0.99831967])
+	SeriesBuffer(offset=0, offset_end=8192, samples=32, duration=500000000, data=[0.00452957 ... 0.99831967])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=16384, noffset=16384, size=256, duration=1000000000, data=None)
+	SeriesBuffer(offset=16384, offset_end=32768, samples=256, duration=1000000000, data=None)
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=8192, noffset=16384, size=64, duration=1000000000, data=[ 1.00275514e+00 ... -1.57143307e-05])
+	SeriesBuffer(offset=8192, offset_end=24576, samples=64, duration=1000000000, data=[ 1.00275514e+00 ... -1.57143307e-05])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=32768, noffset=16384, size=256, duration=1000000000, data=[-0.2794155  ...  0.42276725])
+	SeriesBuffer(offset=32768, offset_end=49152, samples=256, duration=1000000000, data=[-0.2794155  ...  0.42276725])
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=24576, noffset=16384, size=64, duration=1000000000, data=[7.40148683e-17 ... 9.25553230e-01])
+	SeriesBuffer(offset=24576, offset_end=40960, samples=64, duration=1000000000, data=[7.40148683e-17 ... 9.25553230e-01])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=49152, noffset=16384, size=256, duration=1000000000, data=None)
+	SeriesBuffer(offset=49152, offset_end=65536, samples=256, duration=1000000000, data=None)
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=40960, noffset=16384, size=64, duration=1000000000, data=[ 9.42946394e-01 ... -4.20381775e-05])
+	SeriesBuffer(offset=40960, offset_end=57344, samples=64, duration=1000000000, data=[ 9.42946394e-01 ... -4.20381775e-05])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=65536, noffset=16384, size=256, duration=1000000000, data=[-0.53657292 ...  0.65914558])
+	SeriesBuffer(offset=65536, offset_end=81920, samples=256, duration=1000000000, data=[-0.53657292 ...  0.65914558])
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=57344, noffset=16384, size=64, duration=1000000000, data=[-7.40148683e-17 ...  7.79057752e-01])
+	SeriesBuffer(offset=57344, offset_end=73728, samples=64, duration=1000000000, data=[-7.40148683e-17 ...  7.79057752e-01])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=81920, noffset=16384, size=256, duration=1000000000, data=None)
+	SeriesBuffer(offset=81920, offset_end=98304, samples=256, duration=1000000000, data=None)
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=73728, noffset=16384, size=64, duration=1000000000, data=[ 8.08023076e-01 ... -6.50132872e-05])
+	SeriesBuffer(offset=73728, offset_end=90112, samples=64, duration=1000000000, data=[ 8.08023076e-01 ... -6.50132872e-05])
 """.strip()
         )
 

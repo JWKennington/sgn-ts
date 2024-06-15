@@ -49,10 +49,9 @@ class _TSTransSink:
                     buffers=[
                         SeriesBuffer(
                             offset=self.earliest,
-                            noffset=0,
                             sample_rate=self.inbufs[pad][0].sample_rate,
-                            channels=self.inbufs[pad][0].channels,
                             data=None,
+                            shape=self.inbufs[pad][0].shape[:-1] + (0,)
                         )
                     ],
                 )

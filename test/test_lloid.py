@@ -52,7 +52,7 @@ def test_resampler(capsys):
             source_pad_names=("H1",),
             num_buffers=2,
             rate=2048,
-            duration=1,
+            num_samples=2048,
             signal_type="sin",
         ),
         Resampler(

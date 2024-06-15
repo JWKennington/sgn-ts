@@ -159,9 +159,9 @@ class Resampler(TSTransform):
             f"{Offset.fromsamples(self.half_length-self.pad_length,self.inrate)=}"
         )
 
-        channels = A.channels
         sampsin, output_length = self.get_output_length()
         noffset = Offset.fromsamples(output_length, self.outrate)
+        output_shape = A.channels + (output_length,)
 
         if output_length == 0:
             outdata = None
@@ -178,7 +178,7 @@ class Resampler(TSTransform):
                     # if we need to pad half length of zeros in front
                     outdata = self.pad_func(outdata)
                 # resample the data
-                outdata = self.resample(outdata, channels + (output_length,))
+                outdata = self.resample(outdata, output_shape)
 
             # flush samples from audioadapter
             # leave some leftover samples to pad infront of next buffer
@@ -190,10 +190,9 @@ class Resampler(TSTransform):
 
         outbuf = SeriesBuffer(
             offset=self.next_out_offset,
-            noffset=noffset,
-            data=outdata,
             sample_rate=self.outrate,
-            channels=channels,
+            data=outdata,
+            shape=output_shape,
         )
         # shift the next output buffer's offset starting point
         self.next_out_offset += noffset

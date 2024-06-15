@@ -16,45 +16,40 @@ class SeriesBuffer:
     Parameters
     ----------
     offset : int
-        The number of offset samples (defined at sample rate OFFSET_RATE)
+        The number of offset samples (defined at sample rate Offset.OFFSET_RATE)
         since Offset.offset_ref_t0. Similar to "t0".
-    noffset : int
-        The number of offset samples (defined at sample rate OFFSET_RATE)
-        in the buffer. Similar to "duration".
     sample_rate : int
         The sample rate belonging to the set of Offset.ALLOWED_RATES
-    channels : tuple
-        The channels in the data, can be multi-dimensional. If channels =
-        (A, B), and the size of data is N, the shape of the data array is
-        (A, B, N).
     data : Sequence
-        The timeseries data or None. If not None, the inferred sample
-        rate must equal the provided sample rate
-
+        The timeseries data or None.
+    shape : tuple
+        The shape of the data regardless of gaps. Required if data is None, and
+        represents the shape of the absent data.
     """
 
     offset: int = None
-    noffset: int = None
     sample_rate: int = None
-    channels: tuple = None
     data: Sequence[Any] = None
+    shape: tuple = None
 
     def __post_init__(self):
         assert isinstance(self.offset, int)
-        assert isinstance(self.noffset, int)
-        assert isinstance(self.channels, tuple)
         assert self.sample_rate in Offset.ALLOWED_RATES
-        if self.data is not None:
-            assert self.__check_data()
+        if self.data is None:
+            assert isinstance(self.shape, tuple)
+        elif self.shape is None:
+            self.shape = self.data.shape
+        else:
+            assert self.shape == self.data.shape
 
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
             return (
-                "SeriesBuffer(offset=%d, offset_end=%d, size=%d, duration=%d, data=%s)"
+                "SeriesBuffer(offset=%d, offset_end=%d, samples=%d, duration=%d, data=%s)"
                 % (
                     self.offset,
                     self.end_offset,
-                    self.size,
+                    self.samples,
                     self.duration,
                     self.data,
                 )
@@ -63,6 +58,10 @@ class SeriesBuffer:
     @property
     def slice(self):
         return TSSlice(self.offset, self.end_offset)
+
+    @property
+    def noffset(self):
+        return Offset.fromsamples(self.samples, self.sample_rate)
 
     @property
     def t0(self):
@@ -81,19 +80,8 @@ class SeriesBuffer:
         return self.offset + self.noffset
 
     @property
-    def size(self):
-        if self.data is None:
-            return int(self.sample_rate * Offset.tosec(self.noffset))
-            return Offset.tosamples(self.noffset, self.sample_rate)
-        else:
-            return self.data.shape[-1]
-
-    def __check_data(self):
-        return (
-            self.sample_rate == int(self.size / Offset.tosec(self.noffset))
-        ) and (
-            (self.channels == self.data.shape[:-1])
-        )
+    def samples(self):
+        return self.shape[-1]
 
     @property
     def is_gap(self):
@@ -101,10 +89,6 @@ class SeriesBuffer:
             return True
         else:
             return False
-
-    @property
-    def shape(self):
-        return self.channels + (self.size,)
 
     @property
     def filleddata(self):
@@ -139,10 +123,9 @@ class SeriesBuffer:
         assert off < self.offset
         return SeriesBuffer(
             offset=off,
-            noffset=self.offset - off,
             sample_rate=self.sample_rate,
-            channels=self.channels,
             data=data,
+            shape=self.shape[:-1] + (Offset.tosamples(self.offset - off, self.sample_rate),),
         )
 
     def split(self, off):
@@ -151,16 +134,14 @@ class SeriesBuffer:
         midsamples = Offset.tosamples(midoffset, self.sample_rate)
         return SeriesBuffer(
             offset=self.offset,
-            noffset=midoffset,
             sample_rate=self.sample_rate,
-            channels=self.channels,
-            data=None if self.data is None else self.data[:midsamples,],
+            data=None if self.data is None else self.data[...,:midsamples],
+            shape=self.shape[:-1] + (midsamples,)
         ), SeriesBuffer(
             offset=self.offset + midoffset,
-            noffset=self.noffset - midoffset,
             sample_rate=self.sample_rate,
-            channels=self.channels,
-            data=None if self.data is None else self.data[midsamples:,],
+            data=None if self.data is None else self.data[...,midsamples:],
+            shape=self.shape[:-1] + (self.shape[-1] - midsamples,)
         )
 
 

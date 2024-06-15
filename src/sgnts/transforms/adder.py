@@ -17,7 +17,6 @@ class Adder(TSTransform):
         self.inbufs = {}
         super().__post_init__()
         self.sample_rate = None
-        self.channels = None
 
     def pull(self, pad, bufs):
         self.inbufs[pad] = bufs
@@ -28,38 +27,27 @@ class Adder(TSTransform):
             for buf in bufs:
                 assert buf.sample_rate == self.sample_rate 
 
-        if self.channels is None and len(bufs.buffers) > 0:
-            self.channels = bufs[0].channels
-        else:
-            for buf in bufs:
-                assert buf.channels == self.channels
-
     def transform(self, pad):
         EOS = any(b.EOS for b in self.inbufs.values())
 
-        #print(self.preparedframes)
-        print(self.inbufs)
-        frames = list(self.preparedframes.values())
-        if frames[0] is None:
+        print('inbufs in adder',self.inbufs)
+        frames = [b.buffers for b in self.inbufs.values()]
+        if len(frames[0]) == 0:
             return TSFrame(EOS=EOS)
         else:
             # use the first frame as basis
             out = np.concatenate([buf.filleddata for buf in frames[0]])
             # add to the first frame
-            for f in frames:
-                print('1',f)
             for f in frames[1:]:
                 i0 = 0
                 for buf in f:
                     if not buf.is_gap:
-                        out[...,i0:i0+buf.size] += buf.data
-                    i0 += buf.size
+                        out[...,i0:i0+buf.samples] += buf.data
+                    i0 += buf.samples
 
-        return TSFrame(buffers=[SeriesBuffer(
-            offset=offset,
-            noffset=noffset,
-            data=out,
-            sample_rate=self.sample_rate,
-            channels=self.channels
-        )], EOS=EOS)
+            return TSFrame(buffers=[SeriesBuffer(
+                offset=frames[0][0].offset,
+                sample_rate=self.sample_rate,
+                data=out,
+            )], EOS=EOS)
 
