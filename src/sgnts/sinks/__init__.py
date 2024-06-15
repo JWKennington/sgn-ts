@@ -14,19 +14,20 @@ class FakeSeriesSink(SinkElement):
 
     print_message: str = "''"
 
+    def __post_init__(self):
+        super().__post_init__()
+        self.cnt = {p:0 for p in self.sink_pads}
+
     def pull(self, pad, bufs):
         """
         getting the buffer on the pad just modifies the name to show this final
         graph point and the prints it to prove it all works.
         """
+        self.cnt[pad] += 1
         if bufs.EOS:
             self.mark_eos(pad)
         if bufs.buffers is not None:
-            print (bufs)
-        #outstr = "%s :: " % bufs.metadata['__graph__']
-        #for buf in bufs:
-        #    outstr += str(buf)
-        #print(outstr)
+            print (self.cnt[pad], bufs)
 
     @property
     def EOS(self):
