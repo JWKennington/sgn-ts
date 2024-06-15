@@ -43,7 +43,7 @@ class Correlate(TransformElement):
         self.nnew = 0 # len of the new data
         for buf in bufs:
             self.audioadapter.push(buf)
-            self.nnew += buf.size
+            self.nnew += buf.samples
         offset0 = bufs[0].offset
         offset1 = bufs[-1].offset + bufs[-1].noffset
 
@@ -89,8 +89,7 @@ class Correlate(TransformElement):
 
         return TSFrame(buffers=[SeriesBuffer(
             offset=self.this_segment[0],
-            noffset=self.this_noffset,
-            data=out,
             sample_rate=inbufs[-1].sample_rate,
-            channels=self.filters.shape[:-1]
+            data=out,
+            shape=self.filters.shape[:-1] + (self.nnew, )
         )], EOS=EOS)

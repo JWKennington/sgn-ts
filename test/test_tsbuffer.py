@@ -26,7 +26,7 @@ def test_tsgraph(capsys):
             source_pad_names=("H1",),
             num_buffers=2,
             rate=2048,
-            duration=1,
+            num_samples=2048,
             signal_type="white",
             random_seed=1234
         ),
@@ -43,12 +43,12 @@ def test_tsgraph(capsys):
         assert (
             captured.out.strip()
             == """
--> src1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=0, noffset=16384, size=2048, duration=1000000000, data=[0.19151945 ... 0.72562624])
--> src1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=16384, noffset=16384, size=2048, duration=1000000000, data=[0.5880075  ... 0.88689441])
--> src1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=32768, noffset=16384, size=2048, duration=1000000000, data=[0.93690654 ... 0.04236331])
+1 -> src1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=0, offset_end=16384, samples=2048, duration=1000000000, data=[0.19151945 ... 0.72562624])
+2 -> src1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=16384, offset_end=32768, samples=2048, duration=1000000000, data=[0.5880075  ... 0.88689441])
+3 -> src1:src:H1 -> snk1:sink:H1  ::
+	SeriesBuffer(offset=32768, offset_end=49152, samples=2048, duration=1000000000, data=[0.93690654 ... 0.04236331])
 """.strip()
         )
 

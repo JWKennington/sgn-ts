@@ -59,10 +59,9 @@ class Matmul(TransformElement):
 
             outbuf = SeriesBuffer(
                 offset=inbuf.offset,
-                noffset=inbuf.noffset,
-                data=data,
                 sample_rate=inbufs[-1].sample_rate,
-                channels=self.matrix.shape[:-1]
+                data=data,
+                shape=self.matrix.shape[:-1] + (inbuf.samples,)
             )
             outbufs.append(outbuf)
 
