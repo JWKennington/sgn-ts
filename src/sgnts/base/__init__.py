@@ -21,6 +21,7 @@ class _TSTransSink:
         self.at_EOS = False
         self._last_ts = {p: None for p in self.sink_pads}
         self._last_offset = {p: None for p in self.sink_pads}
+        self.__pulled = {p: False for p in self.sink_pads}
 
     def pull(self, pad, bufs):
         self.at_EOS |= bufs.EOS
@@ -28,39 +29,49 @@ class _TSTransSink:
         # extend and check the buffers
         self._sanity_check(bufs, pad)
         self.inbufs[pad].extend(bufs)
+        self.__pulled[pad] = True
+
+        if all(self.__pulled.values()):
+            self.__post_pull()
+
+    def __post_pull(self):
+        # Reset
+        self.__pulled = {p: False for p in self.sink_pads}
 
         # align if possible
         self._align()
 
         # put in heartbeat buffer if not aligned
         if not self._is_aligned:
-            self.preparedframes[pad] = TSFrame(
-                EOS=self.at_EOS,
-                buffers=[
-                    SeriesBuffer(
-                        offset=0,
-                        noffset=0,
-                        sample_rate=bufs[0].sample_rate,
-                        channels=bufs[0].channels,
-                        data=None,
-                    )
-                ],
-            )
+            for pad in self.sink_pads:
+                self.preparedframes[pad] = TSFrame(
+                    EOS=self.at_EOS,
+                    buffers=[
+                        SeriesBuffer(
+                            offset=self.earliest,
+                            noffset=0,
+                            sample_rate=self.inbufs[pad][0].sample_rate,
+                            channels=self.inbufs[pad][0].channels,
+                            data=None,
+                        )
+                    ],
+                )
         # Else pack all the buffers
         else:
-            out = []
             min_latest = self.min_latest
-            for b in tuple(self.inbufs[pad]):
-                if b <= min_latest:
-                    out.append(self.inbufs[pad].popleft())
-            if (buf := self.inbufs[pad].popleft()) is not None:
-                if buf.offset < min_latest:
-                    l, r = buf.split(min_latest)
-                    self.inbufs[pad].appendleft(r)
-                    out.append(l)
-                else:  # Yes this condition is silly
-                    self.inbufs[pad].appendleft(buf)
-            self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers=out)
+            for pad in self.sink_pads:
+                out = []
+                for b in tuple(self.inbufs[pad]):
+                    if b <= min_latest:
+                        out.append(self.inbufs[pad].popleft())
+                if (buf := self.inbufs[pad].popleft()) is not None:
+                    if buf.offset < min_latest:
+                        l, r = buf.split(min_latest)
+                        self.inbufs[pad].appendleft(r)
+                        out.append(l)
+                    else:  # Yes this condition is silly
+                        self.inbufs[pad].appendleft(buf)
+                self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers=out)
 
         if self.timeout(pad):
             raise ValueError("pad %s has timed out" % pad.name)
