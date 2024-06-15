@@ -30,6 +30,8 @@ class _TSTransSink:
         self._sanity_check(bufs, pad)
         self.inbufs[pad].extend(bufs)
         self.__pulled[pad] = True
+        if self.timeout(pad):
+            raise ValueError("pad %s has timed out" % pad.name)
 
         if all(self.__pulled.values()):
             self.__post_pull()
@@ -61,9 +63,10 @@ class _TSTransSink:
             for pad in self.sink_pads:
                 out = []
                 for b in tuple(self.inbufs[pad]):
-                    if b <= min_latest:
+                    if b.end_offset <= min_latest:
                         out.append(self.inbufs[pad].popleft())
-                if (buf := self.inbufs[pad].popleft()) is not None:
+                if len(self.inbufs[pad]) > 0:
+                    buf = self.inbufs[pad].popleft()
                     if buf.offset <= min_latest:
                         l, r = buf.split(min_latest)
                         self.inbufs[pad].appendleft(r)
@@ -73,8 +76,6 @@ class _TSTransSink:
                 assert len(out) > 0
                 self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers=out)
 
-        if self.timeout(pad):
-            raise ValueError("pad %s has timed out" % pad.name)
 
     def _sanity_check(self, bufs, pad):
         if self._last_ts[pad] is not None and self._last_offset[pad] is not None:
@@ -109,7 +110,7 @@ class _TSTransSink:
         return self.inbufs[pad][-1].end < (self.latest - self.max_age)
 
     def latest_by_pad(self, pad):
-        return self.inbufs[pad][-1].offset if self.inbufs[pad] else -1
+        return self.inbufs[pad][-1].end_offset if self.inbufs[pad] else -1
 
     def earliest_by_pad(self, pad):
         return self.inbufs[pad][0].offset if self.inbufs[pad] else -1
