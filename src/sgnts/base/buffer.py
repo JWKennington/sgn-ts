@@ -148,8 +148,7 @@ class SeriesBuffer:
     def split(self, off):
         assert self.offset <= off < self.end_offset
         midoffset = off - self.offset
-        # FIXME this should be exact integer math, shouldn't need int or round
-        midsamples = int(round(Offset.offset2nsamples(midoffset, self.sample_rate)))
+        midsamples = Offset.tosamples(midoffset, self.sample_rate)
         return SeriesBuffer(
             offset=self.offset,
             noffset=midoffset,
