@@ -159,15 +159,24 @@ class TSSource(SourceElement):
 
     Parameters:
     -----------
-    duration: float
-        duration of the data buffer, in seconds
     t0: float
         start time of first buffer, in seconds
+    num_samples: int
+        number of samples to produce per Frame. 
+        If None, the value from Offset.stridesamples will be used
+    rate: int
+        the sample rate of the data
     """
 
-    duration: float = 1
     t0: float = 0
+    num_samples: int = None
+    rate: int = 2048
 
     def __post_init__(self):
         super().__post_init__()
+        assert isinstance(self.rate, int)
+        assert isinstance(self.num_samples, int)
+        # FIXME should we be more careful about this?
         self.offset = {p: Offset.fromsec(self.t0 - Offset.offset_ref_t0) for p in self.source_pads}
+        if self.num_samples is None:
+            self.num_samples = Offset.stridesamples(self.rate)

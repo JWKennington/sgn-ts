@@ -27,25 +27,24 @@ def test_align(capsys):
     #           ---------   -------   --------
 
     inrate = 256
-    duration = 1
-    num_buffers = 8
-    H1_t0 = 0
-    L1_t0 = 3
-    V1_t0 = 5
+    num_buffers = 12
+    H1_t0 = 2
+    L1_t0 = 4
+    V1_t0 = 6
     max_age = 1000000000000
 
     print_message = ("f' duration {bufs[-1].duration} data_is_none {bufs[-1].data is None}'")
 
-    H1_duration = 1
-    L1_duration = 1
-    V1_duration = 1
+    H1_num_samples = 256
+    L1_num_samples = 512
+    V1_num_samples = 768
     pipeline.insert(
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
             num_buffers=num_buffers,
             rate=inrate,
-            duration=H1_duration,
+            num_samples=H1_num_samples,
             t0=H1_t0,
         ),
         Align(
@@ -64,7 +63,7 @@ def test_align(capsys):
             source_pad_names=("L1",),
             num_buffers=num_buffers,
             rate=inrate,
-            duration=L1_duration,
+            num_samples=L1_num_samples,
             t0=L1_t0,
         ),
         FakeSeriesSink(
@@ -77,7 +76,7 @@ def test_align(capsys):
             source_pad_names=("V1",),
             num_buffers=num_buffers,
             rate=inrate,
-            duration=V1_duration,
+            num_samples=V1_num_samples,
             t0=V1_t0,
         ),
         FakeSeriesSink(
