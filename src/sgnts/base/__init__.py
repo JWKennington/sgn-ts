@@ -64,12 +64,13 @@ class _TSTransSink:
                     if b <= min_latest:
                         out.append(self.inbufs[pad].popleft())
                 if (buf := self.inbufs[pad].popleft()) is not None:
-                    if buf.offset < min_latest:
+                    if buf.offset <= min_latest:
                         l, r = buf.split(min_latest)
                         self.inbufs[pad].appendleft(r)
                         out.append(l)
                     else:  # Yes this condition is silly
                         self.inbufs[pad].appendleft(buf)
+                assert len(out) > 0
                 self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers=out)
 
         if self.timeout(pad):
