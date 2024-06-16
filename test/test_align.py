@@ -31,7 +31,7 @@ def test_align(capsys):
     H1_t0 = 2
     L1_t0 = 4
     V1_t0 = 6
-    max_age = 1000000000000
+    max_age = 100*1e9
 
     print_message = ("f' duration {bufs[-1].duration} data_is_none {bufs[-1].data is None}'")
 

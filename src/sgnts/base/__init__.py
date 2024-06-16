@@ -107,7 +107,7 @@ class _TSTransSink:
 
     def timeout(self, pad):
         assert len(self.inbufs[pad]) > 0
-        return self.inbufs[pad][-1].end < (self.latest - self.max_age)
+        return (self.inbufs[pad][-1].end - self.inbufs[pad][0].t0) > self.max_age
 
     def latest_by_pad(self, pad):
         return self.inbufs[pad][-1].end_offset if self.inbufs[pad] else -1
