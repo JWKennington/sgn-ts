@@ -19,7 +19,5 @@ def test_slices(capsys):
         print ("11.\tA-B:", A-B)
         print ("12.\tB-A:", B-A)
 
-        print (TSSlice(1,4).intersection([(TSSlice(0,3), TSSlice(4,5))]))
-
 if __name__ == "__main__":
     test_slices(None)
