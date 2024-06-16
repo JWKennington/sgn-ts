@@ -169,3 +169,23 @@ class TSFrame(Frame):
         for buf in self:
             out += "\n\t%s" % buf
         return out
+
+    @property
+    def offset(self):
+        return self.buffers[0].offset
+
+    @property
+    def end_offset(self):
+        return self.buffers[-1].end_offset
+
+    @property
+    def slice(self):
+        return TSSlice(self.offset, self.end_offset)
+
+    @property
+    def shape(self):
+        return self.buffers[0].shape[:-1] + (sum(b.samples for b in self.buffers),)
+
+    @property
+    def sample_rate(self):
+        return self.buffers[0].sample_rate
