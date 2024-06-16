@@ -37,10 +37,10 @@ class SeriesBuffer:
         assert self.sample_rate in Offset.ALLOWED_RATES
         if self.data is None:
             assert isinstance(self.shape, tuple)
-        elif self.data == 1:
+        elif isinstance(self.data, int) and self.data == 1:
             assert isinstance(self.shape, tuple)
             self.data = numpy.ones(self.shape)
-        elif self.data == 0:
+        elif isinstance(self.data, int) and self.data == 0:
             assert isinstance(self.shape, tuple)
             self.data = numpy.zeros(self.shape)
         elif self.shape is None:
@@ -173,6 +173,10 @@ class TSFrame(Frame):
     """
 
     buffers: int = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        assert len(self.buffers) > 0
 
     def __getitem__(self, item):
         return self.buffers[item]
