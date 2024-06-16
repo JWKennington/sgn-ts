@@ -67,7 +67,7 @@ class _TSTransSink:
                         out.append(self.inbufs[pad].popleft())
                 if len(self.inbufs[pad]) > 0:
                     buf = self.inbufs[pad].popleft()
-                    if buf.offset <= min_latest:
+                    if buf.offset < min_latest:
                         l, r = buf.split(min_latest)
                         self.inbufs[pad].appendleft(r)
                         out.append(l)
