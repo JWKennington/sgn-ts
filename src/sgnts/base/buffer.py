@@ -37,10 +37,10 @@ class SeriesBuffer:
         assert self.sample_rate in Offset.ALLOWED_RATES
         if self.data is None:
             assert isinstance(self.shape, tuple)
-        elif self.data == 1:
+        elif isinstance(self.data, int) and self.data == 1:
             assert isinstance(self.shape, tuple)
             self.data = numpy.ones(self.shape)
-        elif self.data == 0:
+        elif isinstance(self.data, int) and self.data == 0:
             assert isinstance(self.shape, tuple)
             self.data = numpy.zeros(self.shape)
         elif self.shape is None:
