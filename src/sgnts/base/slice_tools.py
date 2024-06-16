@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import bisect
 
 
 @dataclass
@@ -8,11 +9,45 @@ class TSSlices:
     def __post_init__(self):
         self.slices = sorted(self.slices)
 
+    def simplify(self):
+        out = self.slices[0:1].copy()
+        for s in self.slices[1:]:
+            this = s + out[-1]
+            if len(this) == 2:
+                out.append(this[-1])
+            else:
+                out[-1] = this[0]
+        return TSSlices(out)
+
     def intersection(self):
         s = TSSlice(self.slices[0].start, self.slices[0].stop)
         for s2 in self.slices[1:]:
             s = s & s2
         return s
+
+    def search(self, tsslice, align=True):
+        startix = bisect.bisect_left(self.slices, TSSlice(tsslice.start, tsslice.start))
+        stopix = bisect.bisect_right(self.slices, TSSlice(tsslice.stop, tsslice.stop))
+        if not align:
+            return TSSlices(self.slices[startix:stopix])
+        else:
+            out = []
+            for s in self.slices[startix:stopix]:
+                o = s & tsslice
+                if o.isfinite():
+                    out.append(o)
+            return TSSlices(out)
+
+    def invert(self, boundary_slice):
+        if len(self.slices) == 0:
+            return TSSlices([TSSlice(boundary_slice.start, boundary_slice.stop)])
+        out = []
+        if boundary_slice.start < self.slices[0].start:
+            out.append(TSSlice(boundary_slice.start, self.slices[0].start))
+        out.extend([TSSlice(s[n - 1].stop, s[n].start) for s in self.slices[1:]])
+        if boundary_slice.stop > self.slices[-1].stop:
+            out.append(TSSlice(self.slices[-1].stop, boundary_slice.stop))
+        return TSSlices(out)
 
 
 @dataclass
@@ -231,3 +266,9 @@ class TSSlice:
         if not b or not i:
             return []
         return sorted([TSSlice(b.start, i.start), TSSlice(i.stop, b.stop)])
+
+    def isfinite(self):
+        if not self:
+            return False
+        else:
+            return self.stop > self.start

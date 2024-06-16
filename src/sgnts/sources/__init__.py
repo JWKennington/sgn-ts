@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..base import Offset, SeriesBuffer, TSFrame, TSSource
+from ..base import Offset, SeriesBuffer, TSFrame, TSSource, TSSlice, TSSlices
 
 
 @dataclass
@@ -67,16 +67,15 @@ class FakeSeriesSrc(TSSource):
         """
         self.cnt[pad] += 1
         ngap = self.ngap
-        if (ngap == -1 and np.random.rand(1) > 0.5) or (ngap > 0 and self.cnt[pad] % ngap == 0):
+        if (ngap == -1 and np.random.rand(1) > 0.5) or (
+            ngap > 0 and self.cnt[pad] % ngap == 0
+        ):
             data = None
         else:
             data = self.create_data(self.offset[pad])
 
         outbuf = SeriesBuffer(
-            offset=self.offset[pad],
-            sample_rate=self.rate,
-            data=data,
-            shape=self.shape
+            offset=self.offset[pad], sample_rate=self.rate, data=data, shape=self.shape
         )
 
         self.offset[pad] += Offset.fromsamples(self.num_samples, self.rate)
@@ -88,51 +87,53 @@ class FakeSeriesSrc(TSSource):
         )
 
 
-# @dataclass
-# class SegmentSrc(TSSource):
-#    """
-#
-#    Parameters:
-#    -----------
-#    rate: int
-#        the sample rate of the data
-#    segments: tuple
-#        A tuple of segment tuples
-#    """
-#
-#    rate: int = 2048
-#    segments: tuple = None
-#
-#    def __post_init__(self):
-#        super().__post_init__()
-#        self.segments = sorted(slice(*s) for s in self.segments if s[1] < self.t0)
-#
-#    def new(self, pad):
-#        """
-#        New buffers are created on "pad" with an instance specific count and a
-#        name derived from the pad name. "EOS" is set if we have surpassed the requested
-#        number of buffers.
-#        """
-#        noffset = Offset.fromsec(self.duration)
-#        outbuf = SeriesBuffer(
-#            offset=self.offset[pad],
-#            noffset=noffset,
-#            offset_ref_t0=0,
-#            data=data,
-#        )
-#        intersecting_segments = []
-#        outslice = outbuf.slice
-#        for n, s in self.segments:
-#            if s > outslice:
-#                break
-#            if outslice & s:
-#                intersecting_segments.append(s)
-#        self.segments = self.segments[n:]
-#        # FIXME IMPLEMENT BUFFER SPLITTING BY LIST OF SLICES
-#        outbufs = outbuf.split(intersecting_segments)
-#
-#        self.offset[pad] += noffset
-#
-#        return TSFrame(
-#            buffers=[outbuf],
-#        )
+@dataclass
+class SegmentSrc(TSSource):
+    """
+
+    Parameters:
+    -----------
+    rate: int
+        the sample rate of the data
+    segments: tuple
+        A tuple of segment tuples corresponding to time in ns
+    end: int
+        The time at which to stop producing buffers
+    """
+
+    rate: int = 2048
+    segments: tuple = None
+    end: float = None
+
+    def __post_init__(self):
+        assert isinstance(self.end, float)
+        assert self.segments is not None
+        super().__post_init__()
+        # FIXME
+        self.segments = TSSlices(
+            TSSlice(Offset.fromns(s[0]), Offset.fromns(s[1]))
+            for s in self.segments
+            if (s[0] >= self.t0 * 1e9 and s[1] <= self.end * 1e9)
+        ).simplify()
+
+    def new(self, pad):
+        """ """
+        frame_slice = TSSlice(
+            self.offset[pad],
+            self.offset[pad] + Offset.fromsamples(self.num_samples, self.rate),
+        )
+        nongap_slices = self.segments.search(frame_slice)
+        gap_slices = nongap_slices.invert(frame_slice)
+        outbufs = [
+            SeriesBuffer.fromoffsetslice(s, self.rate) for s in gap_slices.slices
+        ]
+        outbufs.extend(
+            [
+                SeriesBuffer.fromoffsetslice(s, self.rate, data=1)
+                for s in nongap_slices.slices
+            ]
+        )
+        outbufs = sorted(outbufs)
+
+        self.offset[pad] = frame_slice.stop
+        return TSFrame(buffers=outbufs, EOS=outbufs[-1].end >= self.end * 1e9)  # FIXME

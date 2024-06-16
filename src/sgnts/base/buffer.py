@@ -37,10 +37,25 @@ class SeriesBuffer:
         assert self.sample_rate in Offset.ALLOWED_RATES
         if self.data is None:
             assert isinstance(self.shape, tuple)
+        elif self.data == 1:
+            assert isinstance(self.shape, tuple)
+            self.data = numpy.ones(self.shape)
+        elif self.data == 0:
+            assert isinstance(self.shape, tuple)
+            self.data = numpy.zeros(self.shape)
         elif self.shape is None:
             self.shape = self.data.shape
         else:
             assert self.shape == self.data.shape
+
+    @staticmethod
+    def fromoffsetslice(offslice, sample_rate, data=None, channels=()):
+        shape = channels + (
+            Offset.tosamples(offslice.stop - offslice.start, sample_rate),
+        )
+        return SeriesBuffer(
+            offset=offslice.start, sample_rate=sample_rate, data=data, shape=shape
+        )
 
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
@@ -125,7 +140,8 @@ class SeriesBuffer:
             offset=off,
             sample_rate=self.sample_rate,
             data=data,
-            shape=self.shape[:-1] + (Offset.tosamples(self.offset - off, self.sample_rate),),
+            shape=self.shape[:-1]
+            + (Offset.tosamples(self.offset - off, self.sample_rate),),
         )
 
     def split(self, off):
@@ -135,13 +151,13 @@ class SeriesBuffer:
         return SeriesBuffer(
             offset=self.offset,
             sample_rate=self.sample_rate,
-            data=None if self.data is None else self.data[...,:midsamples],
-            shape=self.shape[:-1] + (midsamples,)
+            data=None if self.data is None else self.data[..., :midsamples],
+            shape=self.shape[:-1] + (midsamples,),
         ), SeriesBuffer(
             offset=self.offset + midoffset,
             sample_rate=self.sample_rate,
-            data=None if self.data is None else self.data[...,midsamples:],
-            shape=self.shape[:-1] + (self.shape[-1] - midsamples,)
+            data=None if self.data is None else self.data[..., midsamples:],
+            shape=self.shape[:-1] + (self.shape[-1] - midsamples,),
         )
 
 
