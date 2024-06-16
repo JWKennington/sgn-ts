@@ -174,6 +174,10 @@ class TSFrame(Frame):
 
     buffers: int = None
 
+    def __post_init__(self):
+        super().__post_init__()
+        assert len(self.buffers) > 0
+
     def __getitem__(self, item):
         return self.buffers[item]
 
