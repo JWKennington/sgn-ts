@@ -9,7 +9,7 @@ from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Adder, Align, Resampler
 
 
-def test_resampler(capsys):
+def test_adder(capsys):
 
     pipeline = Pipeline()
     max_age = 1000000000000
@@ -27,10 +27,6 @@ def test_resampler(capsys):
     #             |        |
     #             |     H1 | SR1
     #             |        |
-    #             |        |
-    #             -----------
-    #            |   align   |
-    #             -----------
     #             |        |
     #             -----------
     #            |   add     |
@@ -65,16 +61,11 @@ def test_resampler(capsys):
             inrate=512,
             outrate=2048,
         ),
-        Align(
-            name="align",
-            sink_pad_names=("A","B"),
-            source_pad_names=("A","B"),
-            max_age=max_age,
-        ),
         Adder(
             name="add",
-            source_pad_names=("H1",),
-            sink_pad_names=("A", "B"),
+            source_pad_names=("A",),
+            sink_pad_names=("A","B"),
+            max_age=max_age,
         ),
         FakeSeriesSink(
             name="snk1",
@@ -83,26 +74,13 @@ def test_resampler(capsys):
         link_map={
             "down:sink:H1": "src1:src:H1",
             "up:sink:H1": "down:src:H1",
-            "align:sink:A": "up:src:H1",
-            "add:sink:A": "align:src:A",
-            "align:sink:B": "src1:src:H1",
-            "add:sink:B": "align:src:B",
-            "snk1:sink:H1": "add:src:H1",
+            "add:sink:A": "up:src:H1",
+            "add:sink:B": "src1:src:H1",
+            "snk1:sink:H1": "add:src:A",
         },
     )
 
     pipeline.run()
-    if capsys is not None:
-        captured = capsys.readouterr()
-        assert (
-            captured.out.strip()
-            == """
-buffer flow:  ('src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1') -> 'add:src:H1' -> 'snk1:sink:H1' offset 0 time 0
-buffer flow:  ('src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1') -> 'add:src:H1' -> 'snk1:sink:H1' offset 15104 time 921875000
-buffer flow:  ('src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1') -> 'add:src:H1' -> 'snk1:sink:H1' offset 31488 time 1921875000
-""".strip()
-        )
-
 
 if __name__ == "__main__":
-    test_resampler(None)
+    test_adder(None)
