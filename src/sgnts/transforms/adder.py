@@ -7,7 +7,6 @@ from ..base import Audioadapter, SeriesBuffer, TSFrame, TSTransform
 import numpy as np
 
 
-
 @dataclass
 class Adder(TSTransform):
     """
