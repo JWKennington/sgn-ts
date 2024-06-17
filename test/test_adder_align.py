@@ -64,7 +64,7 @@ def test_adder(capsys):
         Adder(
             name="add",
             source_pad_names=("A",),
-            sink_pad_names=("A","B"),
+            sink_pad_names=("A", "B"),
             max_age=max_age,
         ),
         FakeSeriesSink(
@@ -81,6 +81,7 @@ def test_adder(capsys):
     )
 
     pipeline.run()
+
 
 if __name__ == "__main__":
     test_adder(None)

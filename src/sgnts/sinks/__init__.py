@@ -16,7 +16,7 @@ class FakeSeriesSink(SinkElement):
 
     def __post_init__(self):
         super().__post_init__()
-        self.cnt = {p:0 for p in self.sink_pads}
+        self.cnt = {p: 0 for p in self.sink_pads}
 
     def pull(self, pad, bufs):
         """
@@ -27,7 +27,7 @@ class FakeSeriesSink(SinkElement):
         if bufs.EOS:
             self.mark_eos(pad)
         if bufs.buffers is not None:
-            print (self.cnt[pad], bufs)
+            print(self.cnt[pad], bufs)
 
     @property
     def EOS(self):
@@ -41,6 +41,11 @@ class FakeSeriesSink(SinkElement):
 class DumpSeriesSink(SinkElement):
     """
     A sink element that dumps time series data to a txt file
+
+    Parameters:
+    -----------
+    fname: str
+        output file name
     """
 
     fname: str = "out.txt"
@@ -55,6 +60,7 @@ class DumpSeriesSink(SinkElement):
         t0 = buf.t0
         duration = buf.duration
         data = buf.data
+        data = data.reshape(-1, data.shape[-1])
         ts = np.linspace(
             t0 / Time.SECONDS,
             (t0 + duration) / Time.SECONDS,
@@ -72,7 +78,7 @@ class DumpSeriesSink(SinkElement):
         """
         if bufs.EOS:
             self.mark_eos(pad)
-        print (bufs)
+        print(bufs)
         for buf in bufs:
             if not buf.is_gap:
                 self.write_to_file(buf)

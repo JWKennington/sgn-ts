@@ -53,7 +53,7 @@ class _TSTransSink:
                             offset=self.earliest,
                             sample_rate=self.inbufs[pad][0].sample_rate,
                             data=None,
-                            shape=self.inbufs[pad][0].shape[:-1] + (0,)
+                            shape=self.inbufs[pad][0].shape[:-1] + (0,),
                         )
                     ],
                 )
@@ -75,7 +75,6 @@ class _TSTransSink:
                         self.inbufs[pad].appendleft(buf)
                 assert len(out) > 0
                 self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers=out)
-
 
     def _sanity_check(self, bufs, pad):
         if self._last_ts[pad] is not None and self._last_offset[pad] is not None:
@@ -163,7 +162,7 @@ class TSSource(SourceElement):
     t0: float
         start time of first buffer, in seconds
     num_samples: int
-        number of samples to produce per Frame. 
+        number of samples to produce per Frame.
         If None, the value from Offset.stridesamples will be used
     rate: int
         the sample rate of the data
@@ -178,6 +177,8 @@ class TSSource(SourceElement):
         assert isinstance(self.rate, int)
         assert isinstance(self.num_samples, int)
         # FIXME should we be more careful about this?
-        self.offset = {p: Offset.fromsec(self.t0 - Offset.offset_ref_t0) for p in self.source_pads}
+        self.offset = {
+            p: Offset.fromsec(self.t0 - Offset.offset_ref_t0) for p in self.source_pads
+        }
         if self.num_samples is None:
             self.num_samples = Offset.stridesamples(self.rate)

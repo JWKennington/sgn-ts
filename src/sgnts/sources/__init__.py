@@ -54,7 +54,10 @@ class FakeSeriesSrc(TSSource):
             duration = self.num_samples / self.rate
             return np.sin(
                 self.fsin
-                * np.linspace(t0, t0 + duration, self.shape[-1], endpoint=False)
+                * np.tile(
+                    np.linspace(t0, t0 + duration, self.shape[-1], endpoint=False),
+                    self.channels + (1,),
+                )
             )
         else:
             raise ValueError("Unknown signal type")

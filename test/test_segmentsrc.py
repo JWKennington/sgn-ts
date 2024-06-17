@@ -11,19 +11,19 @@ def test_align(capsys):
     pipeline = Pipeline()
 
     #
-    #       -----------------  
+    #       -----------------
     #      | segment src1    |
-    #       -----------------  
+    #       -----------------
     #              |
-    #           --------- 
+    #           ---------
     #          | snk1    |
-    #           --------- 
+    #           ---------
 
     inrate = 256
     num_samples = 256
-    t0 = 0.
-    end = 15.
-    segments = [(1e9,2e9),(10e9,11e9)]
+    t0 = 0.0
+    end = 15.0
+    segments = [(1e9, 2e9), (10e9, 11e9)]
     pipeline.insert(
         SegmentSrc(
             name="src1",
@@ -32,7 +32,7 @@ def test_align(capsys):
             num_samples=num_samples,
             t0=t0,
             end=end,
-            segments = segments
+            segments=segments,
         ),
         FakeSeriesSink(
             name="snk1",
@@ -40,7 +40,7 @@ def test_align(capsys):
         ),
         link_map={
             "snk1:sink:seg": "src1:src:seg",
-        }
+        },
     )
 
     pipeline.run()

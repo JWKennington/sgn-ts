@@ -52,11 +52,11 @@ def test_sync(capsys):
             rate=inrate,
             num_samples=H1_numsamples,
             t0=H1_t0,
-            random_seed=1234
+            random_seed=1234,
         ),
         Sync(
             name="trans1",
-            pad_names_map={"H1":"H1","L1":"L1","V1":"V1"},
+            pad_names_map={"H1": "H1", "L1": "L1", "V1": "V1"},
             mode=mode,
         ),
         FakeSeriesSink(
@@ -71,7 +71,7 @@ def test_sync(capsys):
             rate=inrate,
             num_samples=L1_numsamples,
             t0=L1_t0,
-            random_seed=1234
+            random_seed=1234,
         ),
         FakeSeriesSink(
             name="snk2",
@@ -85,7 +85,7 @@ def test_sync(capsys):
             rate=inrate,
             num_samples=V1_numsamples,
             t0=V1_t0,
-            random_seed=1234
+            random_seed=1234,
         ),
         FakeSeriesSink(
             name="snk3",
@@ -99,10 +99,11 @@ def test_sync(capsys):
             "snk2:sink:L1": "trans1:src:L1",
             "trans1:sink:V1": "src3:src:V1",
             "snk3:sink:V1": "trans1:src:V1",
-        }
+        },
     )
 
     pipeline.run()
+
 
 if __name__ == "__main__":
     test_sync(None)

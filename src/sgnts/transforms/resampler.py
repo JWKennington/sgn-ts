@@ -120,7 +120,7 @@ class Resampler(TSTransform):
 
         return vecs.reshape(int(factor), 1, sub_kernel_length)
 
-    def resample(self, data0, output_shape):
+    def resample(self, data0, output_length):
         data = data0.reshape(-1, data0.shape[-1])
 
         if self.factor > 1:
@@ -137,7 +137,7 @@ class Resampler(TSTransform):
                 ..., :: int(1 / self.factor)
             ]
 
-        out = out.reshape(output_shape)
+        out = out.reshape(data0.shape[:-1] + (output_length,))
 
         return out
 
@@ -146,9 +146,6 @@ class Resampler(TSTransform):
         Up/down samples buffers
         """
         EOS = self.inbufs.EOS
-
-        # if inbuf.data.dim() == 1:
-        #    inbuf.data = inbuf.data.unsqueeze(0)
 
         A = self.audioadapter
         assert self.next_out_offset == A.offset + Offset.fromsamples(
@@ -160,8 +157,7 @@ class Resampler(TSTransform):
         )
 
         sampsin, output_length = self.get_output_length()
-        noffset = Offset.fromsamples(output_length, self.outrate)
-        output_shape = A.channels + (output_length,)
+        output_shape = self.inbufs.shape[:-1] + (output_length,)
 
         if output_length == 0:
             outdata = None
@@ -178,7 +174,7 @@ class Resampler(TSTransform):
                     # if we need to pad half length of zeros in front
                     outdata = self.pad_func(outdata)
                 # resample the data
-                outdata = self.resample(outdata, output_shape)
+                outdata = self.resample(outdata, output_length)
 
             # flush samples from audioadapter
             # leave some leftover samples to pad infront of next buffer
@@ -192,8 +188,8 @@ class Resampler(TSTransform):
             offset=self.next_out_offset,
             sample_rate=self.outrate,
             data=outdata,
-            shape=output_shape,
+            shape=self.inbufs.shape[:-1] + (output_length,),
         )
         # shift the next output buffer's offset starting point
-        self.next_out_offset += noffset
+        self.next_out_offset += Offset.fromsamples(output_length, self.outrate)
         return TSFrame(buffers=[outbuf], EOS=EOS)

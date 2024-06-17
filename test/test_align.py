@@ -31,9 +31,11 @@ def test_align(capsys):
     H1_t0 = 2
     L1_t0 = 4
     V1_t0 = 6
-    max_age = 100*1e9
+    max_age = 100 * 1e9
 
-    print_message = ("f' duration {bufs[-1].duration} data_is_none {bufs[-1].data is None}'")
+    print_message = (
+        "f' duration {bufs[-1].duration} data_is_none {bufs[-1].data is None}'"
+    )
 
     H1_num_samples = 256
     L1_num_samples = 512
@@ -49,8 +51,8 @@ def test_align(capsys):
         ),
         Align(
             name="trans1",
-            sink_pad_names=("H1","L1","V1"),
-            source_pad_names=("H1","L1","V1"),
+            sink_pad_names=("H1", "L1", "V1"),
+            source_pad_names=("H1", "L1", "V1"),
             max_age=max_age,
         ),
         FakeSeriesSink(
@@ -91,7 +93,7 @@ def test_align(capsys):
             "snk2:sink:L1": "trans1:src:L1",
             "trans1:sink:V1": "src3:src:V1",
             "snk3:sink:V1": "trans1:src:V1",
-        }
+        },
     )
 
     pipeline.run()

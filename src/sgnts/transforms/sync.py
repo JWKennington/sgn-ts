@@ -46,18 +46,13 @@ class Sync(TransformElement):
         self.inbufs[pad] = bufs
         for buf in bufs:
             self.audioadapters[pad.name].push(buf)
-        self.segments[pad.name] = self.audioadapters[pad.name].get_available_offset_segment()
+        self.segments[pad.name] = self.audioadapters[
+            pad.name
+        ].get_available_offset_segment()
 
     def transform(self, pad):
-        EOS = any(b.EOS for b in self.inbufs.values())
-        metadata = {
-            "cnt:%s" % b.metadata["name"]: b.metadata["cnt"]
-            for b in self.inbufs.values()
-        }
-        metadata["name"] = "%s -> '%s'" % (
-            "+".join(b.metadata["name"] for b in self.inbufs.values()),
-            pad.name,
-        )
+        frames = list(self.inbufs.values())
+        EOS = any(b.EOS for b in frames)
 
         sink_pad = self.pad_map[pad.name]
 
@@ -72,7 +67,9 @@ class Sync(TransformElement):
             noffset = output_segment[1] - output_segment[0]
             seg = self.segments[sink_pad]
             overlap = (max(output_segment[0], seg[0]), min(output_segment[1], seg[1]))
-            data, copied_gap, copied_nongap = A.copy_samples_by_offset_segment(overlap, pad_zeros=True)
+            data, copied_gap, copied_nongap = A.copy_samples_by_offset_segment(
+                overlap, pad_zeros=True
+            )
             A.flush_samples_by_end_offset_segment(overlap[1])
         else:
             if self.mode == "pad":
@@ -86,23 +83,27 @@ class Sync(TransformElement):
                     min(output_segment[1], seg[1]),
                 )
                 if overlap[1] <= overlap[0]:
-                    data=None
+                    data = None
                 else:
-                    data, copied_gap, copied_nongap = A.copy_samples_by_offset_segment(overlap, pad_zeros=True)
+                    data, copied_gap, copied_nongap = A.copy_samples_by_offset_segment(
+                        overlap, pad_zeros=True
+                    )
                     A.flush_samples_by_end_offset_segment(overlap[1])
             elif self.mode == "drop":
                 output_segment = (max(oldsegs), min(newsegs))
                 noffset = output_segment[1] - output_segment[0]
                 if noffset <= 0:
                     # produce empty buffers
-                    data=None
+                    data = None
                 else:
                     seg = self.segments[sink_pad]
                     overlap = (
                         max(output_segment[0], seg[0]),
                         min(output_segment[1], seg[1]),
                     )
-                    data, copied_gap, copied_nongap = A.copy_samples_by_offset_segment(overlap, pad_zeros=True)
+                    data, copied_gap, copied_nongap = A.copy_samples_by_offset_segment(
+                        overlap, pad_zeros=True
+                    )
                     self.audioadapters[sink_pad].flush_samples_by_end_offset_segment(
                         overlap[1]
                     )
@@ -110,9 +111,10 @@ class Sync(TransformElement):
                 raise ValueError("Unknown mode")
         outbuf = SeriesBuffer(
             offset=output_segment[0],
-            sample_rate=A.sample_rate,
+            sample_rate=frames[0].sample_rate,
             data=data,
-            shape=A.channels + (Offset.tosamples(max(noffset,0), A.sample_rate),)
+            shape=frames[0].shape[:-1]
+            + (Offset.tosamples(max(noffset, 0), A.sample_rate),),
         )
-        #self.outbufs.pop(sink_pad)
-        return TSFrame(buffers=[outbuf], metadata=metadata, EOS=EOS)
+        # self.outbufs.pop(sink_pad)
+        return TSFrame(buffers=[outbuf], EOS=EOS)

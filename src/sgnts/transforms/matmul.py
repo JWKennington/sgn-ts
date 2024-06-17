@@ -12,7 +12,7 @@ class Matmul(TransformElement):
     """
     Performs matrix multiplication with provided matrix.
 
-    If a pad receives more then one buffer, matmul will be performed 
+    If a pad receives more then one buffer, matmul will be performed
     on the list of buffers one by one. The source pad will also output
     a list of buffers.
 
@@ -30,13 +30,14 @@ class Matmul(TransformElement):
 
     def __post_init__(self):
         super().__post_init__()
-        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
-        "only one sink_pad and one source_pad is allowed")
+        assert (
+            len(self.sink_pads) == 1 and len(self.source_pads) == 1
+        ), "only one sink_pad and one source_pad is allowed"
 
     def pull(self, pad, bufs):
         """
-        Assumes there is only one sink pad, if the user wants 
-        to matmul multitple channels of data, 
+        Assumes there is only one sink pad, if the user wants
+        to matmul multitple channels of data,
         connect multiple matmul elements
         """
         self.inbufs = bufs
@@ -61,7 +62,7 @@ class Matmul(TransformElement):
                 offset=inbuf.offset,
                 sample_rate=inbufs[-1].sample_rate,
                 data=data,
-                shape=self.matrix.shape[:-1] + (inbuf.samples,)
+                shape=self.matrix.shape[:-1] + (inbuf.samples,),
             )
             outbufs.append(outbuf)
 
