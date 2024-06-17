@@ -30,17 +30,18 @@ class Correlate(TransformElement):
         assert self.filters is not None
         self.audioadapter = Audioadapter()
         super().__post_init__()
-        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
-        "only one sink_pad and one source_pad is allowed")
+        assert (
+            len(self.sink_pads) == 1 and len(self.source_pads) == 1
+        ), "only one sink_pad and one source_pad is allowed"
 
     def pull(self, pad, bufs):
         """
-        Assumes there is only one sink pad, if the user wants 
-        to correltate multitple channels of data, 
+        Assumes there is only one sink pad, if the user wants
+        to correltate multitple channels of data,
         connect multiple correlate elements
         """
         self.inbufs = bufs
-        self.nnew = 0 # len of the new data
+        self.nnew = 0  # len of the new data
         for buf in bufs:
             self.audioadapter.push(buf)
             self.nnew += buf.samples
@@ -87,9 +88,14 @@ class Correlate(TransformElement):
         if next_offset > A.get_available_offset_segment()[0]:
             A.flush_samples_by_end_offset_segment(next_offset)
 
-        return TSFrame(buffers=[SeriesBuffer(
-            offset=self.this_segment[0],
-            sample_rate=inbufs[-1].sample_rate,
-            data=out,
-            shape=self.filters.shape[:-1] + (self.nnew, )
-        )], EOS=EOS)
+        return TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=self.this_segment[0],
+                    sample_rate=inbufs[-1].sample_rate,
+                    data=out,
+                    shape=self.filters.shape[:-1] + (self.nnew,),
+                )
+            ],
+            EOS=EOS,
+        )

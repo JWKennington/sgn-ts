@@ -29,11 +29,16 @@ class Adder(TSTransform):
             i0 = 0
             for buf in f:
                 if not buf.is_gap:
-                    out[...,i0:i0+buf.samples] += buf.data
+                    out[..., i0 : i0 + buf.samples] += buf.data
                 i0 += buf.samples
 
-        return TSFrame(buffers=[SeriesBuffer(
-            offset=frames[0].offset,
-            sample_rate=frames[0].sample_rate,
-            data=out,
-        )], EOS=frames[0].EOS)
+        return TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=frames[0].offset,
+                    sample_rate=frames[0].sample_rate,
+                    data=out,
+                )
+            ],
+            EOS=frames[0].EOS,
+        )

@@ -1,6 +1,7 @@
 from .time import Time
 import numpy
 
+
 class Offset:
     """
     OFFSET_RATE: the number of offsets in one second.
