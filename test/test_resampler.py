@@ -6,6 +6,7 @@ from sgnts.sinks import DumpSeriesSink, FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Resampler
 
+
 def test_resampler(capsys):
 
     pipeline = Pipeline()
@@ -50,13 +51,9 @@ def test_resampler(capsys):
         DumpSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
-            fname="out_gap.txt"
+            fname="out_gap.txt",
         ),
-        DumpSeriesSink(
-            name="snk2",
-            sink_pad_names=("H1",),
-            fname="in_gap.txt"
-        ),
+        DumpSeriesSink(name="snk2", sink_pad_names=("H1",), fname="in_gap.txt"),
         link_map={
             "trans1:sink:H1": "src1:src:H1",
             "snk1:sink:H1": "trans1:src:H1",
@@ -71,29 +68,29 @@ def test_resampler(capsys):
             captured.out.strip()
             == """
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=0, offset_end=16384, samples=256, duration=1000000000, data=[0.         ... 0.15271153])
+	SeriesBuffer(offset=0, offset_end=16384, shape=(256,), duration=1000000000, data=[0.         ... 0.15271153])
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=0, offset_end=8192, samples=32, duration=500000000, data=[0.00452957 ... 0.99831967])
+	SeriesBuffer(offset=0, offset_end=8192, shape=(32,), duration=500000000, data=[0.00452957 ... 0.99831967])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=16384, offset_end=32768, samples=256, duration=1000000000, data=None)
+	SeriesBuffer(offset=16384, offset_end=32768, shape=(256,), duration=1000000000, data=None)
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=8192, offset_end=24576, samples=64, duration=1000000000, data=[ 1.00275514e+00 ... -1.57143307e-05])
+	SeriesBuffer(offset=8192, offset_end=24576, shape=(64,), duration=1000000000, data=[ 1.00275514e+00 ... -1.57143307e-05])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=32768, offset_end=49152, samples=256, duration=1000000000, data=[-0.2794155  ...  0.42276725])
+	SeriesBuffer(offset=32768, offset_end=49152, shape=(256,), duration=1000000000, data=[-0.2794155  ...  0.42276725])
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=24576, offset_end=40960, samples=64, duration=1000000000, data=[7.40148683e-17 ... 9.25553230e-01])
+	SeriesBuffer(offset=24576, offset_end=40960, shape=(64,), duration=1000000000, data=[7.40148683e-17 ... 9.25553230e-01])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=49152, offset_end=65536, samples=256, duration=1000000000, data=None)
+	SeriesBuffer(offset=49152, offset_end=65536, shape=(256,), duration=1000000000, data=None)
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=40960, offset_end=57344, samples=64, duration=1000000000, data=[ 9.42946394e-01 ... -4.20381775e-05])
+	SeriesBuffer(offset=40960, offset_end=57344, shape=(64,), duration=1000000000, data=[ 9.42946394e-01 ... -4.20381775e-05])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=65536, offset_end=81920, samples=256, duration=1000000000, data=[-0.53657292 ...  0.65914558])
+	SeriesBuffer(offset=65536, offset_end=81920, shape=(256,), duration=1000000000, data=[-0.53657292 ...  0.65914558])
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=57344, offset_end=73728, samples=64, duration=1000000000, data=[-7.40148683e-17 ...  7.79057752e-01])
+	SeriesBuffer(offset=57344, offset_end=73728, shape=(64,), duration=1000000000, data=[-7.40148683e-17 ...  7.79057752e-01])
 -> src1:src:H1 -> trans1:sink:H1 -> snk2:sink:H1  ::
-	SeriesBuffer(offset=81920, offset_end=98304, samples=256, duration=1000000000, data=None)
+	SeriesBuffer(offset=81920, offset_end=98304, shape=(256,), duration=1000000000, data=None)
 -> trans1:src:H1 -> snk1:sink:H1  ::
-	SeriesBuffer(offset=73728, offset_end=90112, samples=64, duration=1000000000, data=[ 8.08023076e-01 ... -6.50132872e-05])
+	SeriesBuffer(offset=73728, offset_end=90112, shape=(64,), duration=1000000000, data=[ 8.08023076e-01 ... -6.50132872e-05])
 """.strip()
         )
 
