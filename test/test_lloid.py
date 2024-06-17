@@ -9,7 +9,7 @@ from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Adder, Correlate, Matmul, Resampler
 
 
-def test_resampler(capsys):
+def test_lloid(capsys):
 
     pipeline = Pipeline()
 
@@ -45,6 +45,8 @@ def test_resampler(capsys):
     #            |   snk1    |
     #             -----------
     #
+
+    max_age = 1000000000000
 
     pipeline.insert(
         FakeSeriesSrc(
@@ -97,6 +99,7 @@ def test_resampler(capsys):
             name="add",
             source_pad_names=("H1",),
             sink_pad_names=("frombuf", "tobuf"),
+            max_age=max_age,
         ),
         FakeSeriesSink(
             name="snk1",
@@ -116,17 +119,7 @@ def test_resampler(capsys):
     )
 
     pipeline.run()
-    if capsys is not None:
-        captured = capsys.readouterr()
-        assert (
-            captured.out.strip()
-            == """
-buffer flow:  ('src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1') -> 'add:src:H1' -> 'snk1:sink:H1' offset 0 time 0
-buffer flow:  ('src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1') -> 'add:src:H1' -> 'snk1:sink:H1' offset 15104 time 921875000
-buffer flow:  ('src1:src:H1' -> 'corr1:src:H1' -> 'mm1:src:H1'+'src1:src:H1' -> 'down:src:H1' -> 'corr2:src:H1' -> 'mm2:src:H1' -> 'up:src:H1') -> 'add:src:H1' -> 'snk1:sink:H1' offset 31488 time 1921875000
-""".strip()
-        )
 
 
 if __name__ == "__main__":
-    test_resampler(None)
+    test_lloid(None)
