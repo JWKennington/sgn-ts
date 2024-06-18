@@ -4,3 +4,4 @@ from .matmul import *
 from .resampler import *
 from .sync import *
 from .align import *
+from .gate import *
