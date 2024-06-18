@@ -50,12 +50,9 @@ class SeriesBuffer:
 
     @staticmethod
     def fromoffsetslice(offslice, sample_rate, data=None, channels=()):
-        if data is None or isinstance(data, int):
-            shape = channels + (
-                Offset.tosamples(offslice.stop - offslice.start, sample_rate),
-            )
-        else:
-            shape = None
+        shape = channels + (
+            Offset.tosamples(offslice.stop - offslice.start, sample_rate),
+        )
         return SeriesBuffer(
             offset=offslice.start, sample_rate=sample_rate, data=data, shape=shape
         )
