@@ -44,7 +44,7 @@ class TSSlices:
         out = []
         if boundary_slice.start < self.slices[0].start:
             out.append(TSSlice(boundary_slice.start, self.slices[0].start))
-        out.extend([TSSlice(s[n - 1].stop, s[n].start) for s in self.slices[1:]])
+        out.extend([TSSlice(s1.stop, s2.start) for (s1,s2) in zip(self.slices[:-1],self.slices[1:])])
         if boundary_slice.stop > self.slices[-1].stop:
             out.append(TSSlice(self.slices[-1].stop, boundary_slice.stop))
         return TSSlices(out)
@@ -265,7 +265,15 @@ class TSSlice:
         i = self & o
         if not b or not i:
             return []
-        return sorted([TSSlice(b.start, i.start), TSSlice(i.stop, b.stop)])
+        out = [TSSlice(b.start, i.start), TSSlice(i.stop, b.stop)]
+        return sorted(o for o in out if o.isfinite())
+
+    def __contains__(self, o):
+        return o.start >= self.start and o.stop <= self.stop
+
+    def split(self, o):
+            assert self.start <= o < self.stop
+            return [TSSlice(self.start, o), TSSlice(o, self.stop)]
 
     def isfinite(self):
         if not self:
