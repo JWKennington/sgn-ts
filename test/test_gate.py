@@ -28,7 +28,7 @@ def test_gate(capsys):
     num_samples = 256
     t0 = 0.0
     end = 15.0
-    segments = [(1e9, 2e9), (10e9, 11e9)]
+    segments = [(1_000_000_000, 2_000_000_000), (10_000_000_000, 11_000_000_000)]
     num_buffers = 20
     pipeline.insert(
         SegmentSrc(
