@@ -134,6 +134,9 @@ class TSTransform(TransformElement, _TSTransSink):
     pull = _TSTransSink.pull
 
     def __post_init__(self):
+        if self.max_age is None:
+            # FIXME is this what we want?
+            self.max_age = 100 * Time.SECONDS
         TransformElement.__post_init__(self)
         _TSTransSink.__post_init__(self)
 

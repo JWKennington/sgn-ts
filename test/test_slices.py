@@ -8,6 +8,8 @@ def test_slices(capsys):
     for A, B in [
         (TSSlice(0, 3), TSSlice(2, 5)),
         (TSSlice(0, 3), TSSlice(4, 6)),
+        (TSSlice(0, 3), TSSlice(1, 2)),
+        (TSSlice(0, 3), TSSlice(1, 3)),
         (TSSlice(0, 3), TSSlice(None, None)),
     ]:
         print("\nA: %s\nB: %s\n" % (A, B))

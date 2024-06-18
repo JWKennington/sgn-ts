@@ -6,7 +6,7 @@ import numpy
 from sgn.base import Frame
 
 from .offset import Offset
-from .slice_tools import TSSlice
+from .slice_tools import TSSlice, TSSlices
 
 
 @dataclass
@@ -69,6 +69,9 @@ class SeriesBuffer:
                     self.data,
                 )
             )
+
+    def __bool__(self):
+        return self.data is not None
 
     @property
     def slice(self):
@@ -144,21 +147,34 @@ class SeriesBuffer:
             + (Offset.tosamples(self.offset - off, self.sample_rate),),
         )
 
-    def split(self, off):
-        assert self.offset <= off < self.end_offset
-        midoffset = off - self.offset
-        midsamples = Offset.tosamples(midoffset, self.sample_rate)
-        return SeriesBuffer(
-            offset=self.offset,
-            sample_rate=self.sample_rate,
-            data=None if self.data is None else self.data[..., :midsamples],
-            shape=self.shape[:-1] + (midsamples,),
-        ), SeriesBuffer(
-            offset=self.offset + midoffset,
-            sample_rate=self.sample_rate,
-            data=None if self.data is None else self.data[..., midsamples:],
-            shape=self.shape[:-1] + (self.shape[-1] - midsamples,),
-        )
+    def sub_buffer(self, slc, gap=False):
+            assert slc in self.slice
+            startsamples, stopsamples = Offset.tosamples(slc.start - self.offset, self.sample_rate), Offset.tosamples(slc.stop - self.offset, self.sample_rate)
+            gap = gap and self.data is not None
+            if not gap:
+                data = self.data[..., startsamples:stopsamples]
+            else:
+                data = None
+            return SeriesBuffer(
+                    offset=slc.start,
+                    sample_rate=self.sample_rate,
+                    data=data,
+                    shape=self.shape[:-1] + (stopsamples - startsamples,))
+
+    def split(self, boundaries, contiguous = False):
+        out = []
+        if isinstance(boundaries, int):
+            boundaries = TSSlices(self.slice.split(boundaries))
+        if not isinstance(boundaries, TSSlices):
+            raise NotImplementedError
+        for slc in boundaries.slices:
+            assert slc in self.slice
+            out.append(self.sub_buffer(slc))
+        if contiguous:
+            gap_boundaries = boundaries.invert(self.slice)
+            for slc in gap_boundaries.slices:
+                out.append(self.sub_buffer(slc, gap=True))
+        return sorted(out)
 
 
 @dataclass
