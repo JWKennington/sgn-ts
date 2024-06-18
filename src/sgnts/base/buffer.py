@@ -156,17 +156,13 @@ class SeriesBuffer:
             gap = gap and self.data is not None
             if not gap:
                 data = self.data[..., startsamples:stopsamples]
-                return SeriesBuffer.fromoffsetslice(
-                    offslice = slc,
-                    sample_rate=self.sample_rate,
-                    data=data)
             else:
-                shape = self.shape[:-1] + (stopsamples - startsamples,)
-                return SeriesBuffer.fromoffsetslice(
-                    offslice = slc,
+                data = None
+            return SeriesBuffer(
+                    offset=slc.start,
                     sample_rate=self.sample_rate,
-                    data=None,
-                    channels = self.shape[:-1])
+                    data=data,
+                    shape=self.shape[:-1] + (stopsamples - startsamples,))
 
     def split(self, boundaries, contiguous = False):
         out = []
