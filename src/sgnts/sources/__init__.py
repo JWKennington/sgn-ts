@@ -17,12 +17,15 @@ class FakeSeriesSrc(TSSource):
     rate: int
         the sample rate of the data
     channels: tuple
-        the channels of the data
+        the number channels of the data in each dimension except the last, i.e.,
+        channels = data.shape[:-1]. If data has shape (A, B, N), then channels = 
+        (A, B). Note that if data is one dimensional and has shape (N,), channels
+        would be an empty tuple (). 
     signal_type: str
         currently supported types: (1) 'white': white noise data. (2) 'sin' or 'sine':
         sine wave data
     fsin: float
-        frequency of the sine wave is signal_type = 'sin'
+        frequency of the sine wave if signal_type = 'sin'
     ngap: int
         Frequency of gap buffers, will generate a gap buffer every ngap buffers.
         ngap=0: do not generate gap buffers.
