@@ -22,6 +22,16 @@ class _TSTransSink:
         self._last_ts = {p: None for p in self.sink_pads}
         self._last_offset = {p: None for p in self.sink_pads}
         self.__pulled = {p: False for p in self.sink_pads}
+        self.audioadapters = None
+        if self.history_pad_samples or self.future_pad_samples:
+            # we need audioadapters
+            self.audioadapters = {p: Audioadapter() for p in self.sink_pads}
+            self.pad_zeros_samples = 0
+            if self.pad_zeros_startup is True:
+                # at startup, pad zeros in front of the first buffer to
+                # serve as history
+                self.pad_zeros_samples = self.history_pad_samples
+            self.preparedoutframes = {p: None for p in self.sink_pads}
 
     def pull(self, pad, bufs):
         self.at_EOS |= bufs.EOS
@@ -35,6 +45,118 @@ class _TSTransSink:
 
         if all(self.__pulled.values()):
             self.__post_pull()
+
+    def __adapter(self, pad, bufs):
+        """
+        Use the audioadapter to handle streaming scenarios such
+        as padding with history, future, and fixed stride outputs.
+
+        The self.preparedframes are padded with the requested
+        padding.  This method also produces a self.preparedoutframes,
+        that infers the metadata information for the output buffer,
+        with the data initialized as None.  Downstream transforms
+        can directly use the frames from self.preparedframes for
+        computation, and then update the data in the buffer in
+        self.preparedoutframes with the buffer.update_data(data)
+        method.
+
+
+        Example 1 upsampling:
+        ----------------------
+        kernel length = 17
+        need to pad 8 samples before and after
+
+        input:     ________................________
+                   history   for output    future
+                   pad                     pad
+                   samples=8               samples=8
+
+
+        Example 2 correlation:
+        ----------------------
+        filter length = 16
+        need to pad filter_length - 1 samples
+
+        input:     ----------------........
+                   history         for output
+                   pad
+                   samples=15
+        """
+        a = self.audioadapters[pad]
+        buf0 = bufs[0]
+
+        # push all buffers in the frame into the audioadapter
+        for buf in bufs:
+            a.push(buf)
+
+        # Check whether we have enough samples to produce a frame
+        min_samples = (
+            self.history_pad_samples
+            + self.future_pad_samples
+            + 1
+            - self.pad_zeros_samples
+        )
+
+        # figure out the offset for preparedframes and preparedoutframes
+        offset = a.offset - Offset.fromsamples(self.pad_zeros_samples, buf0.sample_rate)
+        outoffset = offset + Offset.fromsamples(
+            self.history_pad_samples, buf0.sample_rate
+        )
+        if a.size < min_samples:
+            # not enough samples to produce output yet
+            # make a heartbeat buffer
+            data = None
+            shape = buf0.shape[:-1] + (0,)
+            outshape = shape
+        else:
+            # We have enough samples, find out how many samples to copy
+            # out of the audioadapter
+            # copy all of the samples in the audioadapter
+            num_copy_samples = a.size
+
+            # copy out samples from head of audioadapter
+            if a.is_gap() is True:
+                # the whole audioadapter is a gap
+                data = None
+            else:
+                data = a.copy_samples(num_copy_samples)
+                if self.pad_zeros_samples > 0:
+                    # pad zeros in front of buffer
+                    data = pad_func(data, self.pad_zeros_samples)
+
+            # flush out samples from head of audioadapter
+            num_flush_samples = (
+                num_copy_samples - self.history_pad_samples - self.future_pad_samples
+            )
+            a.flush_samples(num_flush_samples)
+
+            shape = buf0.shape[:-1] + (num_copy_samples + self.pad_zeros_samples,)
+            outsamples = num_flush_samples + self.pad_zeros_samples
+            if self.outrate is not None and self.inrate is not None:
+                outsamples = int(outsamples * self.outrate / self.inrate)
+            outshape = buf0.shape[:-1] + (outsamples,)
+
+            # update next zeros padding
+            self.pad_zeros_samples = -min(0, num_flush_samples)
+
+        # prepare output frames, one buffer per frame
+        self.preparedoutframes[pad] = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=outoffset,
+                    sample_rate=(self.outrate or buf0.sample_rate),
+                    data=None,
+                    shape=outshape,
+                )
+            ],
+            EOS=self.at_EOS,
+        )
+
+        return [
+            SeriesBuffer(
+                offset=offset, sample_rate=buf0.sample_rate, data=data, shape=shape
+            )
+        ]
 
     def __post_pull(self):
         # Reset
@@ -74,6 +196,8 @@ class _TSTransSink:
                     else:  # Yes this condition is silly
                         self.inbufs[pad].appendleft(buf)
                 assert len(out) > 0
+                if self.audioadapters is not None:
+                    out = self.__adapter(pad, out)
                 self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers=out)
 
     def _sanity_check(self, bufs, pad):
@@ -132,6 +256,11 @@ class TSTransform(TransformElement, _TSTransSink):
 
     max_age: int = None
     pull = _TSTransSink.pull
+    history_pad_samples: int = 0
+    future_pad_samples: int = 0
+    pad_zeros_startup: bool = False
+    inrate: int = None
+    outrate: int = None
 
     def __post_init__(self):
         if self.max_age is None:
@@ -185,3 +314,9 @@ class TSSource(SourceElement):
         }
         if self.num_samples is None:
             self.num_samples = Offset.stridesamples(self.rate)
+
+
+def pad_func(data, pad_samples):
+    npad = [(0, 0)] * data.ndim
+    npad[-1] = (pad_samples, 0)
+    return np.pad(data, npad, "constant")
