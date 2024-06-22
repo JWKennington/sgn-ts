@@ -37,11 +37,6 @@ class Audioadapter:
         else:
             return None
 
-    def pad_func(self, data, pad_samples):
-        npad = [(0, 0)] * data.ndim
-        npad[-1] = (pad_samples, 0)
-        return np.pad(data, npad, "constant")
-
     def cat_func(self, xs, axis):
         return np.concatenate(xs, axis=axis)
 
@@ -167,7 +162,7 @@ class Audioadapter:
         else:
             out = None
 
-        return out, copied_gap, copied_nongap
+        return out
 
     def copy_samples_by_offset_segment(self, offset_segment, pad_zeros=False):
         """
@@ -217,11 +212,11 @@ class Audioadapter:
             ni = 0
             nsamples -= pad_samples
 
-        out, copied_gap, copied_nongap = self.copy_samples(nsamples, start_sample=ni)
+        out = self.copy_samples(nsamples, start_sample=ni)
         if pad_samples > 0 and out is not None:
             out = self.pad_func(out, pad_samples)
 
-        return out, copied_gap, copied_nongap
+        return out
 
     def flush_samples(self, nsamples: int):
         """
