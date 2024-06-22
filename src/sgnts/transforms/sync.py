@@ -67,9 +67,7 @@ class Sync(TransformElement):
             noffset = output_segment[1] - output_segment[0]
             seg = self.segments[sink_pad]
             overlap = (max(output_segment[0], seg[0]), min(output_segment[1], seg[1]))
-            data, copied_gap, copied_nongap = A.copy_samples_by_offset_segment(
-                overlap, pad_zeros=True
-            )
+            data = A.copy_samples_by_offset_segment(overlap, pad_zeros=True)
             A.flush_samples_by_end_offset_segment(overlap[1])
         else:
             if self.mode == "pad":
@@ -85,9 +83,7 @@ class Sync(TransformElement):
                 if overlap[1] <= overlap[0]:
                     data = None
                 else:
-                    data, copied_gap, copied_nongap = A.copy_samples_by_offset_segment(
-                        overlap, pad_zeros=True
-                    )
+                    data = A.copy_samples_by_offset_segment(overlap, pad_zeros=True)
                     A.flush_samples_by_end_offset_segment(overlap[1])
             elif self.mode == "drop":
                 output_segment = (max(oldsegs), min(newsegs))
@@ -101,9 +97,7 @@ class Sync(TransformElement):
                         max(output_segment[0], seg[0]),
                         min(output_segment[1], seg[1]),
                     )
-                    data, copied_gap, copied_nongap = A.copy_samples_by_offset_segment(
-                        overlap, pad_zeros=True
-                    )
+                    data = A.copy_samples_by_offset_segment(overlap, pad_zeros=True)
                     self.audioadapters[sink_pad].flush_samples_by_end_offset_segment(
                         overlap[1]
                     )

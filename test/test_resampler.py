@@ -47,13 +47,14 @@ def test_resampler(capsys):
             sink_pad_names=("H1",),
             inrate=inrate,
             outrate=outrate,
+            pad_zeros_startup=True,
         ),
         DumpSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
-            fname="out_gap.txt",
+            fname="out.txt",
         ),
-        DumpSeriesSink(name="snk2", sink_pad_names=("H1",), fname="in_gap.txt"),
+        DumpSeriesSink(name="snk2", sink_pad_names=("H1",), fname="in.txt"),
         link_map={
             "trans1:sink:H1": "src1:src:H1",
             "snk1:sink:H1": "trans1:src:H1",
