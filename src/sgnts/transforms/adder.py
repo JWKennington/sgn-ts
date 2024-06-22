@@ -23,7 +23,7 @@ class Adder(TSTransform):
         assert len(set(f.end_offset for f in frames)) == 1
 
         # use the first frame as basis
-        out = np.concatenate([buf.filleddata for buf in frames[0]])
+        out = np.concatenate([buf.filleddata for buf in frames[0]], axis=-1)
         # add to the first frame
         for f in frames[1:]:
             i0 = 0
