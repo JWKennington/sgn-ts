@@ -47,9 +47,9 @@ def test_resampler(capsys):
             source_pad_names=("H1",),
             sink_pad_names=("H1",),
             adapter_config=AdapterConfig(
-                stride=int(256*0.25),
+                stride=int(256 * 0.25),
                 pad_zeros_startup=True,
-                ),
+            ),
             inrate=inrate,
             outrate=outrate,
         ),
