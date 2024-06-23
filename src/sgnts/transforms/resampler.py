@@ -3,7 +3,14 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.signal import correlate
 
-from ..base import Audioadapter, SeriesBuffer, TSTransform, TSFrame, Offset, AdapterConfig
+from ..base import (
+    Audioadapter,
+    SeriesBuffer,
+    TSTransform,
+    TSFrame,
+    Offset,
+    AdapterConfig,
+)
 
 
 @dataclass
