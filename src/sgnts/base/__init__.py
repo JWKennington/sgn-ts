@@ -128,12 +128,26 @@ class _TSTransSink:
         # figure out the offset for preparedframes and preparedoutframes
         offset = a.offset - Offset.fromsamples(self.pad_zeros_samples, buf0.sample_rate)
         outoffset = offset + Offset.fromsamples(self.overlap[0], buf0.sample_rate)
+        preparedbufs = []
+        print(a.size, min_samples, self.overlap, self.stride, self.pad_zeros_samples)
         if a.size < min_samples:
             # not enough samples to produce output yet
             # make a heartbeat buffer
-            data = None
             shape = buf0.shape[:-1] + (0,)
             outshape = shape
+            preparedbufs.append(SeriesBuffer(offset=offset, sample_rate=buf0.sample_rate, data=None, shape=shape))
+            # prepare output frames, one buffer per frame
+            self.preparedoutframes[pad] = TSFrame(
+                buffers=[
+                    SeriesBuffer(
+                        offset=outoffset,
+                        sample_rate=(self.outrate or buf0.sample_rate),
+                        data=None,
+                        shape=outshape,
+                    )
+                ],
+                EOS=self.at_EOS,
+            )
         else:
             # We have enough samples, find out how many samples to copy
             # out of the audioadapter
@@ -141,50 +155,56 @@ class _TSTransSink:
             if self.stride == 0:
                 # provide all the data
                 num_copy_samples = a.size
+                nloop = 1
             else:
                 num_copy_samples = min_samples
+                nloop = 1 + (a.size - min_samples)//self.stride
 
-            if a.is_gap() is True:
-                # the whole audioadapter is a gap
-                data = None
-            else:
-                # copy out samples from head of audioadapter
-                data = a.copy_samples(num_copy_samples)
-                if self.pad_zeros_samples > 0:
-                    # pad zeros in front of buffer
-                    data = pad_func(data, self.pad_zeros_samples)
+            preparedoutbufs = []
 
-            # flush out samples from head of audioadapter
-            num_flush_samples = num_copy_samples - sum(self.overlap)
-            a.flush_samples(num_flush_samples)
+            for i in range(nloop):
+                if a.is_gap() is True:
+                    # the whole audioadapter is a gap
+                    data = None
+                else:
+                    # copy out samples from head of audioadapter
+                    data = a.copy_samples(num_copy_samples)
+                    if self.pad_zeros_samples > 0:
+                        # pad zeros in front of buffer
+                        data = pad_func(data, self.pad_zeros_samples)
 
-            shape = buf0.shape[:-1] + (num_copy_samples + self.pad_zeros_samples,)
-            outsamples = num_flush_samples + self.pad_zeros_samples
-            if self.outrate is not None and self.inrate is not None:
-                outsamples = int(outsamples * self.outrate / self.inrate)
-            outshape = buf0.shape[:-1] + (outsamples,)
+                # flush out samples from head of audioadapter
+                num_flush_samples = num_copy_samples - sum(self.overlap)
+                a.flush_samples(num_flush_samples)
 
-            # update next zeros padding
-            self.pad_zeros_samples = -min(0, num_flush_samples)
+                shape = buf0.shape[:-1] + (num_copy_samples + self.pad_zeros_samples,)
+                outsamples = num_flush_samples + self.pad_zeros_samples
+                if self.outrate is not None and self.inrate is not None:
+                    outsamples = int(outsamples * self.outrate / self.inrate)
+                outshape = buf0.shape[:-1] + (outsamples,)
 
-        # prepare output frames, one buffer per frame
-        self.preparedoutframes[pad] = TSFrame(
-            buffers=[
-                SeriesBuffer(
-                    offset=outoffset,
-                    sample_rate=(self.outrate or buf0.sample_rate),
-                    data=None,
-                    shape=outshape,
-                )
-            ],
-            EOS=self.at_EOS,
-        )
+                # update next zeros padding
+                self.pad_zeros_samples = -min(0, num_flush_samples)
+                preparedbufs.append(SeriesBuffer(offset=offset, sample_rate=buf0.sample_rate, data=data, shape=shape))
+                preparedoutbufs.append(
+                    SeriesBuffer(
+                        offset=outoffset,
+                        sample_rate=(self.outrate or buf0.sample_rate),
+                        data=None,
+                        shape=outshape,
+                    )
+                    )
+                offset += Offset.fromsamples(shape[-1], buf0.sample_rate)
+                outoffset += Offset.fromsamples(outsamples, (self.outrate or buf0.sample_rate))
+                num_copy_samples = sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
 
-        return [
-            SeriesBuffer(
-                offset=offset, sample_rate=buf0.sample_rate, data=data, shape=shape
+            # prepare output frames, one buffer per frame
+            self.preparedoutframes[pad] = TSFrame(
+                buffers=preparedoutbufs,
+                EOS=self.at_EOS,
             )
-        ]
+
+        return preparedbufs
 
     def __post_pull(self):
         # Reset
