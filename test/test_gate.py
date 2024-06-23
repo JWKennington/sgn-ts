@@ -51,9 +51,9 @@ def test_gate(capsys):
         Gate(
             name="gate",
             source_pad_names=("gate",),
-            sink_pad_names=("data","control"),
+            sink_pad_names=("data", "control"),
             control="control",
-            ),
+        ),
         FakeSeriesSink(
             name="snk",
             sink_pad_names=("gate",),
