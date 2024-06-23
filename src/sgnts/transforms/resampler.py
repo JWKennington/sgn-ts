@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.signal import correlate
 
-from ..base import Audioadapter, SeriesBuffer, TSTransform, TSFrame, Offset
+from ..base import Audioadapter, SeriesBuffer, TSTransform, TSFrame, Offset, AdapterConfig
 
 
 @dataclass
@@ -11,10 +11,20 @@ class Resampler(TSTransform):
     """
     Up/down samples time-series data
 
+    Parameters:
+    -----------
+    inrate: int
+        sample rate of the input frames
+    outrate: int
+        sample rate of the output frames
+
     Assumptions:
     ------------
     - There is only one sink pad and one source pad
     """
+
+    inrate: int = None
+    outrate: int = None
 
     def __post_init__(self):
         factor = self.outrate / self.inrate
@@ -33,7 +43,9 @@ class Resampler(TSTransform):
             self.kernel_length = self.half_length * 2 + 1
             self.thiskernel = self.upkernel(factor)
 
-        self.overlap = (self.half_length, self.half_length)
+        if self.adapter_config is None:
+            self.adapter_config = AdapterConfig()
+        self.adapter_config.overlap = (self.half_length, self.half_length)
 
         super().__post_init__()
 
@@ -97,10 +109,34 @@ class Resampler(TSTransform):
 
     def transform(self, pad):
         frame = self.preparedframes[self.sink_pads[0]]
-        outframe = self.preparedoutframes[self.sink_pads[0]]
-        if frame.shape[-1] > 0 and not frame.is_gap:
-            for buf, outbuf in zip(frame, outframe):
-                outdata = self.resample(buf.data, outbuf.shape)
-                outbuf.update_data(outdata)
+        outoffsets = self.preparedoutoffsets[self.sink_pads[0]]
 
-        return outframe
+        outbufs = []
+        if frame.shape[-1] == 0:
+            outbufs.append(
+                SeriesBuffer(
+                    offset=outoffsets[0]["offset"],
+                    sample_rate=self.outrate,
+                    data=None,
+                    shape=frame.shape,
+                )
+            )
+        else:
+            for i, buf in enumerate(frame):
+                shape = frame.shape[:-1] + (
+                    Offset.tosamples(outoffsets[i]["noffset"], self.outrate),
+                )
+                if buf.is_gap:
+                    data = None
+                else:
+                    data = self.resample(buf.data, shape)
+                outbufs.append(
+                    SeriesBuffer(
+                        offset=outoffsets[i]["offset"],
+                        sample_rate=self.outrate,
+                        data=data,
+                        shape=shape,
+                    )
+                )
+
+        return TSFrame(buffers=outbufs, EOS=frame.EOS)

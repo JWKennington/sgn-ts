@@ -12,17 +12,12 @@ from .slice_tools import *
 
 
 @dataclass
-class _TSTransSink:
+class AdapterConfig:
     """
-    Base class for TSTransforms and TSSinks, will produce aligned frames
-    in preparedframes. If overlap or stride is nonzero, will trigger
-    the audioadapter to queue data, and make padded or strided frames
-    in preparedframes.
+    Config to hold parameters used for the audioadapter in _TSTransSink
 
     Parameters:
     -----------
-    max_age: int
-        the max age before timeout, in nanoseconds
     overlap: tuple[int, int]
         the overlap before and after the data segement to process,
         in samples
@@ -31,18 +26,31 @@ class _TSTransSink:
     pad_zeros_startup: bool
         when overlap is provided, whether to pad zeros in front of the
         first buffer, or wait until there is enough data.
-    inrate: int
-        the sample rate of the input data
-    outrate: int
-        the sample rate of output of the transform
     """
 
-    max_age: int = None
     overlap: tuple[int, int] = (0, 0)
     stride: int = 0
     pad_zeros_startup: bool = False
-    inrate: int = None
-    outrate: int = None
+
+
+@dataclass
+class _TSTransSink:
+    """
+    Base class for TSTransforms and TSSinks, will produce aligned frames
+    in preparedframes. If adapter_config is provided, will trigger
+    the audioadapter to queue data, and make padded or strided frames
+    in preparedframes.
+
+    Parameters:
+    -----------
+    max_age: int
+        the max age before timeout, in nanoseconds
+    adapter_config: type[AdapterConfig]
+        holds parameters used for audioadapter behavior
+    """
+
+    max_age: int = None
+    adapter_config: type[AdapterConfig] = None
 
     def __post_init__(self):
         self._is_aligned = False
@@ -53,7 +61,11 @@ class _TSTransSink:
         self._last_offset = {p: None for p in self.sink_pads}
         self.__pulled = {p: False for p in self.sink_pads}
         self.audioadapters = None
-        if any(self.overlap) or self.stride:
+        if self.adapter_config is not None:
+            self.overlap = self.adapter_config.overlap
+            self.stride = self.adapter_config.stride
+            self.pad_zeros_startup = self.adapter_config.pad_zeros_startup
+
             # we need audioadapters
             self.audioadapters = {p: Audioadapter() for p in self.sink_pads}
             self.pad_zeros_samples = 0
@@ -61,7 +73,7 @@ class _TSTransSink:
                 # at startup, pad zeros in front of the first buffer to
                 # serve as history
                 self.pad_zeros_samples = self.overlap[0]
-            self.preparedoutframes = {p: None for p in self.sink_pads}
+            self.preparedoutoffsets = {p: None for p in self.sink_pads}
 
     def pull(self, pad, bufs):
         self.at_EOS |= bufs.EOS
@@ -129,7 +141,6 @@ class _TSTransSink:
         offset = a.offset - Offset.fromsamples(self.pad_zeros_samples, buf0.sample_rate)
         outoffset = offset + Offset.fromsamples(self.overlap[0], buf0.sample_rate)
         preparedbufs = []
-        print(a.size, min_samples, self.overlap, self.stride, self.pad_zeros_samples)
         if a.size < min_samples:
             # not enough samples to produce output yet
             # make a heartbeat buffer
@@ -141,17 +152,8 @@ class _TSTransSink:
                 )
             )
             # prepare output frames, one buffer per frame
-            self.preparedoutframes[pad] = TSFrame(
-                buffers=[
-                    SeriesBuffer(
-                        offset=outoffset,
-                        sample_rate=(self.outrate or buf0.sample_rate),
-                        data=None,
-                        shape=outshape,
-                    )
-                ],
-                EOS=self.at_EOS,
-            )
+            self.preparedoutoffsets[pad] = [{"offset": outoffset, "noffset": 0}]
+
         else:
             # We have enough samples, find out how many samples to copy
             # out of the audioadapter
@@ -165,6 +167,7 @@ class _TSTransSink:
                 nloop = 1 + (a.size - min_samples) // self.stride
 
             preparedoutbufs = []
+            outoffsets = []
 
             for i in range(nloop):
                 if a.is_gap() is True:
@@ -182,42 +185,25 @@ class _TSTransSink:
                 a.flush_samples(num_flush_samples)
 
                 shape = buf0.shape[:-1] + (num_copy_samples + self.pad_zeros_samples,)
-                outsamples = num_flush_samples + self.pad_zeros_samples
-                if self.outrate is not None and self.inrate is not None:
-                    outsamples = int(outsamples * self.outrate / self.inrate)
-                outshape = buf0.shape[:-1] + (outsamples,)
 
                 # update next zeros padding
                 self.pad_zeros_samples = -min(0, num_flush_samples)
-                preparedbufs.append(
-                    SeriesBuffer(
-                        offset=offset,
-                        sample_rate=buf0.sample_rate,
-                        data=data,
-                        shape=shape,
-                    )
+                pbuf = SeriesBuffer(
+                    offset=offset, sample_rate=buf0.sample_rate, data=data, shape=shape
                 )
-                preparedoutbufs.append(
-                    SeriesBuffer(
-                        offset=outoffset,
-                        sample_rate=(self.outrate or buf0.sample_rate),
-                        data=None,
-                        shape=outshape,
-                    )
+                preparedbufs.append(pbuf)
+                outnoffset = pbuf.noffset - Offset.fromsamples(
+                    sum(self.overlap), buf0.sample_rate
                 )
+                outoffsets.append({"offset": outoffset, "noffset": outnoffset})
+
                 offset += Offset.fromsamples(shape[-1], buf0.sample_rate)
-                outoffset += Offset.fromsamples(
-                    outsamples, (self.outrate or buf0.sample_rate)
-                )
+                outoffset += outnoffset
                 num_copy_samples = (
                     sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
                 )
 
-            # prepare output frames, one buffer per frame
-            self.preparedoutframes[pad] = TSFrame(
-                buffers=preparedoutbufs,
-                EOS=self.at_EOS,
-            )
+            self.preparedoutoffsets[pad] = outoffsets
 
         return preparedbufs
 

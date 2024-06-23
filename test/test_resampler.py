@@ -5,6 +5,7 @@ from sgn.apps import Pipeline
 from sgnts.sinks import DumpSeriesSink, FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Resampler
+from sgnts.base import AdapterConfig
 
 
 def test_resampler(capsys):
@@ -45,10 +46,12 @@ def test_resampler(capsys):
             name="trans1",
             source_pad_names=("H1",),
             sink_pad_names=("H1",),
-            stride=int(256*0.25),
+            adapter_config=AdapterConfig(
+                stride=int(256*0.25),
+                pad_zeros_startup=True,
+                ),
             inrate=inrate,
             outrate=outrate,
-            pad_zeros_startup=True,
         ),
         DumpSeriesSink(
             name="snk1",
