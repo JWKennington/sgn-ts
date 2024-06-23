@@ -4,12 +4,33 @@ import bisect
 
 @dataclass
 class TSSlices:
-    slices: tuple
+    """
+    A class that holds a list of TSSlice objects and defines some operations on them.
+
+    Parameters:
+    ===========
+    slices: list
+        A list of TSSlice objects. These will be stored in a sorted order and are assumed to be immutable
+    """
+
+    slices: list
 
     def __post_init__(self):
         self.slices = sorted(self.slices)
 
     def simplify(self):
+        """
+        merge overlapping slices and return a new instance of TSSlices.
+
+            slices = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6)])
+
+                slices.simplify() = TSSlices(slices=[TSSlice(start=0, stop=6)])
+
+            slices = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6), TSSlice(start=8, stop=10)])
+
+                slices.simplify() = TSSlices(slices=[TSSlice(start=0, stop=6), TSSlice(start=8, stop=10)])
+        """
+
         out = self.slices[0:1].copy()
         for s in self.slices[1:]:
             this = s + out[-1]
@@ -20,12 +41,38 @@ class TSSlices:
         return TSSlices(out)
 
     def intersection(self):
+        """
+        Find the intersection of all slices. Might be empty.
+
+            slices = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6)])
+
+                slices.intersection() = TSSlice(start=2, stop=3)
+
+            slices = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6), TSSlice(start=8, stop=10)])
+
+                slices.intersection() = TSSlice(start=None, stop=None)
+        """
         s = TSSlice(self.slices[0].start, self.slices[0].stop)
         for s2 in self.slices[1:]:
             s = s & s2
         return s
 
     def search(self, tsslice, align=True):
+        """
+        Search for the set of TSSlices that overlap wtih tsslice. If align=True
+        the returned slices will be truncated to exactly fall within tsslice.
+
+            slices = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6)])
+
+                slices.search(TSSlice(2,4), align=True) = TSSlices(slices=[TSSlice(start=2, stop=4), TSSlice(start=2, stop=3), TSSlice(start=2, stop=4)])
+                slices.search(TSSlice(2,4), align=False) = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6)])
+
+            slices = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6), TSSlice(start=8, stop=10)])
+
+                slices.search(TSSlice(2,4), align=True) = TSSlices(slices=[TSSlice(start=2, stop=4), TSSlice(start=2, stop=3), TSSlice(start=2, stop=4)])
+                slices.search(TSSlice(2,4), align=False) = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6)])
+        """
+
         startix = bisect.bisect_left(self.slices, TSSlice(tsslice.start, tsslice.start))
         stopix = bisect.bisect_right(self.slices, TSSlice(tsslice.stop, tsslice.stop))
         if not align:
@@ -39,14 +86,29 @@ class TSSlices:
             return TSSlices(out)
 
     def invert(self, boundary_slice):
+        """
+        Within boundary_slice, return an inverted set of TSSlice's
+
+            slices = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6)])
+
+                slices.invert(TSSlice(2,4)) = TSSlices(slices=[])
+
+            slices = TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3), TSSlice(start=2, stop=6), TSSlice(start=8, stop=10)])
+
+                slices.invert(TSSlice(2,4)) = TSSlices(slices=[TSSlice(start=6, stop=8)])
+        """
+
         if len(self.slices) == 0:
             return TSSlices([TSSlice(boundary_slice.start, boundary_slice.stop)])
+        _slices = self.simplify().slices
         out = []
-        if boundary_slice.start < self.slices[0].start:
-            out.append(TSSlice(boundary_slice.start, self.slices[0].start))
-        out.extend([TSSlice(s1.stop, s2.start) for (s1,s2) in zip(self.slices[:-1],self.slices[1:])])
-        if boundary_slice.stop > self.slices[-1].stop:
-            out.append(TSSlice(self.slices[-1].stop, boundary_slice.stop))
+        if boundary_slice.start < _slices[0].start:
+            out.append(TSSlice(boundary_slice.start, _slices[0].start))
+        out.extend(
+            [TSSlice(s1.stop, s2.start) for (s1, s2) in zip(_slices[:-1], _slices[1:])]
+        )
+        if boundary_slice.stop > _slices[-1].stop:
+            out.append(TSSlice(_slices[-1].stop, boundary_slice.stop))
         return TSSlices(out)
 
 
@@ -272,8 +334,8 @@ class TSSlice:
         return o.start >= self.start and o.stop <= self.stop
 
     def split(self, o):
-            assert self.start <= o < self.stop
-            return [TSSlice(self.start, o), TSSlice(o, self.stop)]
+        assert self.start <= o < self.stop
+        return [TSSlice(self.start, o), TSSlice(o, self.stop)]
 
     def isfinite(self):
         if not self:
