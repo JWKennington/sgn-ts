@@ -66,6 +66,7 @@ def test_adder(capsys):
             source_pad_names=("A",),
             sink_pad_names=("A", "B"),
             max_age=max_age,
+            stride=2048*2
         ),
         FakeSeriesSink(
             name="snk1",

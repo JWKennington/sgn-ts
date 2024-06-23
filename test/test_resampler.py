@@ -45,6 +45,7 @@ def test_resampler(capsys):
             name="trans1",
             source_pad_names=("H1",),
             sink_pad_names=("H1",),
+            stride=int(256*1.5),
             inrate=inrate,
             outrate=outrate,
             pad_zeros_startup=True,
