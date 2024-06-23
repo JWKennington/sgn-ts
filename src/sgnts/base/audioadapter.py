@@ -64,7 +64,9 @@ class Audioadapter:
             tb is SeriesBuffer
         ), f"Buffers should be of type SeriesBuffer, instead got {tb}"
 
-        if buf.noffset == 0:
+        if buf.noffset == 0 and len(self.buffers) > 0:
+            # if there are no buffers and the very first buffer we receive
+            # is a zero lenth buffer, still push it into the adapter
             return
 
         sample_rate = buf.sample_rate
