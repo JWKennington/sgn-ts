@@ -69,7 +69,6 @@ def test_lloid(capsys):
             source_pad_names=("H1",),
             sink_pad_names=("H1",),
             filters=np.random.rand(10, 2048),
-            pad_zeros_startup=True,
         ),
         Matmul(
             name="mm2",
@@ -89,7 +88,6 @@ def test_lloid(capsys):
             source_pad_names=("H1",),
             sink_pad_names=("H1",),
             filters=np.random.rand(10, 2048),
-            pad_zeros_startup=True,
         ),
         Matmul(
             name="mm1",
