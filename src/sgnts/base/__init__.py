@@ -95,19 +95,19 @@ class _TSTransSink:
         and fixed stride frames.
 
         The self.preparedframes are padded with the requested
-        padding.  This method also produces a self.preparedoutframes,
+        padding.  This method also produces a self.preparedoutoffsets,
         that infers the metadata information for the output buffer,
         with the data initialized as None.  Downstream transforms
         can directly use the frames from self.preparedframes for
-        computation, and then update the data in the buffer in
-        self.preparedoutframes with the buffer.update_data(data)
-        method.
+        computation, and then use the offset and noffset information
+        in self.preparedoutoffsets to construct the output frame.
 
         If stride is not provided, the audioadapter will push out as
         many samples as it can. If the stride is smaller than the in
         coming buffers, and the audioadapter has enough samples to
         produce multiple strides, there will be multiple buffers in
-        preparedframes, one for each stride.
+        preparedframes, and a list of offset, noffset pairs in
+        preparedoutoffsets, one for each stride.
 
 
         Example 1 upsampling:
@@ -145,7 +145,7 @@ class _TSTransSink:
         # Check whether we have enough samples to produce a frame
         min_samples = sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
 
-        # figure out the offset for preparedframes and preparedoutframes
+        # figure out the offset for preparedframes and preparedoutoffsets
         offset = a.offset - Offset.fromsamples(self.pad_zeros_samples, buf0.sample_rate)
         outoffset = offset + Offset.fromsamples(self.overlap[0], buf0.sample_rate)
         preparedbufs = []
