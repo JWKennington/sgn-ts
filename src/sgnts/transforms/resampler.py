@@ -11,20 +11,10 @@ class Resampler(TSTransform):
     """
     Up/down samples time-series data
 
-    Parameters:
-    -----------
-    inrate: int
-        sample rate of input data
-    outrate: int
-        sample rate of output data
-
     Assumptions:
     ------------
     - There is only one sink pad and one source pad
     """
-
-    inrate: int = None
-    outrate: int = None
 
     def __post_init__(self):
         factor = self.outrate / self.inrate
@@ -43,8 +33,7 @@ class Resampler(TSTransform):
             self.kernel_length = self.half_length * 2 + 1
             self.thiskernel = self.upkernel(factor)
 
-        self.history_pad_samples = self.half_length
-        self.future_pad_samples = self.half_length
+        self.overlap = (self.half_length, self.half_length)
 
         super().__post_init__()
 
@@ -109,15 +98,9 @@ class Resampler(TSTransform):
     def transform(self, pad):
         frame = self.preparedframes[self.sink_pads[0]]
         outshape = self.preparedoutframes[self.sink_pads[0]].shape
-        if frame.shape[-1] == 0:
-            outdata = None
-        else:
-            if frame.is_gap:
-                # if all([b.is_gap for b in frame.buffers]):
-                outdata = None
-            else:
-                outdata = self.resample(frame.buffers[0].data, outshape)
-
         outframe = self.preparedoutframes[self.sink_pads[0]]
-        outframe.buffers[0].update_data(outdata)
+        if frame.shape[-1] > 0 and not frame.is_gap:
+            outdata = self.resample(frame.buffers[0].data, outshape)
+            outframe.buffers[0].update_data(outdata)
+
         return outframe
