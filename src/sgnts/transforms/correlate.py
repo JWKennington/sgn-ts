@@ -6,7 +6,14 @@ import numpy as np
 import scipy
 from sgn.base import TransformElement
 
-from ..base import Audioadapter, Offset, SeriesBuffer, TSFrame, TSTransform
+from ..base import (
+    Audioadapter,
+    Offset,
+    SeriesBuffer,
+    TSFrame,
+    TSTransform,
+    AdapterConfig,
+)
 
 
 @dataclass
@@ -28,7 +35,9 @@ class Correlate(TSTransform):
 
     def __post_init__(self):
         assert self.filters is not None
-        self.overlap = (self.filters.shape[-1] - 1, 0)
+        if self.adapter_config is None:
+            self.adapter_config = AdapterConfig()
+        self.adapter_config.overlap = (self.filters.shape[-1] - 1, 0)
         super().__post_init__()
         assert (
             len(self.sink_pads) == 1 and len(self.source_pads) == 1
@@ -38,17 +47,30 @@ class Correlate(TSTransform):
         """
         Correlates data with filters
         """
-        data = self.preparedframes[self.sink_pads[0]].buffers[0].data
-
-        # FIXME: consider gaps
-        # FIXME: Are there multi-channel correlation in numpy or scipy?
-        # FIXME: consider multi-dimensional filters
-        os = []
-        for i in range(self.filters.shape[0]):
-            os.append(scipy.signal.correlate(data, self.filters[i], mode="valid"))
-        out = np.vstack(os)
-
-        outframe = self.preparedoutframes[self.sink_pads[0]]
-        outshape = self.filters.shape[:-1] + (outframe.shape[-1],)
-        outframe.buffers[0].update_data(out, shape=outshape)
-        return outframe
+        outbufs = []
+        outoffsets = self.preparedoutoffsets[self.sink_pads[0]]
+        frames = self.preparedframes[self.sink_pads[0]]
+        for i, buf in enumerate(frames):
+            if buf.is_gap:
+                data = None
+            else:
+                # FIXME: consider gaps
+                # FIXME: Are there multi-channel correlation in numpy or scipy?
+                # FIXME: consider multi-dimensional filters
+                os = []
+                for j in range(self.filters.shape[0]):
+                    os.append(
+                        scipy.signal.correlate(buf.data, self.filters[j], mode="valid")
+                    )
+                data = np.vstack(os)
+            outoffset = outoffsets[i]
+            outbufs.append(
+                SeriesBuffer(
+                    offset=outoffset["offset"],
+                    sample_rate=buf.sample_rate,
+                    data=data,
+                    shape=self.filters.shape[:-1]
+                    + (Offset.tosamples(outoffset["noffset"], buf.sample_rate),),
+                )
+            )
+        return TSFrame(buffers=outbufs, EOS=frames.EOS)
