@@ -28,6 +28,7 @@ class Correlate(TSTransform):
 
     def __post_init__(self):
         assert self.filters is not None
+        self.overlap = (self.filters.shape[-1] - 1, 0)
         super().__post_init__()
         assert (
             len(self.sink_pads) == 1 and len(self.source_pads) == 1
