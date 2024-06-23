@@ -97,10 +97,10 @@ class Resampler(TSTransform):
 
     def transform(self, pad):
         frame = self.preparedframes[self.sink_pads[0]]
-        outshape = self.preparedoutframes[self.sink_pads[0]].shape
         outframe = self.preparedoutframes[self.sink_pads[0]]
         if frame.shape[-1] > 0 and not frame.is_gap:
-            outdata = self.resample(frame.buffers[0].data, outshape)
-            outframe.buffers[0].update_data(outdata)
+            for buf, outbuf in zip(frame, outframe):
+                outdata = self.resample(buf.data, outbuf.shape)
+                outbuf.update_data(outdata)
 
         return outframe
