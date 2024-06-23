@@ -27,7 +27,7 @@ class _TSTransSink:
         the overlap before and after the data segement to process,
         in samples
     stride: int
-        the stride to produce
+        the stride to produce, in samples
     pad_zeros_startup: bool
         when overlap is provided, whether to pad zeros in front of the
         first buffer, or wait until there is enough data.
