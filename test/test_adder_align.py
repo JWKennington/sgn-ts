@@ -7,6 +7,7 @@ from sgn.apps import Pipeline
 from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Adder, Align, Resampler
+from sgnts.base import AdapterConfig
 
 
 def test_adder(capsys):
@@ -66,7 +67,7 @@ def test_adder(capsys):
             source_pad_names=("A",),
             sink_pad_names=("A", "B"),
             max_age=max_age,
-            stride=2048*2
+            adapter_config=AdapterConfig(stride=2048 * 2),
         ),
         FakeSeriesSink(
             name="snk1",
