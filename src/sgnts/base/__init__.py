@@ -92,7 +92,7 @@ class _TSTransSink:
         """
         Use the audioadapter to handle streaming scenarios such
         as padding with overlap before and after the target data,
-        and fixed stride outputs.
+        and fixed stride frames.
 
         The self.preparedframes are padded with the requested
         padding.  This method also produces a self.preparedoutframes,
@@ -103,15 +103,22 @@ class _TSTransSink:
         self.preparedoutframes with the buffer.update_data(data)
         method.
 
+        If stride is not provided, the audioadapter will push out as
+        many samples as it can. If the stride is smaller than the in
+        coming buffers, and the audioadapter has enough samples to
+        produce multiple strides, there will be multiple buffers in
+        preparedframes, one for each stride.
+
 
         Example 1 upsampling:
         ----------------------
         kernel length = 17
         need to pad 8 samples before and after
         overlap = (8, 8)
-
-        preparedframes:     ________................________
+        stride = 16
                                         for output
+        preparedframes:     ________................________
+                                        stride=16
                             pad                     pad
                             samples=8               samples=8
 
@@ -121,9 +128,10 @@ class _TSTransSink:
         filter length = 16
         need to pad filter_length - 1 samples
         overlap = (15, 0)
-
-        preparedframes:     ----------------........
+        stride = 8
                                             for output
+        preparedframes:     ----------------........
+                                            stride=8
                             pad
                             samples=15
         """
