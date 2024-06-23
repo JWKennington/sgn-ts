@@ -13,6 +13,36 @@ from .slice_tools import *
 
 @dataclass
 class _TSTransSink:
+    """
+    Base class for TSTransforms and TSSinks, will produce aligned frames
+    in preparedframes. If overlap or stride is nonzero, will trigger
+    the audioadapter to queue data, and make padded or strided frames
+    in preparedframes.
+
+    Parameters:
+    -----------
+    max_age: int
+        the max age before timeout, in nanoseconds
+    overlap: tuple[int, int]
+        the overlap before and after the data segement to process,
+        in samples
+    stride: int
+        the stride to produce
+    pad_zeros_startup: bool
+        when overlap is provided, whether to pad zeros in front of the
+        first buffer, or wait until there is enough data.
+    inrate: int
+        the sample rate of the input data
+    outrate: int
+        the sample rate of output of the transform
+    """
+
+    max_age: int = None
+    overlap: tuple[int, int] = (0, 0)
+    stride: int = 0
+    pad_zeros_startup: bool = False
+    inrate: int = None
+    outrate: int = None
 
     def __post_init__(self):
         self._is_aligned = False
@@ -23,14 +53,14 @@ class _TSTransSink:
         self._last_offset = {p: None for p in self.sink_pads}
         self.__pulled = {p: False for p in self.sink_pads}
         self.audioadapters = None
-        if self.history_pad_samples or self.future_pad_samples:
+        if any(self.overlap) or self.stride:
             # we need audioadapters
             self.audioadapters = {p: Audioadapter() for p in self.sink_pads}
             self.pad_zeros_samples = 0
             if self.pad_zeros_startup is True:
                 # at startup, pad zeros in front of the first buffer to
                 # serve as history
-                self.pad_zeros_samples = self.history_pad_samples
+                self.pad_zeros_samples = self.overlap[0]
             self.preparedoutframes = {p: None for p in self.sink_pads}
 
     def pull(self, pad, bufs):
@@ -49,7 +79,8 @@ class _TSTransSink:
     def __adapter(self, pad, bufs):
         """
         Use the audioadapter to handle streaming scenarios such
-        as padding with history, future, and fixed stride outputs.
+        as padding with overlap before and after the target data,
+        and fixed stride outputs.
 
         The self.preparedframes are padded with the requested
         padding.  This method also produces a self.preparedoutframes,
@@ -65,22 +96,24 @@ class _TSTransSink:
         ----------------------
         kernel length = 17
         need to pad 8 samples before and after
+        overlap = (8, 8)
 
-        input:     ________................________
-                   history   for output    future
-                   pad                     pad
-                   samples=8               samples=8
+        preparedframes:     ________................________
+                                        for output
+                            pad                     pad
+                            samples=8               samples=8
 
 
         Example 2 correlation:
         ----------------------
         filter length = 16
         need to pad filter_length - 1 samples
+        overlap = (15, 0)
 
-        input:     ----------------........
-                   history         for output
-                   pad
-                   samples=15
+        preparedframes:     ----------------........
+                                            for output
+                            pad
+                            samples=15
         """
         a = self.audioadapters[pad]
         buf0 = bufs[0]
@@ -90,18 +123,11 @@ class _TSTransSink:
             a.push(buf)
 
         # Check whether we have enough samples to produce a frame
-        min_samples = (
-            self.history_pad_samples
-            + self.future_pad_samples
-            + 1
-            - self.pad_zeros_samples
-        )
+        min_samples = sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
 
         # figure out the offset for preparedframes and preparedoutframes
         offset = a.offset - Offset.fromsamples(self.pad_zeros_samples, buf0.sample_rate)
-        outoffset = offset + Offset.fromsamples(
-            self.history_pad_samples, buf0.sample_rate
-        )
+        outoffset = offset + Offset.fromsamples(self.overlap[0], buf0.sample_rate)
         if a.size < min_samples:
             # not enough samples to produce output yet
             # make a heartbeat buffer
@@ -112,22 +138,24 @@ class _TSTransSink:
             # We have enough samples, find out how many samples to copy
             # out of the audioadapter
             # copy all of the samples in the audioadapter
-            num_copy_samples = a.size
+            if self.stride == 0:
+                # provide all the data
+                num_copy_samples = a.size
+            else:
+                num_copy_samples = min_samples
 
-            # copy out samples from head of audioadapter
             if a.is_gap() is True:
                 # the whole audioadapter is a gap
                 data = None
             else:
+                # copy out samples from head of audioadapter
                 data = a.copy_samples(num_copy_samples)
                 if self.pad_zeros_samples > 0:
                     # pad zeros in front of buffer
                     data = pad_func(data, self.pad_zeros_samples)
 
             # flush out samples from head of audioadapter
-            num_flush_samples = (
-                num_copy_samples - self.history_pad_samples - self.future_pad_samples
-            )
+            num_flush_samples = num_copy_samples - sum(self.overlap)
             a.flush_samples(num_flush_samples)
 
             shape = buf0.shape[:-1] + (num_copy_samples + self.pad_zeros_samples,)
@@ -254,13 +282,7 @@ class _TSTransSink:
 @dataclass
 class TSTransform(TransformElement, _TSTransSink):
 
-    max_age: int = None
     pull = _TSTransSink.pull
-    history_pad_samples: int = 0
-    future_pad_samples: int = 0
-    pad_zeros_startup: bool = False
-    inrate: int = None
-    outrate: int = None
 
     def __post_init__(self):
         if self.max_age is None:
@@ -276,7 +298,6 @@ class TSTransform(TransformElement, _TSTransSink):
 @dataclass
 class TSSink(SinkElement, _TSTransSink):
 
-    max_age: int = None
     pull = _TSTransSink.pull
 
     def __post_init__(self):
