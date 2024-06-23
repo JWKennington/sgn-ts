@@ -187,14 +187,6 @@ class SeriesBuffer:
                 out.append(self.sub_buffer(slc, gap=True))
         return sorted(out)
 
-    def update_data(self, data, shape=None):
-        if shape is None:
-            assert data.shape == self.shape
-        else:
-            assert data.shape == shape
-            self.shape = shape
-        self.data = data
-
 
 @dataclass
 class TSFrame(Frame):
