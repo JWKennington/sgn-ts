@@ -38,6 +38,7 @@ class Correlate(TSTransform):
         if self.adapter_config is None:
             self.adapter_config = AdapterConfig()
         self.adapter_config.overlap = (self.filters.shape[-1] - 1, 0)
+        self.adapter_config.pad_zeros_startup = True
         super().__post_init__()
         assert (
             len(self.sink_pads) == 1 and len(self.source_pads) == 1
