@@ -27,5 +27,13 @@ def test_slices(capsys):
         print("12.\tB-A:", B - A)
 
 
+    for slices in [TSSlices([TSSlice(0, 4), TSSlice(2, 6), TSSlice(1, 3),]), TSSlices([TSSlice(0, 4), TSSlice(2, 6), TSSlice(1, 3), TSSlice(8,10)])]:
+        print ("\nslices = %s\n" % (slices,))
+        print ("1.\tslices.simplify() = %s" % slices.simplify())
+        print ("2.\tslices.intersection() = %s" % slices.intersection())
+        print ("3.\tslices.search(TSSlice(2,4), align=True) = %s" % slices.search(TSSlice(2,4), align=True))
+        print ("4.\tslices.search(TSSlice(2,4), align=False) = %s" % slices.search(TSSlice(2,4), align=False))
+        print ("5.\tslices.invert(TSSlice(2,4)) = %s" % slices.invert(TSSlice(2,4)))
+
 if __name__ == "__main__":
     test_slices(None)
