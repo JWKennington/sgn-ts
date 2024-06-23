@@ -135,7 +135,11 @@ class _TSTransSink:
             # make a heartbeat buffer
             shape = buf0.shape[:-1] + (0,)
             outshape = shape
-            preparedbufs.append(SeriesBuffer(offset=offset, sample_rate=buf0.sample_rate, data=None, shape=shape))
+            preparedbufs.append(
+                SeriesBuffer(
+                    offset=offset, sample_rate=buf0.sample_rate, data=None, shape=shape
+                )
+            )
             # prepare output frames, one buffer per frame
             self.preparedoutframes[pad] = TSFrame(
                 buffers=[
@@ -158,7 +162,7 @@ class _TSTransSink:
                 nloop = 1
             else:
                 num_copy_samples = min_samples
-                nloop = 1 + (a.size - min_samples)//self.stride
+                nloop = 1 + (a.size - min_samples) // self.stride
 
             preparedoutbufs = []
 
@@ -185,7 +189,14 @@ class _TSTransSink:
 
                 # update next zeros padding
                 self.pad_zeros_samples = -min(0, num_flush_samples)
-                preparedbufs.append(SeriesBuffer(offset=offset, sample_rate=buf0.sample_rate, data=data, shape=shape))
+                preparedbufs.append(
+                    SeriesBuffer(
+                        offset=offset,
+                        sample_rate=buf0.sample_rate,
+                        data=data,
+                        shape=shape,
+                    )
+                )
                 preparedoutbufs.append(
                     SeriesBuffer(
                         offset=outoffset,
@@ -193,10 +204,14 @@ class _TSTransSink:
                         data=None,
                         shape=outshape,
                     )
-                    )
+                )
                 offset += Offset.fromsamples(shape[-1], buf0.sample_rate)
-                outoffset += Offset.fromsamples(outsamples, (self.outrate or buf0.sample_rate))
-                num_copy_samples = sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
+                outoffset += Offset.fromsamples(
+                    outsamples, (self.outrate or buf0.sample_rate)
+                )
+                num_copy_samples = (
+                    sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
+                )
 
             # prepare output frames, one buffer per frame
             self.preparedoutframes[pad] = TSFrame(
