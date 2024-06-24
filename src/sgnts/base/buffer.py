@@ -124,18 +124,26 @@ class SeriesBuffer:
     def __lt__(self, item):
         if isinstance(item, int):
             return self.end_offset < item
+        elif isinstance(item, SeriesBuffer):
+            return self.end_offset < item.end_offset
 
     def __le__(self, item):
         if isinstance(item, int):
             return self.end_offset <= item
+        elif isinstance(item, SeriesBuffer):
+            return self.end_offset <= item.end_offset
 
     def __ge__(self, item):
         if isinstance(item, int):
             return self.offset >= item
+        elif isinstance(item, SeriesBuffer):
+            return self.end_offset >= item.end_offset
 
     def __gt__(self, item):
         if isinstance(item, int):
             return self.offset > item
+        elif isinstance(item, SeriesBuffer):
+            return self.end_offset > item.end_offset
 
     def pad_buffer(self, off, data=None):
         assert off < self.offset

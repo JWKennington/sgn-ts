@@ -18,6 +18,12 @@ class TSSlices:
     def __post_init__(self):
         self.slices = sorted(self.slices)
 
+    def __iadd__(self, other):
+        """
+        inplace add (a new instance is made though)
+        """
+        return TSSlices(self.slices + other.slices)
+
     def simplify(self):
         """
         merge overlapping slices and return a new instance of TSSlices.
