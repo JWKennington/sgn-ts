@@ -64,7 +64,11 @@ class Threshold(TSTransform):
                 j
                 for sub in [
                     self.__split_above_threshold(
-                        b, self.threshold, self.startwn, self.stopwn
+                        b,
+                        self.threshold,
+                        self.startwn,
+                        self.stopwn,
+                        self.invert,
                     )
                     for b in self.preparedframes[self.sinkpad]
                     if b
