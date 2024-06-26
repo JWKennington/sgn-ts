@@ -156,20 +156,23 @@ class SeriesBuffer:
         )
 
     def sub_buffer(self, slc, gap=False):
-            assert slc in self.slice
-            startsamples, stopsamples = Offset.tosamples(slc.start - self.offset, self.sample_rate), Offset.tosamples(slc.stop - self.offset, self.sample_rate)
-            gap = gap and self.data is not None
-            if not gap:
-                data = self.data[..., startsamples:stopsamples]
-            else:
-                data = None
-            return SeriesBuffer(
-                    offset=slc.start,
-                    sample_rate=self.sample_rate,
-                    data=data,
-                    shape=self.shape[:-1] + (stopsamples - startsamples,))
+        assert slc in self.slice
+        startsamples, stopsamples = Offset.tosamples(
+            slc.start - self.offset, self.sample_rate
+        ), Offset.tosamples(slc.stop - self.offset, self.sample_rate)
+        gap = gap and self.data is not None
+        if not gap:
+            data = self.data[..., startsamples:stopsamples]
+        else:
+            data = None
+        return SeriesBuffer(
+            offset=slc.start,
+            sample_rate=self.sample_rate,
+            data=data,
+            shape=self.shape[:-1] + (stopsamples - startsamples,),
+        )
 
-    def split(self, boundaries, contiguous = False):
+    def split(self, boundaries, contiguous=False):
         out = []
         if isinstance(boundaries, int):
             boundaries = TSSlices(self.slice.split(boundaries))
@@ -201,6 +204,7 @@ class TSFrame(Frame):
     def __post_init__(self):
         super().__post_init__()
         assert len(self.buffers) > 0
+        self.is_gap = all([b.is_gap for b in self.buffers])
 
     def __getitem__(self, item):
         return self.buffers[item]
