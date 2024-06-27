@@ -1,7 +1,5 @@
 from dataclasses import dataclass, field
 
-from sgn.base import TransformElement
-
 from ..base import Audioadapter, SeriesBuffer, TSFrame, TSTransform
 
 import numpy as np

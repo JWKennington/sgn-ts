@@ -4,11 +4,11 @@ from typing import Any
 
 import numpy as np
 
-from ..base import SeriesBuffer, TransformElement, TSFrame
+from ..base import SeriesBuffer, TSTransform, TSFrame
 
 
 @dataclass
-class Matmul(TransformElement):
+class Matmul(TSTransform):
     """
     Performs matrix multiplication with provided matrix.
 
