@@ -22,6 +22,7 @@ class FakeSeriesSink(TSSink):
         getting the buffer on the pad just modifies the name to show this final
         graph point and the prints it to prove it all works.
         """
+        super().pull(pad, bufs)
         self.cnt[pad] += 1
         if bufs.EOS:
             self.mark_eos(pad)
@@ -75,6 +76,7 @@ class DumpSeriesSink(TSSink):
         getting the buffer on the pad just modifies the name to show this final
         graph point and the prints it to prove it all works.
         """
+        super().pull(pad, bufs)
         if bufs.EOS:
             self.mark_eos(pad)
         print(bufs)
