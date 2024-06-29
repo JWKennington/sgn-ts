@@ -53,6 +53,10 @@ class _TSTransSink:
     adapter_config: type[AdapterConfig] = None
 
     def __post_init__(self):
+        if self.max_age is None:
+            # FIXME is this what we want?
+            self.max_age = 100 * Time.SECONDS
+
         self._is_aligned = False
         self.inbufs = {p: deque() for p in self.sink_pads}
         self.preparedframes = {p: None for p in self.sink_pads}
@@ -314,9 +318,6 @@ class TSTransform(TransformElement, _TSTransSink):
     pull = _TSTransSink.pull
 
     def __post_init__(self):
-        if self.max_age is None:
-            # FIXME is this what we want?
-            self.max_age = 100 * Time.SECONDS
         TransformElement.__post_init__(self)
         _TSTransSink.__post_init__(self)
 

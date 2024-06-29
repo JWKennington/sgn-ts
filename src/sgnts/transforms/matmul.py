@@ -4,11 +4,11 @@ from typing import Any
 
 import numpy as np
 
-from ..base import SeriesBuffer, TransformElement, TSFrame
+from ..base import SeriesBuffer, TSTransform, TSFrame
 
 
 @dataclass
-class Matmul(TransformElement):
+class Matmul(TSTransform):
     """
     Performs matrix multiplication with provided matrix.
 
@@ -34,23 +34,14 @@ class Matmul(TransformElement):
             len(self.sink_pads) == 1 and len(self.source_pads) == 1
         ), "only one sink_pad and one source_pad is allowed"
 
-    def pull(self, pad, bufs):
-        """
-        Assumes there is only one sink pad, if the user wants
-        to matmul multitple channels of data,
-        connect multiple matmul elements
-        """
-        self.inbufs = bufs
-
     def transform(self, pad):
         """
         Matmul over list of buffers
         """
-        inbufs = self.inbufs
         outbufs = []
         # loop over the input data, only perform matmul on non-gaps
-        EOS = inbufs.EOS
-        for inbuf in inbufs:
+        frames = self.preparedframes[self.sink_pads[0]]
+        for inbuf in frames:
             is_gap = inbuf.is_gap
 
             if is_gap:
@@ -60,10 +51,10 @@ class Matmul(TransformElement):
 
             outbuf = SeriesBuffer(
                 offset=inbuf.offset,
-                sample_rate=inbufs[-1].sample_rate,
+                sample_rate=inbuf.sample_rate,
                 data=data,
                 shape=self.matrix.shape[:-1] + (inbuf.samples,),
             )
             outbufs.append(outbuf)
 
-        return TSFrame(buffers=outbufs, EOS=EOS)
+        return TSFrame(buffers=outbufs, EOS=frames.EOS)

@@ -4,7 +4,6 @@ from typing import Any
 
 import numpy as np
 import scipy
-from sgn.base import TransformElement
 
 from ..base import (
     Audioadapter,

@@ -1,13 +1,12 @@
 from dataclasses import dataclass
 
 import numpy as np
-from sgn.sinks import SinkElement
 
-from ..base import Time
+from ..base import Time, TSSink
 
 
 @dataclass
-class FakeSeriesSink(SinkElement):
+class FakeSeriesSink(TSSink):
     """
     A fake sink element
     """
@@ -23,6 +22,7 @@ class FakeSeriesSink(SinkElement):
         getting the buffer on the pad just modifies the name to show this final
         graph point and the prints it to prove it all works.
         """
+        super().pull(pad, bufs)
         self.cnt[pad] += 1
         if bufs.EOS:
             self.mark_eos(pad)
@@ -38,7 +38,7 @@ class FakeSeriesSink(SinkElement):
 
 
 @dataclass
-class DumpSeriesSink(SinkElement):
+class DumpSeriesSink(TSSink):
     """
     A sink element that dumps time series data to a txt file
 
@@ -76,6 +76,7 @@ class DumpSeriesSink(SinkElement):
         getting the buffer on the pad just modifies the name to show this final
         graph point and the prints it to prove it all works.
         """
+        super().pull(pad, bufs)
         if bufs.EOS:
             self.mark_eos(pad)
         print(bufs)
