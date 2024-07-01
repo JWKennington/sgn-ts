@@ -12,6 +12,8 @@ from ..base import (
     AdapterConfig,
 )
 
+UP_HALF_LENGTH = 8
+DOWN_HALF_LENGTH = 32
 
 @dataclass
 class Resampler(TSTransform):
@@ -27,7 +29,7 @@ class Resampler(TSTransform):
 
     Assumptions:
     ------------
-    - There is only one sink pad and one source pad
+    - There is only one sink pad
     """
 
     inrate: int = None
@@ -41,12 +43,12 @@ class Resampler(TSTransform):
 
         if self.outrate < self.inrate:
             # downsample parameters
-            self.half_length = int(32 / factor)
+            self.half_length = int(DOWN_HALF_LENGTH / factor)
             self.kernel_length = self.half_length * 2 + 1
             self.thiskernel = self.downkernel(factor)
         else:
             # upsample parameters
-            self.half_length = 8
+            self.half_length = UP_HALF_LENGTH
             self.kernel_length = self.half_length * 2 + 1
             self.thiskernel = self.upkernel(factor)
 
@@ -60,8 +62,8 @@ class Resampler(TSTransform):
         self.pad_length = self.half_length
 
         assert (
-            len(self.sink_pads) == 1 and len(self.source_pads) == 1
-        ), "only one sink_pad and one source_pad is allowed"
+            len(self.sink_pads) == 1
+        ), "only one sink_pad"
 
     def downkernel(self, factor: float):
         """

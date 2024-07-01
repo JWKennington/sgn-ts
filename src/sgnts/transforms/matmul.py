@@ -34,20 +34,23 @@ class Matmul(TSTransform):
             len(self.sink_pads) == 1 and len(self.source_pads) == 1
         ), "only one sink_pad and one source_pad is allowed"
 
+    def matmul(self, a, b):
+        return np.matmul(a, b)
+
     def transform(self, pad):
         """
         Matmul over list of buffers
         """
         outbufs = []
         # loop over the input data, only perform matmul on non-gaps
-        frames = self.preparedframes[self.sink_pads[0]]
-        for inbuf in frames:
+        frame = self.preparedframes[self.sink_pads[0]]
+        for inbuf in frame:
             is_gap = inbuf.is_gap
 
             if is_gap:
                 data = None
             else:
-                data = np.matmul(self.matrix, inbuf.data)
+                data = self.matmul(self.matrix, inbuf.data)
 
             outbuf = SeriesBuffer(
                 offset=inbuf.offset,
@@ -57,4 +60,4 @@ class Matmul(TSTransform):
             )
             outbufs.append(outbuf)
 
-        return TSFrame(buffers=outbufs, EOS=frames.EOS)
+        return TSFrame(buffers=outbufs, EOS=frame.EOS, metadata=frame.metadata)

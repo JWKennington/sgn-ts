@@ -10,6 +10,7 @@ from numpy import pad
 from .buffer import SeriesBuffer
 from .offset import Offset
 from .time import Time
+from .. import math
 
 
 class Audioadapter:
@@ -18,7 +19,7 @@ class Audioadapter:
     track the copying and flushing of data from the adapter
     """
 
-    def __init__(self):
+    def __init__(self, lib=math):
         self.buffers = deque()
         self.size = 0
         self.gap_size = 0
@@ -29,6 +30,7 @@ class Audioadapter:
         self.sample_rate = None
         self.data_all = None
         self.gaps_all = None
+        self.lib = lib
 
     @property
     def end_offset(self):
@@ -37,22 +39,19 @@ class Audioadapter:
         else:
             return None
 
-    def cat_func(self, xs, axis):
-        return np.concatenate(xs, axis=axis)
-
     def concatenate_data(self):
         """
         Concatenate all the data and gaps info in the buffers, and save as attribute
         """
         if self.size > 0:
-            self.data_all = self.cat_func([b.filleddata for b in self.buffers], axis=-1)
+            self.data_all = self.lib.cat_func([b.filleddata(self.lib.zeros_func) for b in self.buffers], axis=-1)
             if self.gaps_all is None and self.gap_size > 0 and self.nongap_size > 0:
                 # mixture of gaps and nongaps
                 self.gaps_all = self.concatenate_gaps()
 
     def concatenate_gaps(self):
-        return self.cat_func(
-            [np.full(b.samples, b.is_gap) for b in self.buffers], axis=-1
+        return self.lib.cat_func(
+            [self.lib.full_func((b.samples,), b.is_gap) for b in self.buffers], axis=-1
         )
 
     def push(self, buf):
@@ -81,8 +80,8 @@ class Audioadapter:
         next_offset = self.next_offset
         if next_offset is not None and buf.offset != next_offset:
             raise ValueError(
-                f"got an unexpected buffer offset: {buf.offset=} \
-                        instead of {next_offset=}"
+                f"got an unexpected buffer offset: {buf.offset=}"
+                f" instead of {next_offset=} sample rate: {buf.sample_rate=}"
             )
         self.next_offset = buf.end_offset
 
@@ -156,7 +155,7 @@ class Audioadapter:
         # copy data
         if copy_data is True:
             if self.data_all is None:
-                out = self.cat_func([b.filleddata for b in self.buffers], axis=-1)[
+                out = self.lib.cat_func([b.filleddata(self.lib.zeros_func) for b in self.buffers], axis=-1)[
                     ..., i0 : i0 + nsamples
                 ]
             else:
@@ -216,7 +215,7 @@ class Audioadapter:
 
         out = self.copy_samples(nsamples, start_sample=ni)
         if pad_samples > 0 and out is not None:
-            out = self.pad_func(out, pad_samples)
+            out = self.lib.pad_func(out, (pad_samples,0))
 
         return out
 

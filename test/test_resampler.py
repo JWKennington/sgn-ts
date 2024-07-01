@@ -6,6 +6,7 @@ from sgnts.sinks import DumpSeriesSink, FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Resampler
 from sgnts.base import AdapterConfig
+from sgnts import math
 
 
 def test_resampler(capsys):
@@ -49,6 +50,7 @@ def test_resampler(capsys):
             adapter_config=AdapterConfig(
                 stride=int(256 * 0.25),
                 pad_zeros_startup=True,
+                lib=math
             ),
             inrate=inrate,
             outrate=outrate,

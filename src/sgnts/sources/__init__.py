@@ -18,12 +18,13 @@ class FakeSeriesSrc(TSSource):
         the sample rate of the data
     channels: tuple
         the number channels of the data in each dimension except the last, i.e.,
-        channels = data.shape[:-1]. If data has shape (A, B, N), then channels = 
+        channels = data.shape[:-1]. If data has shape (A, B, N), then channels =
         (A, B). Note that if data is one dimensional and has shape (N,), channels
-        would be an empty tuple (). 
+        would be an empty tuple ().
     signal_type: str
         currently supported types: (1) 'white': white noise data. (2) 'sin' or 'sine':
-        sine wave data
+        sine wave data. (3) 'impulse': creates an impulse data, where the value is one
+        at one sample point, and everywhere else is zero
     fsin: float
         frequency of the sine wave if signal_type = 'sin'
     ngap: int
@@ -31,7 +32,10 @@ class FakeSeriesSrc(TSSource):
         ngap=0: do not generate gap buffers.
         ngap=-1: generates gap buffers randomly.
     random_seed: int
-        set the random seed, used for signal_type = 'white'
+        set the random seed, used for signal_type = 'white' or 'impulse'
+    impulse_position: int
+        The sample point position to place the impulse. If None, then the impulse 
+        will be generated randomly.
     """
 
     num_buffers: int = 0
@@ -41,13 +45,32 @@ class FakeSeriesSrc(TSSource):
     fsin: float = 5
     ngap: int = 0
     random_seed: int = None
+    impulse_position: int = None
 
     def __post_init__(self):
         super().__post_init__()
         self.cnt = {p: 0 for p in self.source_pads}
         self.shape = self.channels + (self.num_samples,)
-        if self.signal_type == "white" and self.random_seed is not None:
+        if self.random_seed is not None and (self.signal_type == "white" or self.signal_type == "impulse"):
             np.random.seed(self.random_seed)
+        if self.signal_type == "impulse":
+            assert len(self.shape) == 1
+            #self.current_samples = 0
+            if self.impulse_position is None:
+                self.impulse_position = np.random.randint(0,self.num_buffers*self.num_samples)
+            print("Placing impulse at sample point",self.impulse_position)
+
+    def create_impulse_data(self, offset):
+        data = np.zeros(self.num_samples)
+        current_samples = Offset.tosamples(offset, self.rate)
+        if (
+            current_samples <= self.impulse_position
+            and self.impulse_position < current_samples + self.num_samples
+        ):
+            print("Creating the impulse")
+            data[self.impulse_position - current_samples] = 1
+        #self.current_samples += self.num_samples
+        return data
 
     def create_data(self, offset):
         if self.signal_type == "white":
@@ -62,6 +85,8 @@ class FakeSeriesSrc(TSSource):
                     self.channels + (1,),
                 )
             )
+        elif self.signal_type == "impulse":
+            return self.create_impulse_data(offset)
         else:
             raise ValueError("Unknown signal type")
 
@@ -85,10 +110,13 @@ class FakeSeriesSrc(TSSource):
         )
 
         self.offset[pad] += Offset.fromsamples(self.num_samples, self.rate)
+        metadata={"cnt": self.cnt, "name": "'%s'" % pad.name}
+        if self.impulse_position is not None:
+            metadata["impulse_offset"] = Offset.fromsamples(self.impulse_position, self.rate)
 
         return TSFrame(
             buffers=[outbuf],
-            metadata={"cnt": self.cnt, "name": "'%s'" % pad.name},
+            metadata=metadata,
             EOS=self.cnt[pad] > self.num_buffers,
         )
 
