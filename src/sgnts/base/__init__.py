@@ -4,13 +4,12 @@ import numpy as np
 
 from sgn.base import *
 
-#from ..math import *
 from .audioadapter import *
 from .buffer import *
 from .offset import *
 from .time import *
 from .slice_tools import *
-from .. import math as numpy_math
+from ..math import Math as numpy_math
 
 
 @dataclass

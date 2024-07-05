@@ -10,7 +10,7 @@ from numpy import pad
 from .buffer import SeriesBuffer
 from .offset import Offset
 from .time import Time
-from .. import math
+from ..math import Math
 
 
 class Audioadapter:
@@ -19,7 +19,7 @@ class Audioadapter:
     track the copying and flushing of data from the adapter
     """
 
-    def __init__(self, lib=math):
+    def __init__(self, lib=Math):
         self.buffers = deque()
         self.size = 0
         self.gap_size = 0

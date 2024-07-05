@@ -4,7 +4,7 @@ from ..base import Audioadapter, SeriesBuffer, TSFrame, TSTransform
 
 import numpy as np
 
-from .. import math
+from ..math import Math
 
 
 @dataclass
@@ -13,7 +13,7 @@ class Adder(TSTransform):
     Add up all the buffers from all the sink pads
     """
 
-    lib: int = math
+    lib: int = Math
     coeff_map: dict[str, float] = None
     addslices_map: dict[str, tuple[slice]] = None
 
