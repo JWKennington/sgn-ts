@@ -12,6 +12,7 @@ class FakeSeriesSink(TSSink):
     """
 
     print_message: str = "''"
+    verbose: bool = False
 
     def __post_init__(self):
         super().__post_init__()
@@ -27,7 +28,7 @@ class FakeSeriesSink(TSSink):
         bufs = self.preparedframes[pad]
         if bufs.EOS:
             self.mark_eos(pad)
-        if bufs.buffers is not None:
+        if self.verbose is True:
             print(self.cnt[pad], bufs)
 
     @property
