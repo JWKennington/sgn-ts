@@ -12,8 +12,10 @@ class Adder(TSTransform):
     """
     Add up all the buffers from all the sink pads
     """
+
     lib: int = math
-    coeff_map: dict[str,float] = None
+    coeff_map: dict[str, float] = None
+    addslices_map: dict[str, tuple[slice]] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -22,11 +24,14 @@ class Adder(TSTransform):
         frames = list(self.preparedframes.values())
         if self.coeff_map is not None:
             keys = list(k.name.split(":")[-1] for k in self.preparedframes.keys())
-        print(frames)
         assert len(set(f.sample_rate for f in frames)) == 1
         assert len(set(f.offset for f in frames)) == 1
         assert len(set(f.end_offset for f in frames)) == 1
-        assert len(set(f.shape for f in frames)) == 1
+
+        if self.addslices_map is None:
+            assert len(set(f.shape for f in frames)) == 1
+        else:
+            assert len(set(f.shape[-1] for f in frames)) == 1
 
         if all(frame.is_gap for frame in frames):
             out = None
@@ -36,20 +41,29 @@ class Adder(TSTransform):
             if len(frames[0].buffers) == 1:
                 out = frames[0].buffers[0].filleddata(self.lib.zeros_func)
             else:
-                out = self.lib.cat_func([buf.filleddata(self.lib.zeros_func) for buf in frames[0]], axis=-1)
+                out = self.lib.cat_func(
+                    [buf.filleddata(self.lib.zeros_func) for buf in frames[0]], axis=-1
+                )
             if self.coeff_map is not None:
                 out *= self.coeff_map[keys[0]]
             shape = out.shape
             # add to the first frame
             for i, f in enumerate(frames[1:]):
                 if self.coeff_map is not None:
-                    coeff = self.coeff_map[keys[i+1]]
+                    coeff = self.coeff_map[keys[i + 1]]
                 else:
                     coeff = 1
                 i0 = 0
                 for buf in f:
                     if not buf.is_gap:
-                        out[..., i0 : i0 + buf.samples] += buf.data * coeff
+                        if self.addslices_map is None:
+                            out[..., i0 : i0 + buf.samples] += buf.data * coeff
+                        else:
+                            slices = self.addslices_map[keys[i + 1]] + (
+                                slice(i0, i0 + buf.samples),
+                            )
+                            out[slices] += buf.data * coeff
+
                     i0 += buf.samples
 
         return TSFrame(
@@ -62,5 +76,5 @@ class Adder(TSTransform):
                 )
             ],
             EOS=frames[0].EOS,
-            metadata=frames[0].metadata
+            metadata=frames[0].metadata,
         )
