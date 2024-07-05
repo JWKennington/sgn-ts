@@ -34,7 +34,7 @@ class FakeSeriesSrc(TSSource):
     random_seed: int
         set the random seed, used for signal_type = 'white' or 'impulse'
     impulse_position: int
-        The sample point position to place the impulse. If None, then the impulse 
+        The sample point position to place the impulse. If None, then the impulse
         will be generated randomly.
     """
 
@@ -46,19 +46,25 @@ class FakeSeriesSrc(TSSource):
     ngap: int = 0
     random_seed: int = None
     impulse_position: int = None
+    verbose: bool = False
 
     def __post_init__(self):
         super().__post_init__()
         self.cnt = {p: 0 for p in self.source_pads}
         self.shape = self.channels + (self.num_samples,)
-        if self.random_seed is not None and (self.signal_type == "white" or self.signal_type == "impulse"):
+        if self.random_seed is not None and (
+            self.signal_type == "white" or self.signal_type == "impulse"
+        ):
             np.random.seed(self.random_seed)
         if self.signal_type == "impulse":
             assert len(self.shape) == 1
-            #self.current_samples = 0
+            # self.current_samples = 0
             if self.impulse_position is None:
-                self.impulse_position = np.random.randint(0,self.num_buffers*self.num_samples)
-            print("Placing impulse at sample point",self.impulse_position)
+                self.impulse_position = np.random.randint(
+                    0, self.num_buffers * self.num_samples
+                )
+            if self.verbose:
+                print("Placing impulse at sample point", self.impulse_position)
 
     def create_impulse_data(self, offset):
         data = np.zeros(self.num_samples)
@@ -67,9 +73,9 @@ class FakeSeriesSrc(TSSource):
             current_samples <= self.impulse_position
             and self.impulse_position < current_samples + self.num_samples
         ):
-            print("Creating the impulse")
+            if self.verbose:
+                print("Creating the impulse")
             data[self.impulse_position - current_samples] = 1
-        #self.current_samples += self.num_samples
         return data
 
     def create_data(self, offset):
@@ -110,9 +116,11 @@ class FakeSeriesSrc(TSSource):
         )
 
         self.offset[pad] += Offset.fromsamples(self.num_samples, self.rate)
-        metadata={"cnt": self.cnt, "name": "'%s'" % pad.name}
+        metadata = {"cnt": self.cnt, "name": "'%s'" % pad.name}
         if self.impulse_position is not None:
-            metadata["impulse_offset"] = Offset.fromsamples(self.impulse_position, self.rate)
+            metadata["impulse_offset"] = Offset.fromsamples(
+                self.impulse_position, self.rate
+            )
 
         return TSFrame(
             buffers=[outbuf],
