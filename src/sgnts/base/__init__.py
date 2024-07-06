@@ -262,7 +262,7 @@ class _TSTransSink:
                     else:  # Yes this condition is silly
                         self.inbufs[pad].appendleft(buf)
                 assert len(out) > 0
-                if self.audioadapters is not None:
+                if self.adapter_config is not None:
                     out = self.__adapter(pad, out)
                 self.preparedframes[pad] = TSFrame(
                     EOS=self.at_EOS,
