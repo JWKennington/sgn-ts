@@ -262,11 +262,9 @@ class _TSTransSink:
                 self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers=out)
 
     def _sanity_check(self, bufs, pad):
-        if self._last_ts[pad] is not None and self._last_offset[pad] is not None:
+        if self._last_offset[pad] is not None:
             assert bufs[0].offset == self._last_offset[pad]
-            assert bufs[0].end == self._last_ts[pad]
-            self._last_offset[pad] = bufs[-1].end_offset
-            self._last_ts[pad] = bufs[-1].end
+        self._last_offset[pad] = bufs[-1].end_offset
 
     def _align(self):
 
