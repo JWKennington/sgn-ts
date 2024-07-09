@@ -1,10 +1,8 @@
 from dataclasses import dataclass, field
 
-from ..base import Audioadapter, SeriesBuffer, TSFrame, TSTransform
+from ..base import Audioadapter, SeriesBuffer, TSFrame, TSTransform, ArrayOps
 
 import numpy as np
-
-from ..math import Math
 
 
 @dataclass
@@ -13,7 +11,7 @@ class Adder(TSTransform):
     Add up all the buffers from all the sink pads
     """
 
-    lib: int = Math
+    lib: int = ArrayOps
     coeff_map: dict[str, float] = None
     addslices_map: dict[str, tuple[slice]] = None
 

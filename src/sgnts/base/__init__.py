@@ -9,7 +9,7 @@ from .buffer import *
 from .offset import *
 from .time import *
 from .slice_tools import *
-from ..math import Math as numpy_math
+from .array_ops import ArrayOps
 
 
 @dataclass
@@ -32,7 +32,7 @@ class AdapterConfig:
     overlap: tuple[int, int] = (0, 0)
     stride: int = 0
     pad_zeros_startup: bool = False
-    lib: int = numpy_math
+    lib: int = ArrayOps
 
 
 @dataclass
