@@ -37,7 +37,7 @@ class Offset:
     crash.
     """
 
-    offset_ref_t0 = 0
+    offset_ref_t0 = 0 # in nanoseconds
     OFFSET_RATE = 16384
     ALLOWED_RATES = set(2**x for x in range(1 + int(numpy.log2(OFFSET_RATE))))
     TARGET_OFFSET_STRIDE = 4096

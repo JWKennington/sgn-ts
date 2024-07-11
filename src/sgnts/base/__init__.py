@@ -359,7 +359,7 @@ class TSSource(SourceElement):
         assert isinstance(self.num_samples, int)
         # FIXME should we be more careful about this?
         self.offset = {
-            p: Offset.fromsec(self.t0 - Offset.offset_ref_t0) for p in self.source_pads
+            p: Offset.fromsec(self.t0 - Offset.offset_ref_t0/Time.SECONDS) for p in self.source_pads
         }
         if self.num_samples is None:
             self.num_samples = Offset.stridesamples(self.rate)
