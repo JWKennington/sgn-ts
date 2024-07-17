@@ -24,6 +24,7 @@ class FakeSeriesSink(TSSink):
         """
         super().pull(pad, bufs)
         self.cnt[pad] += 1
+        bufs = self.preparedframes[pad]
         if bufs.EOS:
             self.mark_eos(pad)
         if bufs.buffers is not None:
@@ -77,6 +78,7 @@ class DumpSeriesSink(TSSink):
         graph point and the prints it to prove it all works.
         """
         super().pull(pad, bufs)
+        bufs = self.preparedframes[pad]
         if bufs.EOS:
             self.mark_eos(pad)
         print(bufs)

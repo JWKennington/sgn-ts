@@ -64,6 +64,7 @@ class _TSTransSink:
         self._last_ts = {p: None for p in self.sink_pads}
         self._last_offset = {p: None for p in self.sink_pads}
         self.__pulled = {p: False for p in self.sink_pads}
+        self.metadata = {p: None for p in self.sink_pads}
         self.audioadapters = None
         if self.adapter_config is not None:
             self.overlap = self.adapter_config.overlap
@@ -86,6 +87,7 @@ class _TSTransSink:
         self._sanity_check(bufs, pad)
         self.inbufs[pad].extend(bufs)
         self.__pulled[pad] = True
+        self.metadata[pad] = bufs.metadata
         if self.timeout(pad):
             raise ValueError("pad %s has timed out" % pad.name)
 
@@ -239,6 +241,7 @@ class _TSTransSink:
                             shape=self.inbufs[pad][0].shape[:-1] + (0,),
                         )
                     ],
+                    metadata=self.metadata[pad],
                 )
         # Else pack all the buffers
         else:
@@ -259,7 +262,11 @@ class _TSTransSink:
                 assert len(out) > 0
                 if self.audioadapters is not None:
                     out = self.__adapter(pad, out)
-                self.preparedframes[pad] = TSFrame(EOS=self.at_EOS, buffers=out)
+                self.preparedframes[pad] = TSFrame(
+                    EOS=self.at_EOS,
+                    buffers=out,
+                    metadata=self.metadata[pad],
+                )
 
     def _sanity_check(self, bufs, pad):
         if self._last_offset[pad] is not None:
@@ -359,7 +366,8 @@ class TSSource(SourceElement):
         assert isinstance(self.num_samples, int)
         # FIXME should we be more careful about this?
         self.offset = {
-            p: Offset.fromsec(self.t0 - Offset.offset_ref_t0/Time.SECONDS) for p in self.source_pads
+            p: Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
+            for p in self.source_pads
         }
         if self.num_samples is None:
             self.num_samples = Offset.stridesamples(self.rate)
