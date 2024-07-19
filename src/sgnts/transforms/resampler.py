@@ -53,6 +53,7 @@ class Resampler(TSTransform):
         if self.adapter_config is None:
             self.adapter_config = AdapterConfig()
         self.adapter_config.overlap = (self.half_length, self.half_length)
+        self.adapter_config.pad_zeros_startup = True
 
         super().__post_init__()
 
