@@ -270,7 +270,7 @@ class _TSTransSink:
 
     def _sanity_check(self, bufs, pad):
         if self._last_offset[pad] is not None:
-            assert bufs[0].offset == self._last_offset[pad]
+            assert bufs[0].offset == self._last_offset[pad], f"{self.name=}, {pad=} {bufs[0].offset=}, {self._last_offset[pad]=}"
         self._last_offset[pad] = bufs[-1].end_offset
 
     def _align(self):
