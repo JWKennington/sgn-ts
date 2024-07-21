@@ -41,10 +41,7 @@ class Threshold(TSTransform):
         signal = buffer.data
         sample_rate = buffer.sample_rate
         off0 = buffer.offset
-        if invert:
-            mask = numpy.concatenate(([False], numpy.abs(signal) < threshold, [False]))
-        else:
-            mask = numpy.concatenate(([False], numpy.abs(signal) >= threshold, [False]))
+        mask = numpy.concatenate(([False], numpy.abs(signal) >= threshold, [False]))
         idx = numpy.flatnonzero(mask[1:] != mask[:-1])
         return [
             TSSlice(
@@ -55,9 +52,10 @@ class Threshold(TSTransform):
         ]
 
     def transform(self, pad):
+        frame = self.preparedframes[self.sinkpad]
         boundary_offsets = TSSlice(
-            self.preparedframes[self.sinkpad][0].offset,
-            self.preparedframes[self.sinkpad][0].end_offset,
+            frame[0].offset,
+            frame[-1].end_offset,
         )
         self.nongap_slices += TSSlices(
             [
@@ -70,7 +68,7 @@ class Threshold(TSTransform):
                         self.stopwn,
                         self.invert,
                     )
-                    for b in self.preparedframes[self.sinkpad]
+                    for b in frame
                     if b
                 ]
                 for j in sub
@@ -78,18 +76,21 @@ class Threshold(TSTransform):
         ).simplify()
         # restrict to slices that are new enough to matter
         self.nongap_slices = TSSlices(
-            [s for s in self.nongap_slices.slices if not s < boundary_offsets]
+            [s for s in self.nongap_slices.slices if not s.stop <= boundary_offsets.start]
         )
 
         aligned_nongap_slices = self.nongap_slices.search(boundary_offsets, align=True)
+        if self.invert:
+            aligned_nongap_slices = aligned_nongap_slices.invert(boundary_offsets)
+
         out = sorted(
             [
                 b
                 for bs in [
                     buf.split(aligned_nongap_slices, contiguous=True)
-                    for buf in self.preparedframes[self.sinkpad]
+                    for buf in frame
                 ]
                 for b in bs
             ]
         )
-        return TSFrame(buffers=out, EOS=self.at_EOS)
+        return TSFrame(buffers=out, EOS=self.at_EOS, metadata=frame.metadata)
