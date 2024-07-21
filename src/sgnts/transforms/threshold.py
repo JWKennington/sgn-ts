@@ -41,10 +41,7 @@ class Threshold(TSTransform):
         signal = buffer.data
         sample_rate = buffer.sample_rate
         off0 = buffer.offset
-        if invert:
-            mask = numpy.concatenate(([False], numpy.abs(signal) < threshold, [False]))
-        else:
-            mask = numpy.concatenate(([False], numpy.abs(signal) >= threshold, [False]))
+        mask = numpy.concatenate(([False], numpy.abs(signal) >= threshold, [False]))
         idx = numpy.flatnonzero(mask[1:] != mask[:-1])
         return [
             TSSlice(
@@ -57,7 +54,7 @@ class Threshold(TSTransform):
     def transform(self, pad):
         boundary_offsets = TSSlice(
             self.preparedframes[self.sinkpad][0].offset,
-            self.preparedframes[self.sinkpad][0].end_offset,
+            self.preparedframes[self.sinkpad][-1].end_offset,
         )
         self.nongap_slices += TSSlices(
             [
@@ -78,10 +75,13 @@ class Threshold(TSTransform):
         ).simplify()
         # restrict to slices that are new enough to matter
         self.nongap_slices = TSSlices(
-            [s for s in self.nongap_slices.slices if not s < boundary_offsets]
+            [s for s in self.nongap_slices.slices if not s.stop <= boundary_offsets.start]
         )
 
         aligned_nongap_slices = self.nongap_slices.search(boundary_offsets, align=True)
+        if self.invert:
+            aligned_nongap_slices = aligned_nongap_slices.invert(boundary_offsets)
+
         out = sorted(
             [
                 b
