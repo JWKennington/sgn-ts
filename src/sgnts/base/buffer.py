@@ -160,7 +160,7 @@ class SeriesBuffer:
         startsamples, stopsamples = Offset.tosamples(
             slc.start - self.offset, self.sample_rate
         ), Offset.tosamples(slc.stop - self.offset, self.sample_rate)
-        gap = gap and self.data is not None
+        gap = gap or self.data is None
         if not gap:
             data = self.data[..., startsamples:stopsamples]
         else:
