@@ -52,9 +52,10 @@ class Threshold(TSTransform):
         ]
 
     def transform(self, pad):
+        frame = self.preparedframes[self.sinkpad]
         boundary_offsets = TSSlice(
-            self.preparedframes[self.sinkpad][0].offset,
-            self.preparedframes[self.sinkpad][-1].end_offset,
+            frame[0].offset,
+            frame[-1].end_offset,
         )
         self.nongap_slices += TSSlices(
             [
@@ -67,7 +68,7 @@ class Threshold(TSTransform):
                         self.stopwn,
                         self.invert,
                     )
-                    for b in self.preparedframes[self.sinkpad]
+                    for b in frame
                     if b
                 ]
                 for j in sub
@@ -87,9 +88,9 @@ class Threshold(TSTransform):
                 b
                 for bs in [
                     buf.split(aligned_nongap_slices, contiguous=True)
-                    for buf in self.preparedframes[self.sinkpad]
+                    for buf in frame
                 ]
                 for b in bs
             ]
         )
-        return TSFrame(buffers=out, EOS=self.at_EOS)
+        return TSFrame(buffers=out, EOS=self.at_EOS, metadata=frame.metadata)
