@@ -147,4 +147,4 @@ class Resampler(TSTransform):
                     )
                 )
 
-        return TSFrame(buffers=outbufs, EOS=frame.EOS)
+        return TSFrame(buffers=outbufs, EOS=frame.EOS, metadata=frame.metadata)
