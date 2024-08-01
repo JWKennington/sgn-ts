@@ -47,6 +47,8 @@ class SeriesBuffer:
             self.shape = self.data.shape
         else:
             assert self.shape == self.data.shape
+            for t in self.shape:
+                assert isinstance(t, int)
 
     @staticmethod
     def fromoffsetslice(offslice, sample_rate, data=None, channels=()):
