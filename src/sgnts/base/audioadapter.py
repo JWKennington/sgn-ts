@@ -10,6 +10,7 @@ from numpy import pad
 from .buffer import SeriesBuffer
 from .offset import Offset
 from .time import Time
+from .array_ops import ArrayOps
 
 
 class Audioadapter:
@@ -18,7 +19,7 @@ class Audioadapter:
     track the copying and flushing of data from the adapter
     """
 
-    def __init__(self):
+    def __init__(self, lib=ArrayOps):
         self.buffers = deque()
         self.size = 0
         self.gap_size = 0
@@ -28,7 +29,7 @@ class Audioadapter:
         self.next_offset = None
         self.sample_rate = None
         self.data_all = None
-        self.gaps_all = None
+        self.lib = lib
 
     @property
     def end_offset(self):
@@ -37,23 +38,13 @@ class Audioadapter:
         else:
             return None
 
-    def cat_func(self, xs, axis):
-        return np.concatenate(xs, axis=axis)
-
     def concatenate_data(self):
         """
         Concatenate all the data and gaps info in the buffers, and save as attribute
         """
         if self.size > 0:
-            self.data_all = self.cat_func([b.filleddata for b in self.buffers], axis=-1)
-            if self.gaps_all is None and self.gap_size > 0 and self.nongap_size > 0:
-                # mixture of gaps and nongaps
-                self.gaps_all = self.concatenate_gaps()
+            self.data_all = self.lib.cat_func([b.filleddata(self.lib.zeros_func) for b in self.buffers], axis=-1)
 
-    def concatenate_gaps(self):
-        return self.cat_func(
-            [np.full(b.samples, b.is_gap) for b in self.buffers], axis=-1
-        )
 
     def push(self, buf):
         """
@@ -81,8 +72,8 @@ class Audioadapter:
         next_offset = self.next_offset
         if next_offset is not None and buf.offset != next_offset:
             raise ValueError(
-                f"got an unexpected buffer offset: {buf.offset=} \
-                        instead of {next_offset=}"
+                f"got an unexpected buffer offset: {buf.offset=}"
+                f" instead of {next_offset=} sample rate: {buf.sample_rate=}"
             )
         self.next_offset = buf.end_offset
 
@@ -98,6 +89,7 @@ class Audioadapter:
             raise ValueError(f"Unknown is_gap value {is_gap=} {type(is_gap)=}")
 
         self.buffers.append(buf)
+        self.data_all = None # reset the data array
 
         if self.offset is None or len(self.buffers) == 1:
             self.offset = buf.offset
@@ -130,39 +122,20 @@ class Audioadapter:
         assert nsamples > 0, f"{nsamples=} {self.sample_rate=}"
         assert nsamples == int(nsamples), f"{nsamples=} must be an integer"
 
-        copied_gap = False
-        copied_nongap = False
-
         i0 = self.skip + start_sample
 
         # check gaps before copying
         copy_data = False
-        if self.gap_size == 0:
-            # no gaps in buffer
-            copied_nongap = True
-            copied_gap = False
-            copy_data = True
-        elif self.nongap_size == 0:
+        if self.nongap_size == 0:
             # no nongaps
-            copied_nongap = False
-            copied_gap = True
+            out = None
         else:
-            # some gaps, some nongaps
-            gaps = self.get_gaps_info(nsamples, start_sample)
-            copied_gap = gaps.any().item()
-            copied_nongap = ((~gaps).any()).item()
-            copy_data = True
-
-        # copy data
-        if copy_data is True:
             if self.data_all is None:
-                out = self.cat_func([b.filleddata for b in self.buffers], axis=-1)[
+                out = self.lib.cat_func([b.filleddata(self.lib.zeros_func) for b in self.buffers], axis=-1)[
                     ..., i0 : i0 + nsamples
                 ]
             else:
                 out = self.data_all[..., i0 : i0 + nsamples]
-        else:
-            out = None
 
         return out
 
@@ -191,9 +164,6 @@ class Audioadapter:
                 f"requested: {offset_segment}, available: {avail_seg}"
             )
 
-        copied_gap = False
-        copied_nongap = False
-
         # find start sample
         ni = Offset.tosamples(offset_segment[0] - self.offset, self.sample_rate)
         assert ni == int(ni), "start sample point number is not an integer"
@@ -216,7 +186,7 @@ class Audioadapter:
 
         out = self.copy_samples(nsamples, start_sample=ni)
         if pad_samples > 0 and out is not None:
-            out = self.pad_func(out, pad_samples)
+            out = self.lib.pad_func(out, (pad_samples,0))
 
         return out
 
@@ -257,7 +227,6 @@ class Audioadapter:
             self.offset = buf0.offset + Offset.fromsamples(self.skip, self.sample_rate)
 
         self.data_all = None
-        self.gaps_all = None
 
     def flush_samples_by_end_offset_segment(self, end_offset_segment):
         """
@@ -286,10 +255,9 @@ class Audioadapter:
         Return a list of booleans that flag samples based on whether they are gaps
         True: is_gap, False: is_nongap
         """
-        if self.gaps_all is None:
-            out = self.concatenate_gaps()
-        else:
-            out = self.gaps_all
+        out = self.lib.cat_func(
+            [self.lib.full_func((b.samples,), b.is_gap) for b in self.buffers], axis=-1
+        )
         i0 = self.skip + start_sample
         out = out[..., i0 : i0 + nsamples]
         return out
@@ -300,8 +268,5 @@ class Audioadapter:
         """
         if self.nongap_size == 0:
             return True
-        elif self.gap_size == 0:
-            return False
         else:
-            gaps = self.concatenate_gaps()
-            return gaps.all().item()
+            return False

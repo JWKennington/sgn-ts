@@ -17,16 +17,30 @@ class Gate(TSTransform):
     """
 
     control: str = None
- 
+
     def __post_init__(self):
         assert self.control is not None and self.control in self.sink_pad_names
         super().__post_init__()
         assert len(self.sink_pads) == 2
         assert len(self.source_pads) == 1
         self.controlpad = self.sink_pad_dict["%s:sink:%s" % (self.name, self.control)]
-        self.sinkpad = self.sink_pad_dict["%s:sink:%s" % (self.name, list(set(self.sink_pad_names) - set([self.control]))[0])]
+        self.sinkpad = self.sink_pad_dict[
+            "%s:sink:%s"
+            % (self.name, list(set(self.sink_pad_names) - set([self.control]))[0])
+        ]
 
     def transform(self, pad):
-        nongap_slices = TSSlices([b.slice for b in self.preparedframes[self.controlpad] if b])
-        out = sorted([b for bs in [buf.split(nongap_slices, contiguous = True) for buf in self.preparedframes[self.sinkpad]] for b in bs])
-        return TSFrame(buffers = out, EOS=self.at_EOS)
+        nongap_slices = TSSlices(
+            [b.slice for b in self.preparedframes[self.controlpad] if b]
+        )
+        out = sorted(
+            [
+                b
+                for bs in [
+                    buf.split(nongap_slices, contiguous=True)
+                    for buf in self.preparedframes[self.sinkpad]
+                ]
+                for b in bs
+            ]
+        )
+        return TSFrame(buffers=out, EOS=self.at_EOS)

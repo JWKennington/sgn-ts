@@ -9,6 +9,7 @@ from .buffer import *
 from .offset import *
 from .time import *
 from .slice_tools import *
+from .array_ops import ArrayOps
 
 
 @dataclass
@@ -31,6 +32,7 @@ class AdapterConfig:
     overlap: tuple[int, int] = (0, 0)
     stride: int = 0
     pad_zeros_startup: bool = False
+    lib: int = ArrayOps
 
 
 @dataclass
@@ -72,7 +74,7 @@ class _TSTransSink:
             self.pad_zeros_startup = self.adapter_config.pad_zeros_startup
 
             # we need audioadapters
-            self.audioadapters = {p: Audioadapter() for p in self.sink_pads}
+            self.audioadapters = {p: Audioadapter(lib=self.adapter_config.lib) for p in self.sink_pads}
             self.pad_zeros_samples = 0
             if self.pad_zeros_startup is True:
                 # at startup, pad zeros in front of the first buffer to
@@ -192,7 +194,7 @@ class _TSTransSink:
                     data = a.copy_samples(num_copy_samples)
                     if self.pad_zeros_samples > 0:
                         # pad zeros in front of buffer
-                        data = pad_func(data, self.pad_zeros_samples)
+                        data = self.adapter_config.lib.pad_func(data, (self.pad_zeros_samples,0))
 
                 # flush out samples from head of audioadapter
                 num_flush_samples = num_copy_samples - sum(self.overlap)
@@ -239,7 +241,7 @@ class _TSTransSink:
                             sample_rate=self.inbufs[pad][0].sample_rate,
                             data=None,
                             shape=self.inbufs[pad][0].shape[:-1] + (0,),
-                        )
+                        ),
                     ],
                     metadata=self.metadata[pad],
                 )
@@ -260,7 +262,7 @@ class _TSTransSink:
                     else:  # Yes this condition is silly
                         self.inbufs[pad].appendleft(buf)
                 assert len(out) > 0
-                if self.audioadapters is not None:
+                if self.adapter_config is not None:
                     out = self.__adapter(pad, out)
                 self.preparedframes[pad] = TSFrame(
                     EOS=self.at_EOS,
@@ -372,8 +374,3 @@ class TSSource(SourceElement):
         if self.num_samples is None:
             self.num_samples = Offset.stridesamples(self.rate)
 
-
-def pad_func(data, pad_samples):
-    npad = [(0, 0)] * data.ndim
-    npad[-1] = (pad_samples, 0)
-    return np.pad(data, npad, "constant")

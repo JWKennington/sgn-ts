@@ -47,6 +47,8 @@ class SeriesBuffer:
             self.shape = self.data.shape
         else:
             assert self.shape == self.data.shape
+            for t in self.shape:
+                assert isinstance(t, int)
 
     @staticmethod
     def fromoffsetslice(offslice, sample_rate, data=None, channels=()):
@@ -60,11 +62,12 @@ class SeriesBuffer:
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
             return (
-                "SeriesBuffer(offset=%d, offset_end=%d, shape=%s, duration=%d, data=%s)"
+                "SeriesBuffer(offset=%d, offset_end=%d, shape=%s, sample_rate=%d, duration=%d, data=%s)"
                 % (
                     self.offset,
                     self.end_offset,
                     self.shape,
+                    self.sample_rate,
                     self.duration,
                     self.data,
                 )
@@ -108,12 +111,11 @@ class SeriesBuffer:
         else:
             return False
 
-    @property
-    def filleddata(self):
+    def filleddata(self, zeros_func):
         if self.data is not None:
             return self.data
         else:
-            return numpy.zeros(self.shape)
+            return zeros_func(self.shape)
 
     def __contains__(self, item):
         if isinstance(item, int):
