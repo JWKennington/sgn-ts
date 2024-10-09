@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 
-import numpy as np
-
 from sgn.apps import Pipeline
-
+from sgnts.base import AdapterConfig
 from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
-from sgnts.transforms import Adder, Align, Resampler
-from sgnts.base import AdapterConfig
+from sgnts.transforms import Adder, Resampler
 
 
 def test_adder(capsys):
