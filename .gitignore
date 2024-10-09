@@ -6,3 +6,6 @@ site/
 __pycache__
 _version.py
 .coverage
+
+# IDE files
+.idea/
