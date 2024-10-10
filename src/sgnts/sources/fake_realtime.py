@@ -1,0 +1,37 @@
+from dataclasses import dataclass
+from time import sleep
+
+import numpy as np
+
+from ..base import Offset, SeriesBuffer, TSFrame, TSSource
+
+
+@dataclass
+class FakeRealtimeSrc(TSSource):
+    """
+    A time-series source that generates fake data in fixed-size buffers in real-time
+    """
+
+    rate: int = 2048
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.cnt = {p: 0 for p in self.source_pads}
+        self.shape = (self.num_samples,)
+        self.duration = self.num_samples / self.rate
+
+    def new(self, pad):
+        self.cnt[pad] += 1
+
+        sleep(self.duration)
+
+        data = np.random.rand(self.num_samples)
+
+        outbuf = SeriesBuffer(
+            offset=self.offset[pad], sample_rate=self.rate, data=data, shape=self.shape
+        )
+
+        self.offset[pad] += Offset.fromsamples(self.num_samples, self.rate)
+        metadata = {"cnt": self.cnt, "name": "'%s'" % pad.name}
+
+        return TSFrame(buffers=[outbuf], metadata=metadata, EOS=False)
