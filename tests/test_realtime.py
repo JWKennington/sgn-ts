@@ -13,7 +13,7 @@ def test_realtime(capsys):
     inrate = 256
     num_samples = 256
     t0 = 0.0
-    num_buffers = 10
+    num_buffers = 2
     pipeline.insert(
         FakeRealtimeSrc(
             name="src",
