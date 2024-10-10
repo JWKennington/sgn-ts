@@ -26,7 +26,7 @@ class FakeRealtimeSrc(TSSource):
 
         sleep(self.duration)
 
-        data = np.random.rand(self.num_samples)
+        data = np.random.randn(self.num_samples)
 
         outbuf = SeriesBuffer(
             offset=self.offset[pad], sample_rate=self.rate, data=data, shape=self.shape

@@ -81,7 +81,7 @@ class FakeSeriesSrc(TSSource):
 
     def create_data(self, offset):
         if self.signal_type == "white":
-            return np.random.rand(*self.shape)
+            return np.random.randn(*self.shape)
         elif self.signal_type == "sin" or self.signal_type == "sine":
             t0 = Offset.tosec(offset)
             duration = self.num_samples / self.rate
