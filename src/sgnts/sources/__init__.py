@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..base import Offset, SeriesBuffer, TSFrame, TSSource, TSSlice, TSSlices
-from .fake_realtime import FakeRealtimeSrc
+from .fake_realtime import RealTimeWhiteNoiseSrc
 
 
 @dataclass
