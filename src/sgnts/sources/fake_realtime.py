@@ -7,7 +7,7 @@ from ..base import Offset, SeriesBuffer, TSFrame, TSSource
 
 
 @dataclass
-class FakeRealtimeSrc(TSSource):
+class RealTimeWhiteNoiseSrc(TSSource):
     """
     A time-series source that generates fake data in fixed-size buffers in real-time
     """
