@@ -13,6 +13,7 @@ class FakeRealtimeSrc(TSSource):
     """
 
     rate: int = 2048
+    num_buffers: int = 10
 
     def __post_init__(self):
         super().__post_init__()
@@ -34,4 +35,8 @@ class FakeRealtimeSrc(TSSource):
         self.offset[pad] += Offset.fromsamples(self.num_samples, self.rate)
         metadata = {"cnt": self.cnt, "name": "'%s'" % pad.name}
 
-        return TSFrame(buffers=[outbuf], metadata=metadata, EOS=False)
+        return TSFrame(
+            buffers=[outbuf],
+            metadata=metadata,
+            EOS=self.cnt[pad] >= self.num_buffers,
+        )
