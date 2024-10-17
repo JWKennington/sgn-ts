@@ -7,6 +7,7 @@ from sgn.base import Frame
 
 from .offset import Offset
 from .slice_tools import TSSlice, TSSlices
+from .array_ops import NumpyBackend, _TorchBackend, TorchArray
 
 
 @dataclass
@@ -157,7 +158,70 @@ class SeriesBuffer:
         elif isinstance(item, SeriesBuffer):
             return self.end_offset > item.end_offset
 
+    def __iadd__(self, item: "SeriesBuffer") -> "SeriesBuffer":
+        """In-place add a SeriesBuffer to this one
+        padding as necessary.
+        Where addition is impossible returns self
+        
+        Parameters
+        ==========
+        item : SeriesBuffer
+            The other component of the addition.
+            Must be a SeriesBuffer, must have the 
+            same sample rate as self, and its data
+            must be the same type (e.g. numpy array
+            or pytorch Tensor)
+        
+        Returns
+        =======
+        SeriesBuffer
+            The SeriesBuffer resulting from the addition
+        """
+        # Choose the correct backend
+        # Handle polymorphism more smoothly in the future?
+        # It's python so maybe this is the best option available
+        if isinstance(self.data, numpy.ndarray) and isinstance(
+            item.data, numpy.ndarray
+        ):
+            backend = NumpyBackend
+        elif isinstance(self.data, TorchArray) and isinstance(item.data, TorchArray):
+            backend = _TorchBackend
+        # If types don't line up then don't do the addition
+        else:
+            return self
+        if not isinstance(item, SeriesBuffer):
+            return self
+        if self.sample_rate != item.sample_rate:
+            return self
+        # Get the bounds of the new object
+        new_offset = min(item.offset, self.offset)
+        new_end_offset = max(item.end_offset, self.end_offset)
+
+        # Pad both the item and the self to be the shape of the return value
+        padded_item = backend.cat(
+            [
+                backend.zeros(self.shape[:-1] + (item.offset - new_offset,)),
+                item.data,
+                backend.zeros(self.shape[:-1] + (new_end_offset - item.offset,)),
+            ]
+        )
+        padded_self = backend.cat(
+            [
+                backend.zeros(self.shape[:-1] + (self.offset - new_offset,)),
+                self.data,
+                backend.zeros(self.shape[:-1] + (new_end_offset - self.offset,)),
+            ]
+        )
+        return SeriesBuffer(
+            offset=new_offset,
+            sample_rate=self.sample_rate,
+            data = padded_item + padded_self,
+            shape=self.shape[:-1] + (new_end_offset-new_offset,)
+        )
+    
+
     def pad_buffer(self, off, data=None):
+        """Front-pad this buffer to the given offset"""
         assert off < self.offset
         return SeriesBuffer(
             offset=off,
