@@ -201,13 +201,13 @@ class SeriesBuffer:
             max(item.offset - new_offset, 0), sample_rate=self.sample_rate
         )
         item_back_pad = Offset.tosamples(
-            max(item.end_offset - new_end_offset, 0), sample_rate=self.sample_rate
+            max(new_end_offset - item.end_offset, 0), sample_rate=self.sample_rate
         )
         self_front_pad = Offset.tosamples(
             max(self.offset - new_offset, 0), sample_rate=self.sample_rate
         )
         self_back_pad = Offset.tosamples(
-            max(self.end_offset - new_end_offset, 0), sample_rate=self.sample_rate
+            max(new_end_offset - self.end_offset, 0), sample_rate=self.sample_rate
         )
 
         # Pad both the item and the self to be the shape of the return value
@@ -253,7 +253,7 @@ class SeriesBuffer:
 
     def sub_buffer(self, slc, gap=False):
         assert slc in self.slice
-        artsamples, stopsamples = Offset.tosamples(
+        startsamples, stopsamples = Offset.tosamples(
             slc.start - self.offset, self.sample_rate
         ), Offset.tosamples(slc.stop - self.offset, self.sample_rate)
         gap = gap or self.data is None
