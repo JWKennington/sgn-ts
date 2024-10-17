@@ -158,7 +158,7 @@ class SeriesBuffer:
         elif isinstance(item, SeriesBuffer):
             return self.end_offset > item.end_offset
 
-    def __iadd__(self, item: "SeriesBuffer") -> "SeriesBuffer":
+    def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
         """In-place add a SeriesBuffer to this one
         padding as necessary.
         Where addition is impossible returns self
@@ -180,6 +180,9 @@ class SeriesBuffer:
         # Choose the correct backend
         # Handle polymorphism more smoothly in the future?
         # It's python so maybe this is the best option available
+        if not isinstance(item, SeriesBuffer):
+            print("Both arguments must be of the SeriesBuffer type")
+            return None
         if isinstance(self.data, numpy.ndarray) and isinstance(
             item.data, numpy.ndarray
         ):
@@ -187,38 +190,34 @@ class SeriesBuffer:
         elif isinstance(self.data, TorchArray) and isinstance(item.data, TorchArray):
             backend = _TorchBackend
         # If types don't line up then don't do the addition
+        # FIXME better logging
         else:
-            return self
-        if not isinstance(item, SeriesBuffer):
-            return self
+            print("Incompatible data types")
+            return None
+        if self.shape[:-1] != item.shape[:-1]:
+            print("All dimensions except the padding dimension must match")
+            return None
         if self.sample_rate != item.sample_rate:
-            return self
+            print("Sample rates must match")
+            return None
         # Get the bounds of the new object
-        new_offset = min(item.offset, self.offset)
-        new_end_offset = max(item.end_offset, self.end_offset)
+        new_offset = min(self.offset, item.offset)
+        new_end_offset = max(self.end_offset, item.end_offset)
 
-        item_front_pad = Offset.tosamples(
-            max(item.offset - new_offset, 0), sample_rate=self.sample_rate
-        )
-        item_back_pad = Offset.tosamples(
-            max(new_end_offset - item.end_offset, 0), sample_rate=self.sample_rate
-        )
         self_front_pad = Offset.tosamples(
             max(self.offset - new_offset, 0), sample_rate=self.sample_rate
         )
         self_back_pad = Offset.tosamples(
             max(new_end_offset - self.end_offset, 0), sample_rate=self.sample_rate
         )
-
-        # Pad both the item and the self to be the shape of the return value
-        padded_item = backend.cat(
-            [
-                backend.zeros(self.shape[:-1] + (item_front_pad,)),
-                item.data,
-                backend.zeros(self.shape[:-1] + (item_back_pad,)),
-            ],
-            axis=-1,
+        item_front_pad = Offset.tosamples(
+            max(item.offset - new_offset, 0), sample_rate=self.sample_rate
         )
+        item_back_pad = Offset.tosamples(
+            max(new_end_offset - item.end_offset, 0), sample_rate=self.sample_rate
+        )
+
+        # Pad both a and b to be the shape of the return value
         padded_self = backend.cat(
             [
                 backend.zeros(self.shape[:-1] + (self_front_pad,)),
@@ -227,11 +226,19 @@ class SeriesBuffer:
             ],
             axis=-1,
         )
+        padded_item = backend.cat(
+            [
+                backend.zeros(self.shape[:-1] + (item_front_pad,)),
+                item.data,
+                backend.zeros(self.shape[:-1] + (item_back_pad,)),
+            ],
+            axis=-1,
+        )
 
         return SeriesBuffer(
             offset=new_offset,
             sample_rate=self.sample_rate,
-            data=padded_item + padded_self,
+            data=padded_self + padded_item,
             shape=self.shape[:-1]
             + (
                 Offset.tosamples(
@@ -239,6 +246,9 @@ class SeriesBuffer:
                 ),
             ),
         )
+    
+    def __iadd__(self, item : "SeriesBuffer") -> "SeriesBuffer":
+        return self.__add__(item)
 
     def pad_buffer(self, off, data=None):
         """Front-pad this buffer to the given offset"""
