@@ -162,16 +162,16 @@ class SeriesBuffer:
         """In-place add a SeriesBuffer to this one
         padding as necessary.
         Where addition is impossible returns self
-        
+
         Parameters
         ==========
         item : SeriesBuffer
             The other component of the addition.
-            Must be a SeriesBuffer, must have the 
+            Must be a SeriesBuffer, must have the
             same sample rate as self, and its data
             must be the same type (e.g. numpy array
             or pytorch Tensor)
-        
+
         Returns
         =======
         SeriesBuffer
@@ -197,28 +197,48 @@ class SeriesBuffer:
         new_offset = min(item.offset, self.offset)
         new_end_offset = max(item.end_offset, self.end_offset)
 
+        item_front_pad = Offset.tosamples(
+            max(item.offset - new_offset, 0), sample_rate=self.sample_rate
+        )
+        item_back_pad = Offset.tosamples(
+            max(item.end_offset - new_end_offset, 0), sample_rate=self.sample_rate
+        )
+        self_front_pad = Offset.tosamples(
+            max(self.offset - new_offset, 0), sample_rate=self.sample_rate
+        )
+        self_back_pad = Offset.tosamples(
+            max(self.end_offset - new_end_offset, 0), sample_rate=self.sample_rate
+        )
+
         # Pad both the item and the self to be the shape of the return value
         padded_item = backend.cat(
             [
-                backend.zeros(self.shape[:-1] + (item.offset - new_offset,)),
+                backend.zeros(self.shape[:-1] + (item_front_pad,)),
                 item.data,
-                backend.zeros(self.shape[:-1] + (new_end_offset - item.offset,)),
-            ]
+                backend.zeros(self.shape[:-1] + (item_back_pad,)),
+            ],
+            axis=-1,
         )
         padded_self = backend.cat(
             [
-                backend.zeros(self.shape[:-1] + (self.offset - new_offset,)),
+                backend.zeros(self.shape[:-1] + (self_front_pad,)),
                 self.data,
-                backend.zeros(self.shape[:-1] + (new_end_offset - self.offset,)),
-            ]
+                backend.zeros(self.shape[:-1] + (self_back_pad,)),
+            ],
+            axis=-1,
         )
+
         return SeriesBuffer(
             offset=new_offset,
             sample_rate=self.sample_rate,
-            data = padded_item + padded_self,
-            shape=self.shape[:-1] + (new_end_offset-new_offset,)
+            data=padded_item + padded_self,
+            shape=self.shape[:-1]
+            + (
+                Offset.tosamples(
+                    new_end_offset - new_offset, sample_rate=self.sample_rate
+                ),
+            ),
         )
-    
 
     def pad_buffer(self, off, data=None):
         """Front-pad this buffer to the given offset"""
@@ -233,7 +253,7 @@ class SeriesBuffer:
 
     def sub_buffer(self, slc, gap=False):
         assert slc in self.slice
-        startsamples, stopsamples = Offset.tosamples(
+        artsamples, stopsamples = Offset.tosamples(
             slc.start - self.offset, self.sample_rate
         ), Offset.tosamples(slc.stop - self.offset, self.sample_rate)
         gap = gap or self.data is None
