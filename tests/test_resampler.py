@@ -37,7 +37,6 @@ def test_resampler(capsys):
             source_pad_names=("H1",),
             num_buffers=5,
             rate=inrate,
-            num_samples=256,
             signal_type="sin",
             fsin=3,
             ngap=2,
@@ -47,7 +46,6 @@ def test_resampler(capsys):
             source_pad_names=("H1",),
             sink_pad_names=("H1",),
             adapter_config=AdapterConfig(
-                stride=int(256 * 0.25),
                 pad_zeros_startup=True,
             ),
             inrate=inrate,
@@ -57,8 +55,14 @@ def test_resampler(capsys):
             name="snk1",
             sink_pad_names=("H1",),
             fname="out.txt",
+            verbose=True,
         ),
-        DumpSeriesSink(name="snk2", sink_pad_names=("H1",), fname="in.txt"),
+        DumpSeriesSink(
+            name="snk2",
+            sink_pad_names=("H1",),
+            fname="in.txt",
+            verbose=True,
+        ),
         link_map={
             "trans1:sink:H1": "src1:src:H1",
             "snk1:sink:H1": "trans1:src:H1",

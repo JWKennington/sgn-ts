@@ -26,24 +26,18 @@ def test_tsgraph(capsys):
             source_pad_names=("H1",),
             num_buffers=2,
             rate=2048,
-            num_samples=2048,
             signal_type="white",
             random_seed=1234,
         ),
         FakeSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
+            verbose=True,
         ),
         link_map={"snk1:sink:H1": "src1:src:H1"},
     )
 
     pipeline.run()
-    if capsys is not None:
-        captured = capsys.readouterr()
-        assert (
-            captured.out.strip()
-            == """""".strip()
-        )
 
 
 if __name__ == "__main__":

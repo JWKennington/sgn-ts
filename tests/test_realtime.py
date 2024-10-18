@@ -11,7 +11,6 @@ def test_realtime(capsys):
     pipeline = Pipeline()
 
     inrate = 256
-    num_samples = 256
     t0 = 0.0
     num_buffers = 2
     pipeline.insert(
@@ -19,7 +18,6 @@ def test_realtime(capsys):
             name="src",
             source_pad_names=("H1",),
             rate=inrate,
-            num_samples=num_samples,
             t0=t0,
             num_buffers=num_buffers,
         ),

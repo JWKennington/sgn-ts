@@ -54,7 +54,6 @@ def test_lloid(capsys):
             source_pad_names=("H1",),
             num_buffers=2,
             rate=2048,
-            num_samples=2048,
             signal_type="sin",
         ),
         Resampler(
@@ -104,6 +103,7 @@ def test_lloid(capsys):
         FakeSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
+            verbose=True,
         ),
         link_map={
             "down:sink:H1": "src1:src:H1",

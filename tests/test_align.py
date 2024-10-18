@@ -37,16 +37,12 @@ def test_align(capsys):
         "f' duration {bufs[-1].duration} data_is_none {bufs[-1].data is None}'"
     )
 
-    H1_num_samples = 256
-    L1_num_samples = 512
-    V1_num_samples = 768
     pipeline.insert(
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
             num_buffers=num_buffers,
             rate=inrate,
-            num_samples=H1_num_samples,
             t0=H1_t0,
         ),
         Align(
@@ -58,33 +54,31 @@ def test_align(capsys):
         FakeSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
-            print_message=print_message,
+            verbose=True,
         ),
         FakeSeriesSrc(
             name="src2",
             source_pad_names=("L1",),
             num_buffers=num_buffers,
             rate=inrate,
-            num_samples=L1_num_samples,
             t0=L1_t0,
         ),
         FakeSeriesSink(
             name="snk2",
             sink_pad_names=("L1",),
-            print_message=print_message,
+            verbose=True,
         ),
         FakeSeriesSrc(
             name="src3",
             source_pad_names=("V1",),
             num_buffers=num_buffers,
             rate=inrate,
-            num_samples=V1_num_samples,
             t0=V1_t0,
         ),
         FakeSeriesSink(
             name="snk3",
             sink_pad_names=("V1",),
-            print_message=print_message,
+            verbose=True,
         ),
         link_map={
             "trans1:sink:H1": "src1:src:H1",

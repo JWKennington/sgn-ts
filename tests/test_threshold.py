@@ -25,7 +25,6 @@ def test_threshold(capsys):
     #         --------
 
     inrate = 256
-    num_samples = 256
     t0 = 0.0
     end = 15.0
     num_buffers = 20
@@ -38,7 +37,6 @@ def test_threshold(capsys):
             source_pad_names=("data",),
             num_buffers=num_buffers,
             rate=inrate,
-            num_samples=num_samples,
             t0=t0,
         ),
         Threshold(
@@ -52,6 +50,7 @@ def test_threshold(capsys):
         FakeSeriesSink(
             name="snk",
             sink_pad_names=("threshold",),
+            verbose=True,
         ),
         link_map={
             "threshold:sink:data": "datasrc:src:data",

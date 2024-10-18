@@ -34,7 +34,6 @@ def test_tsgraph(capsys):
                num_buffers = 1,
                signal_type = 'white',
                rate=2048,
-               num_samples=2048,
          ),Multiplier(
                name = 'mult',
                source_pad_names = ("H1",),
@@ -43,6 +42,7 @@ def test_tsgraph(capsys):
          ),FakeSeriesSink(
                name = "snk1",
                sink_pad_names = ("L1",),
+               verbose = True,
          ),link_map= #joining together two dicts to allow for arbitrary num_pads
                 {"mult:sink:pad"+str(n):"src1:src:pad"+str(n) for n in range(num_pads)}|{"snk1:sink:L1":"mult:src:H1"}
          )

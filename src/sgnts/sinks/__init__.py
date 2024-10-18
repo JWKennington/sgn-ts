@@ -11,7 +11,6 @@ class FakeSeriesSink(TSSink):
     A fake sink element
     """
 
-    print_message: str = "''"
     verbose: bool = False
 
     def __post_init__(self):
@@ -51,6 +50,7 @@ class DumpSeriesSink(TSSink):
     """
 
     fname: str = "out.txt"
+    verbose: bool = False
 
     def __post_init__(self):
         super().__post_init__()
@@ -82,7 +82,8 @@ class DumpSeriesSink(TSSink):
         bufs = self.preparedframes[pad]
         if bufs.EOS:
             self.mark_eos(pad)
-        print(bufs)
+        if self.verbose is True:
+            print(bufs)
         for buf in bufs:
             if not buf.is_gap:
                 self.write_to_file(buf)
