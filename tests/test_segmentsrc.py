@@ -20,7 +20,6 @@ def test_align(capsys):
     #           ---------
 
     inrate = 256
-    num_samples = 256
     t0 = 0.0
     end = 15.0
     segments = [(1e9, 2e9), (10e9, 11e9)]
@@ -29,7 +28,6 @@ def test_align(capsys):
             name="src1",
             source_pad_names=("seg",),
             rate=inrate,
-            num_samples=num_samples,
             t0=t0,
             end=end,
             segments=segments,
@@ -37,6 +35,7 @@ def test_align(capsys):
         FakeSeriesSink(
             name="snk1",
             sink_pad_names=("seg",),
+            verbose=True,
         ),
         link_map={
             "snk1:sink:seg": "src1:src:seg",

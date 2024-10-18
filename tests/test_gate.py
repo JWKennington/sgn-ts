@@ -25,7 +25,6 @@ def test_gate(capsys):
     #                ---------
 
     inrate = 256
-    num_samples = 256
     t0 = 0.0
     end = 15.0
     segments = [(1_000_000_000, 2_000_000_000), (10_000_000_000, 11_000_000_000)]
@@ -35,7 +34,6 @@ def test_gate(capsys):
             name="segsrc",
             source_pad_names=("seg",),
             rate=inrate,
-            num_samples=num_samples,
             t0=t0,
             end=end,
             segments=segments,
@@ -45,7 +43,6 @@ def test_gate(capsys):
             source_pad_names=("data",),
             num_buffers=num_buffers,
             rate=inrate,
-            num_samples=num_samples,
             t0=t0,
         ),
         Gate(
@@ -57,6 +54,7 @@ def test_gate(capsys):
         FakeSeriesSink(
             name="snk",
             sink_pad_names=("gate",),
+            verbose=True,
         ),
         link_map={
             "gate:sink:data": "datasrc:src:data",

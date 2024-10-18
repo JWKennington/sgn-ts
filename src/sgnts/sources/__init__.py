@@ -52,6 +52,7 @@ class FakeSeriesSrc(TSSource):
     def __post_init__(self):
         super().__post_init__()
         self.cnt = {p: 0 for p in self.source_pads}
+        self.num_samples = Offset.sample_stride(self.rate)
         self.shape = self.channels + (self.num_samples,)
         if self.random_seed is not None and (
             self.signal_type == "white" or self.signal_type == "impulse"
@@ -158,6 +159,7 @@ class SegmentSrc(TSSource):
             for s in self.segments
             if (s[0] >= self.t0 * 1e9 and s[1] <= self.end * 1e9)
         ).simplify()
+        self.num_samples = Offset.sample_stride(self.rate)
 
     def new(self, pad):
         """ """
