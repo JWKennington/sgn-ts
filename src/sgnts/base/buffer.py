@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 import numpy
 
-from sgn.base import Frame
+from sgn.base import Frame, LOGGER
 
 from .offset import Offset
 from .slice_tools import TSSlice, TSSlices
@@ -181,7 +181,7 @@ class SeriesBuffer:
         # Handle polymorphism more smoothly in the future?
         # It's python so maybe this is the best option available
         if not isinstance(item, SeriesBuffer):
-            print("Both arguments must be of the SeriesBuffer type")
+            LOGGER.warning("Both arguments must be of the SeriesBuffer type, returning None")
             return None
         if isinstance(self.data, numpy.ndarray) and isinstance(
             item.data, numpy.ndarray
@@ -192,13 +192,13 @@ class SeriesBuffer:
         # If types don't line up then don't do the addition
         # FIXME better logging
         else:
-            print("Incompatible data types")
+            LOGGER.warning("Incompatible data types, returning None")
             return None
         if self.shape[:-1] != item.shape[:-1]:
-            print("All dimensions except the padding dimension must match")
+            LOGGER.warning("All dimensions except the padding dimension must match, returning None")
             return None
         if self.sample_rate != item.sample_rate:
-            print("Sample rates must match")
+            LOGGER.warning("Sample rates must match, returning None")
             return None
         # Get the bounds of the new object
         new_offset = min(self.offset, item.offset)
