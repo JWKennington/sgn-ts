@@ -77,6 +77,14 @@ def e_params():
     return {"offset":8192, "sample_rate":2048, "shape":(1024,)}
 
 @pytest.fixture
+def f_params():
+    return {"offset":65536, "sample_rate":1024, "shape":(1024,)}
+
+@pytest.fixture
+def g_params():
+    return {"offset":8192, "sample_rate":1024, "shape":(2048,)}
+
+@pytest.fixture
 def numpy_a(a_params):
     return make_ones_buffer(numpy.ones, **a_params)
 
@@ -97,6 +105,14 @@ def numpy_e(e_params):
     return make_ones_buffer(numpy.ones, **e_params)
 
 @pytest.fixture
+def numpy_f(f_params):
+    return make_ones_buffer(numpy.ones, **f_params)
+
+@pytest.fixture
+def numpy_g(g_params):
+    return make_ones_buffer(numpy.ones, **g_params)
+
+@pytest.fixture
 def torch_a(a_params):
     return make_ones_buffer(torch.ones, **a_params)
 
@@ -115,6 +131,14 @@ def torch_d(d_params):
 @pytest.fixture
 def torch_e(e_params):
     return make_ones_buffer(torch.ones, **e_params)
+
+@pytest.fixture
+def torch_f(f_params):
+    return make_ones_buffer(torch.ones, **f_params)
+
+@pytest.fixture
+def torch_g(g_params):
+    return make_ones_buffer(torch.ones, **g_params)
 
 def test_fail_incompatible_data_types(numpy_a, torch_a):
     with pytest.raises(TypeError):
@@ -140,6 +164,68 @@ def test_add_self_numpy(numpy_a, a_params):
     assert numpy_a + numpy_a == one_plus_one
     numpy_a += numpy_a
     assert numpy_a == one_plus_one
+
+def test_add_overlapping_numpy(numpy_a, numpy_b):
+    # At srate of 1024 b's offset of 1024
+    # is 64 samples behind that of a
+    data = numpy.concat(
+        [
+            numpy.ones(64),
+            2 * numpy.ones(960),
+            numpy.ones(64,)
+        ]
+    )
+    correct = SeriesBuffer(
+        offset=0,
+        sample_rate=1024,
+        shape=data.shape,
+        data = data
+    )
+    assert numpy_a + numpy_b == correct
+    numpy_a += numpy_b
+    assert numpy_a == correct
+
+def test_add_different_shape(numpy_a, numpy_g):
+    # g starts 512 samples after a
+    # and is 2048 samples long
+    data = numpy.concat(
+        [
+            numpy.ones(512),
+            2 * numpy.ones(512),
+            numpy.ones(1536)
+        ]
+    )
+    correct = SeriesBuffer(
+        offset=0,
+        sample_rate=1024,
+        shape=data.shape,
+        data = data
+    )
+    assert numpy_a + numpy_g == correct
+    numpy_a += numpy_g
+    assert numpy_a == correct
+
+def test_add_disjoint_numpy(numpy_a, numpy_f):
+    # At sample rate of 1024 offset of 65536 comes 
+    # 4096 samples after offset of 0
+    # since a has shape 1024 that leaves 3072 zeros
+    # between a and f
+    data = numpy.concat(
+        [
+            numpy.ones(1024),
+            numpy.zeros(3072),
+            numpy.ones(1024)
+        ]
+    )
+    correct = SeriesBuffer(
+        offset=0,
+        sample_rate=1024,
+        shape=data.shape,
+        data = data
+    )
+    assert numpy_a + numpy_f == correct
+    numpy_a += numpy_f
+    assert numpy_a == correct
 
 if __name__ == "__main__":
     test_tsgraph(None)
