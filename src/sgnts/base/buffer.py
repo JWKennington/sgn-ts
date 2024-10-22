@@ -94,9 +94,9 @@ class SeriesBuffer:
         if not (value.shape == self.shape): return False
         if type(self.data) != type(value.data): return False
         if isinstance(self.data, numpy.ndarray) and isinstance(value.data, numpy.ndarray):
-            share_data = numpy.any(self.data == value.data)
+            share_data = NumpyBackend.all(self.data == value.data)
         elif isinstance(self.data, TorchArray) and isinstance(value.data, TorchArray):
-            share_data = numpy.any(self.data == value.data)
+            share_data = _TorchBackend.all(self.data == value.data)
         else:
             # Will need to expand this conditional if/when other data types are added
             return False
@@ -178,7 +178,7 @@ class SeriesBuffer:
     def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
         """In-place add a SeriesBuffer to this one
         padding as necessary.
-        Where addition is impossible returns self
+        
 
         Parameters
         ==========

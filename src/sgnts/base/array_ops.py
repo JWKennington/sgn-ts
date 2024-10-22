@@ -14,6 +14,7 @@ must be implemented in subclasses. The current set of operations includes:
 """
 
 from typing import Any, ClassVar, Tuple, Iterable, Optional
+from functools import wraps
 
 import numpy
 
@@ -206,6 +207,11 @@ class NumpyBackend(ArrayBackend):
         """
         return numpy.stack(data, axis=axis)
 
+    @staticmethod
+    @wraps(numpy.all)
+    def all(*args, **kwargs):
+        return numpy.all(*args, **kwargs)
+
     # TODO Remove this backwards compatibility set of aliases when larger refactor
     #  complete
     pad_func = pad
@@ -307,6 +313,12 @@ class _TorchBackend(ArrayBackend):
         """
         _TorchBackend._check_torch()
         return torch.stack(data, axis)
+
+    @staticmethod
+    def all(input : TorchArray, out : None | TorchArray = None):
+        """Returns true if all elements are true"""
+        _TorchBackend._check_torch()
+        return torch.all(input=input, out=out)
 
     # TODO Remove this backwards compatibility set of aliases when larger refactor
     #  complete
