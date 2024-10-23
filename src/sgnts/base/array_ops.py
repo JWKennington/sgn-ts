@@ -13,8 +13,8 @@ must be implemented in subclasses. The current set of operations includes:
 - `stack`: Stack arrays along a new axis
 """
 
-from typing import Any, ClassVar, Tuple, Iterable, Optional
 from functools import wraps
+from typing import Any, ClassVar, Iterable, Optional, Tuple
 
 import numpy
 

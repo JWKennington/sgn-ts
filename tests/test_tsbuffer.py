@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 
+import unittest
 from typing import Any
-from sgn.apps import Pipeline
 
 import numpy
+import pytest
 import torch
+from sgn.apps import Pipeline
 
+from sgnts.base.buffer import SeriesBuffer
 from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
-from sgnts.base.buffer import SeriesBuffer
-
-import pytest
-import unittest
 
 
 def test_tsgraph(capsys):
@@ -178,7 +177,7 @@ def torch_g(g_params):
 
 def test_fail_incompatible_data_types(numpy_a, torch_a):
     with pytest.raises(TypeError):
-        numpy_a + torch_a, TypeError
+        numpy_a + torch_a
 
 
 def test_fail_incompatible_sample_rates(numpy_a, numpy_e):

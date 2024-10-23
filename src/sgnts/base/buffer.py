@@ -3,13 +3,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy
-
 import numpy.typing
-from sgn.base import Frame, LOGGER
+from sgn.base import LOGGER, Frame
 
+from .array_ops import Array, NumpyBackend, TorchArray, _TorchBackend
 from .offset import Offset
 from .slice_tools import TSSlice, TSSlices
-from .array_ops import NumpyBackend, _TorchBackend, TorchArray, Array
 
 
 @dataclass
