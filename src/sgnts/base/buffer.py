@@ -1,10 +1,8 @@
-from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
 
 import numpy
 import numpy.typing
-from sgn.base import LOGGER, Frame
+from sgn.base import Frame
 
 from .array_ops import Array, NumpyBackend, TorchArray, _TorchBackend
 from .offset import Offset

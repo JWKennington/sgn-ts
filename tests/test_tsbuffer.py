@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-import unittest
-from typing import Any
-
 import numpy
 import pytest
 import torch
@@ -317,6 +314,3 @@ def test_add_nonflat_torch(torch_c, torch_d):
     torch_c += torch_d
     assert torch_c == correct
 
-
-if __name__ == "__main__":
-    test_tsgraph(None)
