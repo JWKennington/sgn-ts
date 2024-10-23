@@ -315,7 +315,7 @@ class _TorchBackend(ArrayBackend):
         return torch.stack(data, axis)
 
     @staticmethod
-    def all(input : TorchArray, out : None | TorchArray = None):
+    def all(input: TorchArray, out: None | TorchArray = None):
         """Returns true if all elements are true"""
         _TorchBackend._check_torch()
         return torch.all(input=input, out=out)

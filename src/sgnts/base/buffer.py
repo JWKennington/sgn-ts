@@ -223,26 +223,34 @@ class SeriesBuffer:
         # Get the bounds of the new object
         new_offset = min(self.offset, item.offset)
         new_end_offset = max(self.end_offset, item.end_offset)
-        new_length = Offset.tosamples(new_end_offset - new_offset, sample_rate=self.sample_rate)
+        new_length = Offset.tosamples(
+            new_end_offset - new_offset, sample_rate=self.sample_rate
+        )
 
-        self_start_index = Offset.tosamples(self.offset-new_offset, sample_rate=self.sample_rate)
-        item_start_index = Offset.tosamples(item.offset-new_offset, sample_rate=self.sample_rate)
+        self_start_index = Offset.tosamples(
+            self.offset - new_offset, sample_rate=self.sample_rate
+        )
+        item_start_index = Offset.tosamples(
+            item.offset - new_offset, sample_rate=self.sample_rate
+        )
 
         self_filled_data = self.filleddata(backend.zeros)
         item_filled_data = item.filleddata(backend.zeros)
 
-        new_data = backend.zeros(
-            self.shape[:-1] + (new_length,)
-        )
+        new_data = backend.zeros(self.shape[:-1] + (new_length,))
 
-        new_data[..., self_start_index:self_start_index+self.shape[-1]] += self_filled_data
-        new_data[..., item_start_index:item_start_index+item.shape[-1]] += item_filled_data
+        new_data[
+            ..., self_start_index : self_start_index + self.shape[-1]
+        ] += self_filled_data
+        new_data[
+            ..., item_start_index : item_start_index + item.shape[-1]
+        ] += item_filled_data
 
         return SeriesBuffer(
             offset=new_offset,
             sample_rate=self.sample_rate,
             data=new_data,
-            shape=new_data.shape
+            shape=new_data.shape,
         )
 
     def pad_buffer(self, off, data=None):
