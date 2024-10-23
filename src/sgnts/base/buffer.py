@@ -223,20 +223,16 @@ class SeriesBuffer:
         # Get the bounds of the new object
         new_offset = min(self.offset, item.offset)
         new_end_offset = max(self.end_offset, item.end_offset)
-        new_start_samples = Offset.tosamples(new_offset, sample_rate=self.sample_rate)
-        new_end_samples = Offset.tosamples(new_end_offset, sample_rate=self.sample_rate)
+        new_length = Offset.tosamples(new_end_offset - new_offset, sample_rate=self.sample_rate)
 
-        self_start_samples = Offset.tosamples(self.offset, sample_rate=self.sample_rate)
-        item_start_samples = Offset.tosamples(item.offset, sample_rate=self.sample_rate)
-
-        self_start_index = self_start_samples - new_start_samples
-        item_start_index = item_start_samples - new_start_samples
+        self_start_index = Offset.tosamples(self.offset-new_offset, sample_rate=self.sample_rate)
+        item_start_index = Offset.tosamples(item.offset-new_offset, sample_rate=self.sample_rate)
 
         self_filled_data = self.filleddata(backend.zeros)
         item_filled_data = item.filleddata(backend.zeros)
 
         new_data = backend.zeros(
-            self.shape[:-1] + (new_end_samples - new_start_samples,)
+            self.shape[:-1] + (new_length,)
         )
 
         new_data[..., self_start_index:self_start_index+self.shape[-1]] += self_filled_data
