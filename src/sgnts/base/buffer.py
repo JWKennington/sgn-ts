@@ -4,11 +4,12 @@ from typing import Any
 
 import numpy
 
+import numpy.typing
 from sgn.base import Frame, LOGGER
 
 from .offset import Offset
 from .slice_tools import TSSlice, TSSlices
-from .array_ops import NumpyBackend, _TorchBackend, TorchArray
+from .array_ops import NumpyBackend, _TorchBackend, TorchArray, Array
 
 
 @dataclass
@@ -31,7 +32,7 @@ class SeriesBuffer:
 
     offset: int = None
     sample_rate: int = None
-    data: Sequence[Any] = None
+    data: Array | None = None
     shape: tuple = None
 
     def __post_init__(self):
@@ -89,20 +90,25 @@ class SeriesBuffer:
         return numpy.arange(self.samples) / self.sample_rate + self.t0
         
     def __eq__(self, value: object) -> bool:
-        is_series_buffer = (isinstance(value, SeriesBuffer))
-        if not is_series_buffer: return False
-        if not (value.shape == self.shape): return False
-        if type(self.data) != type(value.data): return False
-        if isinstance(self.data, numpy.ndarray) and isinstance(value.data, numpy.ndarray):
+        is_series_buffer = isinstance(value, SeriesBuffer)
+        if not is_series_buffer:
+            return False
+        if not (value.shape == self.shape):
+            return False
+        if type(self.data) != type(value.data):
+            return False
+        if isinstance(self.data, numpy.ndarray) and isinstance(
+            value.data, numpy.ndarray
+        ):
             share_data = NumpyBackend.all(self.data == value.data)
         elif isinstance(self.data, TorchArray) and isinstance(value.data, TorchArray):
             share_data = _TorchBackend.all(self.data == value.data)
         else:
             # Will need to expand this conditional if/when other data types are added
             return False
-        share_offset = (value.offset == self.offset)
-        share_sample_rate = (value.sample_rate == self.sample_rate)
-        return (share_data and share_offset and share_sample_rate)
+        share_offset = value.offset == self.offset
+        share_sample_rate = value.sample_rate == self.sample_rate
+        return share_data and share_offset and share_sample_rate
 
     @property
     def slice(self):
@@ -178,7 +184,7 @@ class SeriesBuffer:
     def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
         """In-place add a SeriesBuffer to this one
         padding as necessary.
-        
+
 
         Parameters
         ==========
@@ -198,74 +204,50 @@ class SeriesBuffer:
         # Handle polymorphism more smoothly in the future?
         # It's python so maybe this is the best option available
         if not isinstance(item, SeriesBuffer):
-            LOGGER.warning("Both arguments must be of the SeriesBuffer type")
-            raise TypeError
-        if isinstance(self.data, numpy.ndarray) and isinstance(
-            item.data, numpy.ndarray
+            raise TypeError("Both arguments must be of the SeriesBuffer type")
+        # If both are None this will result in NumpyBackend being used
+        if (isinstance(self.data, numpy.ndarray) or self.data is None) and (
+            isinstance(item.data, numpy.ndarray) or item.data is None
         ):
             backend = NumpyBackend
-        elif isinstance(self.data, TorchArray) and isinstance(item.data, TorchArray):
+        elif (isinstance(self.data, TorchArray) or self.data is None) and (
+            isinstance(item.data, TorchArray) or item.data is None
+        ):
             backend = _TorchBackend
-        # If types don't line up then don't do the addition
-        # FIXME better logging
         else:
-            LOGGER.warning("Incompatible data types")
-            raise TypeError
+            raise TypeError("Incompatible data types")
         if self.shape[:-1] != item.shape[:-1]:
-            LOGGER.warning("All dimensions except the padding dimension must match")
-            raise ValueError
+            raise ValueError("All dimensions except the padding dimension must match")
         if self.sample_rate != item.sample_rate:
-            LOGGER.warning("Sample rates must match")
-            raise ValueError
+            raise ValueError("Sample rates must match")
         # Get the bounds of the new object
         new_offset = min(self.offset, item.offset)
         new_end_offset = max(self.end_offset, item.end_offset)
+        new_start_samples = Offset.tosamples(new_offset, sample_rate=self.sample_rate)
+        new_end_samples = Offset.tosamples(new_end_offset, sample_rate=self.sample_rate)
 
-        self_front_pad = Offset.tosamples(
-            max(self.offset - new_offset, 0), sample_rate=self.sample_rate
-        )
-        self_back_pad = Offset.tosamples(
-            max(new_end_offset - self.end_offset, 0), sample_rate=self.sample_rate
-        )
-        item_front_pad = Offset.tosamples(
-            max(item.offset - new_offset, 0), sample_rate=self.sample_rate
-        )
-        item_back_pad = Offset.tosamples(
-            max(new_end_offset - item.end_offset, 0), sample_rate=self.sample_rate
+        self_start_samples = Offset.tosamples(self.offset, sample_rate=self.sample_rate)
+        item_start_samples = Offset.tosamples(item.offset, sample_rate=self.sample_rate)
+
+        self_start_index = self_start_samples - new_start_samples
+        item_start_index = item_start_samples - new_start_samples
+
+        self_filled_data = self.filleddata(backend.zeros)
+        item_filled_data = item.filleddata(backend.zeros)
+
+        new_data = backend.zeros(
+            self.shape[:-1] + (new_end_samples - new_start_samples,)
         )
 
-        # Pad both a and b to be the shape of the return value
-        padded_self = backend.cat(
-            [
-                backend.zeros(self.shape[:-1] + (self_front_pad,)),
-                self.data,
-                backend.zeros(self.shape[:-1] + (self_back_pad,)),
-            ],
-            axis=-1,
-        )
-        padded_item = backend.cat(
-            [
-                backend.zeros(self.shape[:-1] + (item_front_pad,)),
-                item.data,
-                backend.zeros(self.shape[:-1] + (item_back_pad,)),
-            ],
-            axis=-1,
-        )
+        new_data[..., self_start_index:self_start_index+self.shape[-1]] += self_filled_data
+        new_data[..., item_start_index:item_start_index+item.shape[-1]] += item_filled_data
 
         return SeriesBuffer(
             offset=new_offset,
             sample_rate=self.sample_rate,
-            data=padded_self + padded_item,
-            shape=self.shape[:-1]
-            + (
-                Offset.tosamples(
-                    new_end_offset - new_offset, sample_rate=self.sample_rate
-                ),
-            ),
+            data=new_data,
+            shape=new_data.shape
         )
-    
-    def __iadd__(self, item : "SeriesBuffer") -> "SeriesBuffer":
-        return self.__add__(item)
 
     def pad_buffer(self, off, data=None):
         """Front-pad this buffer to the given offset"""
