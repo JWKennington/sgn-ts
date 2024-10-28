@@ -6,13 +6,16 @@ from ..base import TSTransform, TSSlices, TSSlice, TSFrame, Offset
 @dataclass
 class Threshold(TSTransform):
     """
-    Only allow data above or below a threshold to pass. data will otherwise be marked as gap.
+    Only allow data above or below a threshold to pass. data will otherwise be marked
+    as gap.
 
     Parameters:
     -----------
     threshold: float
         The absolute value threshold above which to allow data to pass
     invert: bool
+        False: only data above a threshold will pass
+        True: only data below a threshold will pass
     startwn: int
         The number of samples ahead of the crossing to allow data to pass
     stopwn: int
@@ -34,7 +37,8 @@ class Threshold(TSTransform):
         self.sinkpad = self.sink_pads[0]
         self.nongap_slices = TSSlices([])
 
-    # Modified from: https://stackoverflow.com/questions/43258896/extract-subarrays-of-numpy-array-whose-values-are-above-a-threshold
+    # Modified from: https://stackoverflow.com/questions/43258896/
+    # extract-subarrays-of-numpy-array-whose-values-are-above-a-threshold
     def __split_above_threshold(
         self, buffer, threshold, start_window=0, stop_window=0, invert=False
     ):
@@ -73,10 +77,16 @@ class Threshold(TSTransform):
                 ]
                 for j in sub
             ]
-        ).simplify()
+        )
+        self.nongap_slices = self.nongap_slices.simplify()
+
         # restrict to slices that are new enough to matter
         self.nongap_slices = TSSlices(
-            [s for s in self.nongap_slices.slices if not s.stop <= boundary_offsets.start]
+            [
+                s
+                for s in self.nongap_slices.slices
+                if not s.stop <= boundary_offsets.start
+            ]
         )
 
         aligned_nongap_slices = self.nongap_slices.search(boundary_offsets, align=True)
@@ -87,10 +97,17 @@ class Threshold(TSTransform):
             [
                 b
                 for bs in [
-                    buf.split(aligned_nongap_slices, contiguous=True)
-                    for buf in frame
+                    buf.split(aligned_nongap_slices, contiguous=True) for buf in frame
                 ]
                 for b in bs
             ]
         )
+
+        # sanity check that buffers don't overlap
+        o0 = out[0]
+        for o in out[1:]:
+            if o.offset != o0.end_offset:
+                raise ValueError(f"overlapping offsets {o0.slice, o.slice}")
+            o0 = o
+
         return TSFrame(buffers=out, EOS=self.at_EOS, metadata=frame.metadata)
