@@ -1,15 +1,18 @@
-from dataclasses import dataclass
+from __future__ import annotations
+
 from collections import deque
+from dataclasses import dataclass
+from typing import Optional
+
 import numpy as np
+from sgn.base import SinkElement, SourceElement, TransformElement
 
-from sgn.base import *
-
-from .audioadapter import *
-from .buffer import *
-from .offset import *
-from .time import *
-from .slice_tools import *
-from .array_ops import ArrayOps
+from sgnts.base.array_ops import ArrayOps
+from sgnts.base.audioadapter import Audioadapter
+from sgnts.base.buffer import SeriesBuffer, TSFrame
+from sgnts.base.offset import Offset
+from sgnts.base.slice_tools import TSSlice, TSSlices
+from sgnts.base.time import Time
 
 
 @dataclass
@@ -20,19 +23,25 @@ class AdapterConfig:
     Parameters:
     -----------
     overlap: tuple[int, int]
-        the overlap before and after the data segement to process,
+        the overlap before and after the data segment to process,
         in samples
     stride: int
         the stride to produce, in samples
     pad_zeros_startup: bool
         when overlap is provided, whether to pad zeros in front of the
         first buffer, or wait until there is enough data.
+    skip_gaps: bool
+        produce a whole gap buffer if there are any gaps in the copied data
+        segment
+    lib: ArrayOps
+        the ArrayOps wrapper
     """
 
     overlap: tuple[int, int] = (0, 0)
     stride: int = 0
     pad_zeros_startup: bool = False
-    lib: int = ArrayOps
+    skip_gaps: bool = False
+    lib: type[ArrayOps] = ArrayOps
 
 
 @dataclass
@@ -47,12 +56,12 @@ class _TSTransSink:
     -----------
     max_age: int
         the max age before timeout, in nanoseconds
-    adapter_config: type[AdapterConfig]
+    adapter_config: AdapterConfig
         holds parameters used for audioadapter behavior
     """
 
-    max_age: int = None
-    adapter_config: type[AdapterConfig] = None
+    max_age: Optional[int] = None
+    adapter_config: Optional[AdapterConfig] = None
 
     def __post_init__(self):
         if self.max_age is None:
@@ -60,7 +69,7 @@ class _TSTransSink:
             self.max_age = 100 * Time.SECONDS
 
         self._is_aligned = False
-        self.inbufs = {p: deque() for p in self.sink_pads}
+        self.inbufs = {p: Audioadapter() for p in self.sink_pads}
         self.preparedframes = {p: None for p in self.sink_pads}
         self.at_EOS = False
         self._last_ts = {p: None for p in self.sink_pads}
@@ -72,9 +81,12 @@ class _TSTransSink:
             self.overlap = self.adapter_config.overlap
             self.stride = self.adapter_config.stride
             self.pad_zeros_startup = self.adapter_config.pad_zeros_startup
+            self.skip_gaps = self.adapter_config.skip_gaps
 
             # we need audioadapters
-            self.audioadapters = {p: Audioadapter(lib=self.adapter_config.lib) for p in self.sink_pads}
+            self.audioadapters = {
+                p: Audioadapter(lib=self.adapter_config.lib) for p in self.sink_pads
+            }
             self.pad_zeros_samples = 0
             if self.pad_zeros_startup is True:
                 # at startup, pad zeros in front of the first buffer to
@@ -82,14 +94,14 @@ class _TSTransSink:
                 self.pad_zeros_samples = self.overlap[0]
             self.preparedoutoffsets = {p: None for p in self.sink_pads}
 
-    def pull(self, pad, bufs):
-        self.at_EOS |= bufs.EOS
+    def pull(self, pad, frame):
+        self.at_EOS |= frame.EOS
 
         # extend and check the buffers
-        self._sanity_check(bufs, pad)
-        self.inbufs[pad].extend(bufs)
+        for buf in frame:
+            self.inbufs[pad].push(buf)
         self.__pulled[pad] = True
-        self.metadata[pad] = bufs.metadata
+        self.metadata[pad] = frame.metadata
         if self.timeout(pad):
             raise ValueError("pad %s has timed out" % pad.name)
 
@@ -145,6 +157,7 @@ class _TSTransSink:
         """
         a = self.audioadapters[pad]
         buf0 = bufs[0]
+        sample_rate = buf0.sample_rate
 
         # push all buffers in the frame into the audioadapter
         for buf in bufs:
@@ -154,17 +167,16 @@ class _TSTransSink:
         min_samples = sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
 
         # figure out the offset for preparedframes and preparedoutoffsets
-        offset = a.offset - Offset.fromsamples(self.pad_zeros_samples, buf0.sample_rate)
-        outoffset = offset + Offset.fromsamples(self.overlap[0], buf0.sample_rate)
+        offset = a.offset - Offset.fromsamples(self.pad_zeros_samples, sample_rate)
+        outoffset = offset + Offset.fromsamples(self.overlap[0], sample_rate)
         preparedbufs = []
         if a.size < min_samples:
             # not enough samples to produce output yet
             # make a heartbeat buffer
             shape = buf0.shape[:-1] + (0,)
-            outshape = shape
             preparedbufs.append(
                 SeriesBuffer(
-                    offset=offset, sample_rate=buf0.sample_rate, data=None, shape=shape
+                    offset=offset, sample_rate=sample_rate, data=None, shape=shape
                 )
             )
             # prepare output frames, one buffer per frame
@@ -177,47 +189,59 @@ class _TSTransSink:
             if self.stride == 0:
                 # provide all the data
                 num_copy_samples = a.size
-                nloop = 1
             else:
                 num_copy_samples = min_samples
-                nloop = 1 + (a.size - min_samples) // self.stride
 
-            preparedoutbufs = []
             outoffsets = []
 
-            for i in range(nloop):
-                if a.is_gap() is True:
-                    # the whole audioadapter is a gap
-                    data = None
-                else:
-                    # copy out samples from head of audioadapter
-                    data = a.copy_samples(num_copy_samples)
-                    if self.pad_zeros_samples > 0:
-                        # pad zeros in front of buffer
-                        data = self.adapter_config.lib.pad_func(data, (self.pad_zeros_samples,0))
-
-                # flush out samples from head of audioadapter
-                num_flush_samples = num_copy_samples - sum(self.overlap)
-                a.flush_samples(num_flush_samples)
-
-                shape = buf0.shape[:-1] + (num_copy_samples + self.pad_zeros_samples,)
-
-                # update next zeros padding
-                self.pad_zeros_samples = -min(0, num_flush_samples)
-                pbuf = SeriesBuffer(
-                    offset=offset, sample_rate=buf0.sample_rate, data=data, shape=shape
+            segment_has_gap, segment_has_nongap = a.segment_gaps_info(
+                (
+                    a.offset,
+                    a.offset + Offset.fromsamples(num_copy_samples, a.sample_rate),
                 )
-                preparedbufs.append(pbuf)
-                outnoffset = pbuf.noffset - Offset.fromsamples(
-                    sum(self.overlap), buf0.sample_rate
-                )
-                outoffsets.append({"offset": outoffset, "noffset": outnoffset})
+            )
 
-                offset += Offset.fromsamples(shape[-1], buf0.sample_rate)
-                outoffset += outnoffset
-                num_copy_samples = (
-                    sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
-                )
+            if (
+                a.is_gap()
+                or not segment_has_nongap
+                or (self.skip_gaps and segment_has_gap)
+            ):
+                # produce a gap buffer if
+                # 1. the whole audioadapter is a gap or
+                # 2. the whole segment is a gap or
+                # 3. there are gaps in the segment and we are skipping gaps
+                data = None
+            else:
+                # copy out samples from head of audioadapter
+                data = a.copy_samples(num_copy_samples)
+                if self.pad_zeros_samples > 0:
+                    # pad zeros in front of buffer
+                    data = self.adapter_config.lib.pad_func(
+                        data, (self.pad_zeros_samples, 0)
+                    )
+
+            # flush out samples from head of audioadapter
+            num_flush_samples = num_copy_samples - sum(self.overlap)
+            a.flush_samples(num_flush_samples)
+
+            shape = buf0.shape[:-1] + (num_copy_samples + self.pad_zeros_samples,)
+
+            # update next zeros padding
+            self.pad_zeros_samples = -min(0, num_flush_samples)
+            pbuf = SeriesBuffer(
+                offset=offset, sample_rate=sample_rate, data=data, shape=shape
+            )
+            preparedbufs.append(pbuf)
+            outnoffset = pbuf.noffset - Offset.fromsamples(
+                sum(self.overlap), sample_rate
+            )
+            outoffsets.append({"offset": outoffset, "noffset": outnoffset})
+
+            offset += Offset.fromsamples(shape[-1], sample_rate)
+            outoffset += outnoffset
+            num_copy_samples = (
+                sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
+            )
 
             self.preparedoutoffsets[pad] = outoffsets
 
@@ -238,9 +262,9 @@ class _TSTransSink:
                     buffers=[
                         SeriesBuffer(
                             offset=self.earliest,
-                            sample_rate=self.inbufs[pad][0].sample_rate,
+                            sample_rate=self.inbufs[pad].sample_rate,
                             data=None,
-                            shape=self.inbufs[pad][0].shape[:-1] + (0,),
+                            shape=self.inbufs[pad].buffers[0].shape[:-1] + (0,),
                         ),
                     ],
                     metadata=self.metadata[pad],
@@ -248,19 +272,12 @@ class _TSTransSink:
         # Else pack all the buffers
         else:
             min_latest = self.min_latest
+            earliest = self.earliest
             for pad in self.sink_pads:
-                out = []
-                for b in tuple(self.inbufs[pad]):
-                    if b.end_offset <= min_latest:
-                        out.append(self.inbufs[pad].popleft())
-                if len(self.inbufs[pad]) > 0:
-                    buf = self.inbufs[pad].popleft()
-                    if buf.offset < min_latest:
-                        l, r = buf.split(min_latest)
-                        self.inbufs[pad].appendleft(r)
-                        out.append(l)
-                    else:  # Yes this condition is silly
-                        self.inbufs[pad].appendleft(buf)
+                out = self.inbufs[pad].get_sliced_buffers(
+                    (earliest, min_latest), pad_start=True
+                )
+                self.inbufs[pad].flush_samples_by_end_offset_segment(min_latest)
                 assert len(out) > 0
                 if self.adapter_config is not None:
                     out = self.__adapter(pad, out)
@@ -270,16 +287,11 @@ class _TSTransSink:
                     metadata=self.metadata[pad],
                 )
 
-    def _sanity_check(self, bufs, pad):
-        if self._last_offset[pad] is not None:
-            assert bufs[0].offset == self._last_offset[pad], f"{self.name=}, {pad=} {bufs[0].offset=}, {self._last_offset[pad]=}"
-        self._last_offset[pad] = bufs[-1].end_offset
-
     def _align(self):
 
         def slice_from_pad(inbufs):
             if len(inbufs) > 0:
-                return TSSlice(inbufs[0].offset, inbufs[-1].end_offset)
+                return TSSlice(inbufs.offset, inbufs.end_offset)
             else:
                 return TSSlice(-1, -1)
 
@@ -290,21 +302,17 @@ class _TSTransSink:
 
         if not self._is_aligned and __can_align():
             self._is_aligned = True
-            old = self.earliest
-            for p in self.inbufs:
-                if self.inbufs[p][0].offset != old:
-                    buf = self.inbufs[p][0].pad_buffer(off=old)
-                    self.inbufs[p].appendleft(buf)
 
     def timeout(self, pad):
-        assert len(self.inbufs[pad]) > 0
-        return (self.inbufs[pad][-1].end - self.inbufs[pad][0].t0) > self.max_age
+        return self.inbufs[pad].end_offset - self.inbufs[pad].offset > Offset.fromns(
+            self.max_age
+        )
 
     def latest_by_pad(self, pad):
-        return self.inbufs[pad][-1].end_offset if self.inbufs[pad] else -1
+        return self.inbufs[pad].end_offset if self.inbufs[pad] else -1
 
     def earliest_by_pad(self, pad):
-        return self.inbufs[pad][0].offset if self.inbufs[pad] else -1
+        return self.inbufs[pad].offset if self.inbufs[pad] else -1
 
     @property
     def latest(self):
