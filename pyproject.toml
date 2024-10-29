@@ -98,7 +98,7 @@ exclude = [
     "docs",
 ]
 
-[tool.pytest]
+[tool.pytest.ini_options]
 addopts = "-p no:warnings --cov=sgnts"
 
 [tool.flake8]
