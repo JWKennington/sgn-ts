@@ -26,6 +26,7 @@ The sgn frame object is modified to include a list of buffers representing time 
 
 ## Example
 
+This [MR](https://git.ligo.org/greg/sgn-ts/-/merge_requests/46) is pending but would make this example simpler
 ```python
 #!/usr/bin/env python3
 
