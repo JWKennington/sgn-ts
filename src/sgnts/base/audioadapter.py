@@ -145,6 +145,10 @@ class Audioadapter:
         if bufs[-1].end_offset > end:
             bufs[-1] = bufs[-1].split(end)[0]
 
+        # FIXME: sometimes there are additional zero length buffers
+        if len(bufs) > 1 and bufs[0].samples == 0:
+            bufs.popleft()
+
         return bufs
 
     def copy_samples(self, nsamples: int, start_sample: int = 0) -> Array:
