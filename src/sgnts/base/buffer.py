@@ -219,7 +219,7 @@ class TSFrame(Frame):
         return iter(self.buffers)
 
     def __repr__(self):
-        out = "%s ::" % self.metadata["__graph__"]
+        out = ""
         for buf in self:
             out += "\n\t%s" % buf
         return out
