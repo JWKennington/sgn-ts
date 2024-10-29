@@ -77,6 +77,10 @@ class SeriesBuffer:
         return self.data is not None
 
     @property
+    def tarr(self):
+        return numpy.arange(self.samples) / self.sample_rate + self.t0
+
+    @property
     def slice(self):
         return TSSlice(self.offset, self.end_offset)
 
