@@ -76,6 +76,16 @@ class SeriesBuffer:
     def __bool__(self):
         return self.data is not None
 
+    def set_data(self, data):
+        if data is not None and self.data.shape != data.shape:
+            raise ValueError("Data are incompatible shapes")
+        # it really isn't clear to me if this should be by reference or copy...
+        self.data = data
+
+    @property
+    def tarr(self):
+        return numpy.arange(self.samples) / self.sample_rate + self.t0
+
     @property
     def slice(self):
         return TSSlice(self.offset, self.end_offset)

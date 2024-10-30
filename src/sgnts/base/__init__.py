@@ -359,9 +359,12 @@ class TSSource(SourceElement):
     -----------
     t0: float
         start time of first buffer, in seconds
+    max_num_frames: int
+        max number of frames to produce. Default = 9223372036854775807
     """
 
     t0: float = 0
+    max_num_frames: int = 9223372036854775807
 
     def __post_init__(self):
         super().__post_init__()
@@ -370,3 +373,14 @@ class TSSource(SourceElement):
             p: Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
             for p in self.source_pads
         }
+        self.__cnt = {p: 0 for p in self.source_pads}
+        self.__new_buffer_dict = {}
+
+    def setup_buffers_on_pad(self, channels, rate, pad):
+        self.__new_buffer_dict[pad] = {"sample_rate": rate, "shape": channels + (Offset.sample_stride(self.rate),)}
+
+    def prepare_frame(self, pad, EOS=False, metadata={}):
+        buf = SeriesBuffer(offset=self.offset[pad], data=0, **self.__new_buffer_dict[pad])
+        self.offset[pad] += Offset.fromsamples(buf.samples, buf.sample_rate)
+        self.__cnt[pad] += 1
+        return TSFrame(buffers=[buf], EOS=EOS or self.__cnt[pad] >= self.max_num_frames, metadata=metadata)
