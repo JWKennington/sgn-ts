@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+
 import numpy
 
 from sgn.base import Frame, LOGGER
@@ -86,6 +87,22 @@ class SeriesBuffer:
     @property
     def tarr(self):
         return numpy.arange(self.samples) / self.sample_rate + self.t0
+        
+    def __eq__(self, value: object) -> bool:
+        is_series_buffer = (isinstance(value, SeriesBuffer))
+        if not is_series_buffer: return False
+        if not (value.shape == self.shape): return False
+        if type(self.data) != type(value.data): return False
+        if isinstance(self.data, numpy.ndarray) and isinstance(value.data, numpy.ndarray):
+            share_data = numpy.any(self.data == value.data)
+        elif isinstance(self.data, TorchArray) and isinstance(value.data, TorchArray):
+            share_data = numpy.any(self.data == value.data)
+        else:
+            # Will need to expand this conditional if/when other data types are added
+            return False
+        share_offset = (value.offset == self.offset)
+        share_sample_rate = (value.sample_rate == self.sample_rate)
+        return (share_data and share_offset and share_sample_rate)
 
     @property
     def slice(self):
@@ -181,8 +198,8 @@ class SeriesBuffer:
         # Handle polymorphism more smoothly in the future?
         # It's python so maybe this is the best option available
         if not isinstance(item, SeriesBuffer):
-            LOGGER.warning("Both arguments must be of the SeriesBuffer type, returning None")
-            return None
+            LOGGER.warning("Both arguments must be of the SeriesBuffer type")
+            raise TypeError
         if isinstance(self.data, numpy.ndarray) and isinstance(
             item.data, numpy.ndarray
         ):
@@ -192,14 +209,14 @@ class SeriesBuffer:
         # If types don't line up then don't do the addition
         # FIXME better logging
         else:
-            LOGGER.warning("Incompatible data types, returning None")
-            return None
+            LOGGER.warning("Incompatible data types")
+            raise TypeError
         if self.shape[:-1] != item.shape[:-1]:
-            LOGGER.warning("All dimensions except the padding dimension must match, returning None")
-            return None
+            LOGGER.warning("All dimensions except the padding dimension must match")
+            raise ValueError
         if self.sample_rate != item.sample_rate:
-            LOGGER.warning("Sample rates must match, returning None")
-            return None
+            LOGGER.warning("Sample rates must match")
+            raise ValueError
         # Get the bounds of the new object
         new_offset = min(self.offset, item.offset)
         new_end_offset = max(self.end_offset, item.end_offset)
