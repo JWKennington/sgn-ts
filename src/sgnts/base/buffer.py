@@ -179,9 +179,7 @@ class SeriesBuffer:
             return self.end_offset > item.end_offset
 
     def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
-        """In-place add a SeriesBuffer to this one
-        padding as necessary.
-
+        """Add two `SeriesBuffer`s, padding as necessary.
 
         Parameters
         ==========
