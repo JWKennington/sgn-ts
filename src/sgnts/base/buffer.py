@@ -8,6 +8,7 @@ from .array_ops import Array, NumpyBackend, TorchArray, _TorchBackend
 from .offset import Offset
 from .slice_tools import TSSlice, TSSlices
 
+from typing import Union
 
 @dataclass
 class SeriesBuffer:
@@ -29,7 +30,7 @@ class SeriesBuffer:
 
     offset: int = None
     sample_rate: int = None
-    data: Array | None = None
+    data: Union[Array, None] = None
     shape: tuple = None
 
     def __post_init__(self):
