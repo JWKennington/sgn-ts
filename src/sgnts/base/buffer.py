@@ -8,7 +8,8 @@ from .array_ops import Array, NumpyBackend, TorchArray, _TorchBackend
 from .offset import Offset
 from .slice_tools import TSSlice, TSSlices
 
-from typing import Union
+from typing import Union, Optional, Iterable
+
 
 @dataclass
 class SeriesBuffer:
@@ -52,7 +53,12 @@ class SeriesBuffer:
                 assert isinstance(t, int)
 
     @staticmethod
-    def fromoffsetslice(offslice, sample_rate, data=None, channels=()):
+    def fromoffsetslice(
+        offslice: TSSlice,
+        sample_rate: int,
+        data: Optional[Array] = None,
+        channels: Iterable = (),
+    ) -> "SeriesBuffer":
         shape = channels + (
             Offset.tosamples(offslice.stop - offslice.start, sample_rate),
         )
@@ -86,7 +92,7 @@ class SeriesBuffer:
     @property
     def tarr(self):
         return numpy.arange(self.samples) / self.sample_rate + self.t0
-        
+
     def __eq__(self, value: object) -> bool:
         is_series_buffer = isinstance(value, SeriesBuffer)
         if not is_series_buffer:
@@ -138,10 +144,7 @@ class SeriesBuffer:
 
     @property
     def is_gap(self):
-        if self.data is None:
-            return True
-        else:
-            return False
+        return self.data is None
 
     def filleddata(self, zeros_func):
         if self.data is not None:
@@ -178,6 +181,16 @@ class SeriesBuffer:
             return self.offset > item
         elif isinstance(item, SeriesBuffer):
             return self.end_offset > item.end_offset
+
+    def _insert(self, data, offset) -> None:
+        """TODO workshop the name
+        Adds data from a whose slice is
+        fully contained within self's into self.
+        Does not do safety checks."""
+        insertion_index = Offset.tosamples(
+            offset - self.offset, sample_rate=self.sample_rate
+        )
+        self.data[..., insertion_index : insertion_index + data.shape[-1]] += data
 
     def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
         """Add two `SeriesBuffer`s, padding as necessary.
@@ -217,37 +230,22 @@ class SeriesBuffer:
         if self.sample_rate != item.sample_rate:
             raise ValueError("Sample rates must match")
         # Get the bounds of the new object
-        new_offset = min(self.offset, item.offset)
-        new_end_offset = max(self.end_offset, item.end_offset)
-        new_length = Offset.tosamples(
-            new_end_offset - new_offset, sample_rate=self.sample_rate
+
+        new_buffer = self.fromoffsetslice(
+            self.slice | item.slice,
+            sample_rate=self.sample_rate,
+            data=None,
+            channels=self.shape[:-1],
         )
 
-        self_start_index = Offset.tosamples(
-            self.offset - new_offset, sample_rate=self.sample_rate
-        )
-        item_start_index = Offset.tosamples(
-            item.offset - new_offset, sample_rate=self.sample_rate
-        )
-
+        new_buffer.data = new_buffer.filleddata(backend.zeros)
         self_filled_data = self.filleddata(backend.zeros)
         item_filled_data = item.filleddata(backend.zeros)
 
-        new_data = backend.zeros(self.shape[:-1] + (new_length,))
+        new_buffer._insert(self_filled_data, self.offset)
+        new_buffer._insert(item_filled_data, item.offset)
 
-        new_data[
-            ..., self_start_index : self_start_index + self.shape[-1]
-        ] += self_filled_data
-        new_data[
-            ..., item_start_index : item_start_index + item.shape[-1]
-        ] += item_filled_data
-
-        return SeriesBuffer(
-            offset=new_offset,
-            sample_rate=self.sample_rate,
-            data=new_data,
-            shape=new_data.shape,
-        )
+        return new_buffer
 
     def pad_buffer(self, off, data=None):
         """Front-pad this buffer to the given offset"""
