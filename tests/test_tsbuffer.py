@@ -171,6 +171,40 @@ def torch_f(f_params):
 def torch_g(g_params):
     return make_ones_buffer(torch.ones, **g_params)
 
+# @pytest.fixture
+# def empty_a(a_params):
+#     return SeriesBuffer(data=None, **a_params)
+
+
+# @pytest.fixture
+# def empty_b(b_params):
+#     return SeriesBuffer(data=None, **b_params)
+
+
+# @pytest.fixture
+# def empty_c(c_params):
+#     return SeriesBuffer(data=None, **c_params)
+
+
+# @pytest.fixture
+# def empty_d(d_params):
+#     return SeriesBuffer(data=None, **d_params)
+
+
+# @pytest.fixture
+# def empty_e(e_params):
+#     return SeriesBuffer(data=None, **e_params)
+
+
+# @pytest.fixture
+# def empty_f(f_params):
+#     return SeriesBuffer(data=None, **f_params)
+
+
+# @pytest.fixture
+# def empty_g(g_params):
+#     return SeriesBuffer(data=None, **g_params)
+
 
 def test_fail_incompatible_data_types(numpy_a, torch_a):
     with pytest.raises(TypeError):

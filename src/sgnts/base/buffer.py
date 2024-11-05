@@ -192,6 +192,15 @@ class SeriesBuffer:
         )
         self.data[..., insertion_index : insertion_index + data.shape[-1]] += data
 
+    @property
+    def _backend_from_data(self):
+        if isinstance(self.data, numpy.ndarray):
+            return NumpyBackend
+        elif isinstance(self.data, TorchArray):
+            return _TorchBackend
+        else:
+            return None
+
     def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
         """Add two `SeriesBuffer`s, padding as necessary.
 
@@ -214,29 +223,27 @@ class SeriesBuffer:
         # It's python so maybe this is the best option available
         if not isinstance(item, SeriesBuffer):
             raise TypeError("Both arguments must be of the SeriesBuffer type")
-        # If both are None this will result in NumpyBackend being used
-        if (isinstance(self.data, numpy.ndarray) or self.data is None) and (
-            isinstance(item.data, numpy.ndarray) or item.data is None
-        ):
-            backend = NumpyBackend
-        elif (isinstance(self.data, TorchArray) or self.data is None) and (
-            isinstance(item.data, TorchArray) or item.data is None
-        ):
-            backend = _TorchBackend
-        else:
+        # A bit convoluted, cases are:
+        # - if both None then output gap
+        # - if one None fill the gap and add with other's backend
+        # - if neither None but disagree raise an error
+        backend = self._backend_from_data
+        if (backend != item._backend_from_data) and (item._backend_from_data is not None):
             raise TypeError("Incompatible data types")
+        if backend is None and item._backend_from_data is not None:
+            backend = item._backend_from_data
         if self.shape[:-1] != item.shape[:-1]:
             raise ValueError("All dimensions except the padding dimension must match")
         if self.sample_rate != item.sample_rate:
             raise ValueError("Sample rates must match")
-        # Get the bounds of the new object
-
         new_buffer = self.fromoffsetslice(
             self.slice | item.slice,
             sample_rate=self.sample_rate,
             data=None,
             channels=self.shape[:-1],
         )
+        if backend is None:
+            return new_buffer
 
         new_buffer.data = new_buffer.filleddata(backend.zeros)
         self_filled_data = self.filleddata(backend.zeros)
