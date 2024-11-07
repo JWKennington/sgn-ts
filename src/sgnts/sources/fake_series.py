@@ -1,130 +1,158 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
+from sgn.base import SourcePad
 
-from sgnts.base import Offset, SeriesBuffer, TSFrame, TSSource
+from sgnts.base import Array, Offset, SeriesBuffer, TSFrame, TSSource
 
 
 @dataclass
 class FakeSeriesSrc(TSSource):
-    """
-    A time-series source that generates fake data in fixed-size buffers.
+    """A time-series source that generates fake data in fixed-size buffers.
 
-    Parameters
-    ----------
-    num_buffers: int
-        is required and sets how many buffers will be created before setting "EOS"
-    rate: int
-        the sample rate of the data
-    channels: tuple
-        the number channels of the data in each dimension except the last, i.e.,
-        channels = data.shape[:-1]. If data has shape (A, B, N), then channels =
-        (A, B). Note that if data is one dimensional and has shape (N,), channels
-        would be an empty tuple ().
-    signal_type: str
-        currently supported types: (1) 'white': white noise data. (2) 'sin' or 'sine':
-        sine wave data. (3) 'impulse': creates an impulse data, where the value is one
-        at one sample point, and everywhere else is zero
-    fsin: float
-        frequency of the sine wave if signal_type = 'sin'
-    ngap: int
-        Frequency of gap buffers, will generate a gap buffer every ngap buffers.
-        ngap=0: do not generate gap buffers.
-        ngap=-1: generates gap buffers randomly.
-    random_seed: int
-        set the random seed, used for signal_type = 'white' or 'impulse'
-    impulse_position: int
-        The sample point position to place the impulse. If None, then the impulse
-        will be generated randomly.
+    Args:
+        rate:
+            int, the sample rate of the data
+        channels:
+            tuple[int, ...], the number of channels of the data in each dimension except
+            the last, i.e., channels = data.shape[:-1]. For example, if the data is a
+            multi-dimensional array and has shape=(2, 4, 16) then channels = (2, 4).
+            Note that if data is one dimensional and has shape (16,), channels would be
+            an empty tuple ().
+        signal_type:
+            str, currently supported types: (1) 'white': white noise data. (2) 'sin' or
+            'sine': sine wave data. (3) 'impulse': creates an impulse data, where the
+            value is one at one sample point, and everywhere else is zero
+        fsin:
+            float, the frequency of the sine wave if signal_type = 'sin'
+        ngap:
+            int, the frequency to generate gap buffers, will generate a gap buffer every
+            ngap buffers. ngap=0: do not generate gap buffers. ngap=-1: generates gap
+            buffers randomly.
+        random_seed:
+            int, set the random seed, used for signal_type = 'white' or 'impulse'
+        impulse_position:
+            int, the sample point position to place the impulse. If -1, then the
+            impulse will be generated randomly.
     """
 
-    num_buffers: int = 0
     rate: int = 2048
-    channels: tuple = ()
+    channels: tuple[int, ...] = ()
     signal_type: str = "white"
     fsin: float = 5
     ngap: int = 0
-    random_seed: int = None
-    impulse_position: int = None
+    random_seed: Optional[int] = None
+    impulse_position: int = -1
     verbose: bool = False
 
     def __post_init__(self):
         super().__post_init__()
+
         self.cnt = {p: 0 for p in self.source_pads}
-        self.num_samples = Offset.sample_stride(self.rate)
-        self.shape = self.channels + (self.num_samples,)
+
+        # setup buffers
+        for pad in self.source_pads:
+            self.setup_buffers_on_pad(channels=self.channels, rate=self.rate, pad=pad)
+
         if self.random_seed is not None and (
             self.signal_type == "white" or self.signal_type == "impulse"
         ):
             np.random.seed(self.random_seed)
         if self.signal_type == "impulse":
-            assert len(self.shape) == 1
-            # self.current_samples = 0
-            if self.impulse_position is None:
-                self.impulse_position = np.random.randint(
-                    0, self.num_buffers * self.num_samples
-                )
+            assert self.channels == ()
+            assert len(self.source_pads) == 1
+            if self.impulse_position == -1:
+                self.impulse_position = np.random.randint(0, int(self.end * self.rate))
             if self.verbose:
                 print("Placing impulse at sample point", self.impulse_position)
 
-    def create_impulse_data(self, offset):
-        data = np.zeros(self.num_samples)
-        current_samples = Offset.tosamples(offset, self.rate)
+    def create_impulse_data(self, offset: int, num_samples: int, rate: int) -> Array:
+        """Create the impulse data, where data is zero everywhere, and equals one at one
+        sample point.
+
+        Args:
+            offset:
+                int, the offset of the current buffer, used for checking whether the
+                the impulse is to be placed in the current buffer
+            num_samples:
+                int, the number of samples the data should have
+            rate:
+                int, the sample rate of the data
+
+        Returns:
+            Array, the impulse data
+        """
+        data = np.zeros(num_samples)
+        current_samples = Offset.tosamples(offset, rate)
         if (
             current_samples <= self.impulse_position
-            and self.impulse_position < current_samples + self.num_samples
+            and self.impulse_position < current_samples + num_samples
         ):
             if self.verbose:
                 print("Creating the impulse")
             data[self.impulse_position - current_samples] = 1
         return data
 
-    def create_data(self, offset):
-        if self.signal_type == "white":
-            return np.random.randn(*self.shape)
+    def create_data(self, buf: SeriesBuffer, cnt: int) -> Array:
+        """Create the fake data, can be (1) white noise (2) sine wave (3) impulse data.
+
+        Args:
+            buf:
+                SeriesBuffer, the buffer to create the data for
+            cnt:
+                int, the number of buffers the source pad has generated, used for
+                determining whether to generate gap buffers
+
+        Returns:
+            Array, the fake data array
+        """
+        offset = buf.offset
+        ngap = self.ngap
+        if (ngap == -1 and np.random.rand(1) > 0.5) or (ngap > 0 and cnt % ngap == 0):
+            return None
+        elif self.signal_type == "white":
+            return np.random.randn(*buf.shape)
         elif self.signal_type == "sin" or self.signal_type == "sine":
             t0 = Offset.tosec(offset)
-            duration = self.num_samples / self.rate
+            duration = buf.duration
             return np.sin(
                 self.fsin
                 * np.tile(
-                    np.linspace(t0, t0 + duration, self.shape[-1], endpoint=False),
+                    np.linspace(t0, t0 + duration, buf.samples, endpoint=False),
                     self.channels + (1,),
                 )
             )
         elif self.signal_type == "impulse":
-            return self.create_impulse_data(offset)
+            return self.create_impulse_data(offset, buf.samples, buf.sample_rate)
         else:
             raise ValueError("Unknown signal type")
 
-    def new(self, pad):
-        """
-        New buffers are created on "pad" with an instance specific count and a
-        name derived from the pad name. "EOS" is set if we have surpassed the requested
-        number of buffers.
+    def new(self, pad: SourcePad) -> TSFrame:
+        """New buffers are created on "pad" with an instance specific count and a name
+        derived from the pad name. "EOS" is set if we have surpassed the requested
+        end time.
+
+        Args:
+            Pad:
+                SourcePad, the source pad to generate TSFrames
+
+        Returns:
+            TSFrame, the TSFrame that carries the buffers with fake data
         """
         self.cnt[pad] += 1
-        ngap = self.ngap
-        if (ngap == -1 and np.random.rand(1) > 0.5) or (
-            ngap > 0 and self.cnt[pad] % ngap == 0
-        ):
-            data = None
-        else:
-            data = self.create_data(self.offset[pad])
 
-        outbuf = SeriesBuffer(
-            offset=self.offset[pad], sample_rate=self.rate, data=data, shape=self.shape
-        )
-
-        self.offset[pad] += Offset.fromsamples(self.num_samples, self.rate)
+        # setup metadata
         metadata = {"cnt": self.cnt, "name": "'%s'" % pad.name}
         if self.impulse_position is not None:
             metadata["impulse_offset"] = Offset.fromsamples(
                 self.impulse_position, self.rate
             )
 
-        return TSFrame(
-            buffers=[outbuf],
-            metadata=metadata,
-            EOS=self.cnt[pad] > self.num_buffers,
-        )
+        frame = self.prepare_frame(pad, data=None, metadata=metadata)
+        for buf in frame:
+            buf.set_data(self.create_data(buf, self.cnt[pad]))
+
+        return frame

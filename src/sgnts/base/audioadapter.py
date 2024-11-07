@@ -10,6 +10,7 @@ from typing import Deque, Optional
 from sgnts.base.array_ops import Array, ArrayOps
 from sgnts.base.buffer import SeriesBuffer
 from sgnts.base.offset import Offset
+from sgnts.base.slice_tools import TSSlice
 
 
 class Audioadapter:
@@ -141,13 +142,9 @@ class Audioadapter:
 
         # check buffers at each end
         if bufs[0].offset < start:
-            bufs[0] = bufs[0].split(start)[1]
+            bufs[0] = bufs[0].sub_buffer(TSSlice(start, bufs[0].end_offset))
         if bufs[-1].end_offset > end:
-            bufs[-1] = bufs[-1].split(end)[0]
-
-        # FIXME: sometimes there are additional zero length buffers
-        if len(bufs) > 1 and bufs[0].samples == 0:
-            bufs.popleft()
+            bufs[-1] = bufs[-1].sub_buffer(TSSlice(bufs[-1].offset, end))
 
         return bufs
 
@@ -224,7 +221,8 @@ class Audioadapter:
             else:
                 out = self.data_all[..., ni : ni + nsamples]
 
-        if pad_samples > 0 and out is not None:
+        # FIXME: the checks on out are to avoid mypy errors
+        if pad_samples > 0 and out is not None and not isinstance(out, int):
             out = self.lib.pad_func(out, (pad_samples, 0))
 
         return out

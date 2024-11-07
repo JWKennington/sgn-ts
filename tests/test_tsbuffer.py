@@ -28,10 +28,10 @@ def test_tsgraph(capsys):
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
-            num_buffers=2,
             rate=2048,
             signal_type="white",
             random_seed=1234,
+            end=2,
         ),
         FakeSeriesSink(
             name="snk1",

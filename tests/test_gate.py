@@ -7,7 +7,7 @@ from sgnts.sources import SegmentSrc, FakeSeriesSrc
 from sgnts.transforms import Gate
 
 
-def test_gate(capsys):
+def test_gate():
 
     pipeline = Pipeline()
 
@@ -27,8 +27,7 @@ def test_gate(capsys):
     inrate = 256
     t0 = 0.0
     end = 15.0
-    segments = [(1_000_000_000, 2_000_000_000), (10_000_000_000, 11_000_000_000)]
-    num_buffers = 20
+    segments = [(1_000_000_000, 2_250_000_000), (10_000_000_000, 12_500_000_000)]
     pipeline.insert(
         SegmentSrc(
             name="segsrc",
@@ -41,9 +40,9 @@ def test_gate(capsys):
         FakeSeriesSrc(
             name="datasrc",
             source_pad_names=("data",),
-            num_buffers=num_buffers,
             rate=inrate,
             t0=t0,
+            end=end,
         ),
         Gate(
             name="gate",
@@ -67,4 +66,4 @@ def test_gate(capsys):
 
 
 if __name__ == "__main__":
-    test_gate(None)
+    test_gate()

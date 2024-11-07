@@ -2,35 +2,56 @@ import time
 from dataclasses import dataclass
 
 import numpy as np
+from sgn.base import SourcePad
 
-from ..base import Offset, SeriesBuffer, TSFrame, TSSource
+from sgnts.base import Offset, TSFrame, TSSource
 
 
 @dataclass
 class RealTimeWhiteNoiseSrc(TSSource):
-    """
-    A time-series source that generates fake data in fixed-size buffers in real-time
+    """A time-series source that generates fake data in fixed-size buffers in real-time
+
+    Args:
+        rate:
+            int, the sample rate of the data
+        duration:
+            float, the duration for the source to continue to produce frames, in seconds
     """
 
     rate: int = 2048
-    num_buffers: int = 10
+    duration: float = float("+inf")
 
     def __post_init__(self):
-        super().__post_init__()
-        self.cnt = {p: 0 for p in self.source_pads}
-        self.num_samples = Offset.sample_stride(self.rate)
         self.stride = Offset.SAMPLE_STRIDE_AT_MAX_RATE
-        self.shape = (self.num_samples,)
-        self.next_time = None
 
-    def new(self, pad):
-        self.cnt[pad] += 1
+        # init start time
+        # FIXME: How to define t0? Currently derived from time.time()
+        self.t0_offset = Offset.fromsec(time.time()) // self.stride * self.stride
+        self.t0 = Offset.tosec(self.t0_offset)
+        self.next_time = self.t0_offset + self.stride
+
+        self.end = self.t0 + self.duration
+
+        super().__post_init__()
+
+        for pad in self.source_pads:
+            self.setup_buffers_on_pad(channels=(), rate=self.rate, pad=pad)
+
+    def new(self, pad: SourcePad) -> TSFrame:
+        """New TSFrames are created on "pad" at fixed time intervals that keeps up with
+        the stride specified in Offset.SAMPLE_STRIDE_AT_MAX_RATE. EOS is set if we have
+        surpassed the requested duration.
+
+        Args:
+            pad:
+                SourcePad, the pad for which to produce a new TSFrame
+
+        Returns:
+            TSFrame, the TSFrame with random data
+        """
 
         # Produce buffers at every fixed interval
         now = Offset.fromsec(time.time())
-        if self.next_time is None:
-            self.next_time = now // self.stride * self.stride + self.stride
-
         sleep = Offset.tosec(self.next_time - now)
         if sleep > 0:
             # There might be cases where sleep < 0 and we are behind? In that case
@@ -38,17 +59,11 @@ class RealTimeWhiteNoiseSrc(TSSource):
             time.sleep(sleep)
         self.next_time = self.next_time + self.stride
 
-        data = np.random.randn(self.num_samples)
+        metadata = {"name": "'%s'" % pad.name}
 
-        outbuf = SeriesBuffer(
-            offset=self.offset[pad], sample_rate=self.rate, data=data, shape=self.shape
-        )
+        frame = self.prepare_frame(pad, data=None, metadata=metadata)
 
-        self.offset[pad] += Offset.fromsamples(self.num_samples, self.rate)
-        metadata = {"cnt": self.cnt, "name": "'%s'" % pad.name}
+        for buf in frame:
+            buf.set_data(np.random.randn(buf.samples))
 
-        return TSFrame(
-            buffers=[outbuf],
-            metadata=metadata,
-            EOS=self.cnt[pad] >= self.num_buffers,
-        )
+        return frame

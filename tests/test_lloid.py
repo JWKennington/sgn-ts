@@ -9,7 +9,7 @@ from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Adder, Correlate, Matmul, Resampler
 
 
-def test_lloid(capsys):
+def test_lloid():
 
     pipeline = Pipeline()
 
@@ -52,9 +52,9 @@ def test_lloid(capsys):
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
-            num_buffers=2,
             rate=2048,
             signal_type="sin",
+            end=8,
         ),
         Resampler(
             name="down",
@@ -122,4 +122,4 @@ def test_lloid(capsys):
 
 
 if __name__ == "__main__":
-    test_lloid(None)
+    test_lloid()

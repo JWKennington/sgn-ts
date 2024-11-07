@@ -8,7 +8,7 @@ from sgnts.transforms import Resampler
 from sgnts.base import AdapterConfig
 
 
-def test_resampler(capsys):
+def test_resampler():
 
     pipeline = Pipeline()
 
@@ -29,17 +29,16 @@ def test_resampler(capsys):
 
     inrate = 256
     outrate = 64
-    duration = 1
 
     pipeline.insert(
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
-            num_buffers=5,
             rate=inrate,
             signal_type="sin",
             fsin=3,
             ngap=2,
+            end=8,
         ),
         Resampler(
             name="trans1",
@@ -74,4 +73,4 @@ def test_resampler(capsys):
 
 
 if __name__ == "__main__":
-    test_resampler(None)
+    test_resampler()

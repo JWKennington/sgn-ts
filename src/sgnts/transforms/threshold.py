@@ -97,7 +97,8 @@ class Threshold(TSTransform):
             [
                 b
                 for bs in [
-                    buf.split(aligned_nongap_slices, contiguous=True) for buf in frame
+                    buf.split(aligned_nongap_slices.search(buf.slice), contiguous=True)
+                    for buf in frame
                 ]
                 for b in bs
             ]

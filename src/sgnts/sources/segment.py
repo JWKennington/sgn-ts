@@ -1,56 +1,62 @@
 from dataclasses import dataclass
+from typing import Optional
 
-from sgnts.base import Offset, SeriesBuffer, TSFrame, TSSlice, TSSlices, TSSource
+from sgn.base import SourcePad
+
+from sgnts.base import Offset, TSFrame, TSSlice, TSSlices, TSSource
 
 
 @dataclass
 class SegmentSrc(TSSource):
-    """
+    """Produce non-gap buffers for segments, and gap buffers otherwise.
 
-    Parameters
-    ----------
-    rate: int
-        the sample rate of the data
-    segments: tuple
-        A tuple of segment tuples corresponding to time in ns
-    end: int
-        The time at which to stop producing buffers
+    Args:
+        rate:
+            int, the sample rate of the data
+        segments:
+            tuple[tuple[int, int], ...], a tuple of segment tuples corresponding to
+            time in ns
     """
 
     rate: int = 2048
-    segments: tuple = None
-    end: float = None
+    segments: Optional[tuple[tuple[int, int], ...]] = None
 
     def __post_init__(self):
-        assert isinstance(self.end, float)
         assert self.segments is not None
         super().__post_init__()
+        assert len(self.source_pads) == 1
         # FIXME
-        self.segments = TSSlices(
+        self.segment_slices = TSSlices(
             TSSlice(Offset.fromns(s[0]), Offset.fromns(s[1]))
             for s in self.segments
             if (s[0] >= self.t0 * 1e9 and s[1] <= self.end * 1e9)
         ).simplify()
-        self.num_samples = Offset.sample_stride(self.rate)
 
-    def new(self, pad):
-        """ """
-        frame_slice = TSSlice(
-            self.offset[pad],
-            self.offset[pad] + Offset.fromsamples(self.num_samples, self.rate),
-        )
-        nongap_slices = self.segments.search(frame_slice)
-        gap_slices = nongap_slices.invert(frame_slice)
-        outbufs = [
-            SeriesBuffer.fromoffsetslice(s, self.rate) for s in gap_slices.slices
-        ]
-        outbufs.extend(
-            [
-                SeriesBuffer.fromoffsetslice(s, self.rate, data=1)
-                for s in nongap_slices.slices
-            ]
-        )
-        outbufs = sorted(outbufs)
+        for pad in self.source_pads:
+            self.setup_buffers_on_pad(channels=(), rate=self.rate, pad=pad)
 
-        self.offset[pad] = frame_slice.stop
-        return TSFrame(buffers=outbufs, EOS=outbufs[-1].end >= self.end * 1e9)  # FIXME
+    def new(self, pad: SourcePad) -> TSFrame:
+        """New TSFrames are created on "pad" with stride matching the stride specified
+        in Offset.SAMPLE_STRIDE_AT_MAX_RATE. EOS is set if we have reach the requested
+        "end" time. Non-gap buffers will be produced when they are within the segments
+        provided, and gap buffers will be produced otherwise.
+
+        Args:
+            pad:
+                SourcePad, the pad for which to produce a new TSFrame
+
+        Returns:
+            TSFrame, the TSFrame with non-gap buffers within segments and gap buffers
+            outside segments.
+        """
+        # FIXME: Find a better way to set EOS
+        frame = self.prepare_frame(pad, data=1)
+
+        bufs = []
+        for buf in frame:
+            nongap_slices = self.segment_slices.search(buf.slice)
+            bufs.extend(buf.split(nongap_slices, contiguous=True))
+
+        frame.set_buffers(bufs)
+
+        return frame
