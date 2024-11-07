@@ -26,18 +26,17 @@ def test_threshold(capsys):
 
     inrate = 256
     t0 = 0.0
-    end = 15.0
-    num_buffers = 20
-    threshold = 0.9
+    end = 5.0
+    threshold = 1.5
     startwn = 10
     stopwn = 10
     pipeline.insert(
         FakeSeriesSrc(
             name="datasrc",
             source_pad_names=("data",),
-            num_buffers=num_buffers,
             rate=inrate,
             t0=t0,
+            end=end,
         ),
         Threshold(
             name="threshold",

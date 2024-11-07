@@ -169,7 +169,7 @@ class TestGPUTorchBackend:
     def test_zeros(self):
         """Test the zeros method of the GPUTorchBackend class"""
         res = GPUTorchBackend.zeros(shape=(2, 3))
-        assert torch.all(res == torch.zeros((2, 3)))
+        assert torch.all(res == torch.zeros((2, 3), device="cuda"))
 
     def test_stack(self):
         """Test the stack method of the GPUTorchBackend class"""

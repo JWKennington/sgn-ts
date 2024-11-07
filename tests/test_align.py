@@ -27,11 +27,11 @@ def test_align(capsys):
     #           ---------   -------   --------
 
     inrate = 256
-    num_buffers = 12
     H1_t0 = 2
     L1_t0 = 4
     V1_t0 = 6
     max_age = 100 * 1e9
+    duration = 10
 
     print_message = (
         "f' duration {bufs[-1].duration} data_is_none {bufs[-1].data is None}'"
@@ -41,9 +41,9 @@ def test_align(capsys):
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
-            num_buffers=num_buffers,
             rate=inrate,
             t0=H1_t0,
+            end=H1_t0 + duration,
         ),
         Align(
             name="trans1",
@@ -59,9 +59,9 @@ def test_align(capsys):
         FakeSeriesSrc(
             name="src2",
             source_pad_names=("L1",),
-            num_buffers=num_buffers,
             rate=inrate,
             t0=L1_t0,
+            end=L1_t0 + duration,
         ),
         FakeSeriesSink(
             name="snk2",
@@ -71,9 +71,9 @@ def test_align(capsys):
         FakeSeriesSrc(
             name="src3",
             source_pad_names=("V1",),
-            num_buffers=num_buffers,
             rate=inrate,
             t0=V1_t0,
+            end=V1_t0 + duration,
         ),
         FakeSeriesSink(
             name="snk3",

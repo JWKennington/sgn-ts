@@ -37,7 +37,7 @@ class Gate(TSTransform):
             [
                 b
                 for bs in [
-                    buf.split(nongap_slices, contiguous=True)
+                    buf.split(nongap_slices.search(buf.slice), contiguous=True)
                     for buf in self.preparedframes[self.sinkpad]
                 ]
                 for b in bs

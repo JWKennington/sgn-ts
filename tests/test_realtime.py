@@ -11,15 +11,13 @@ def test_realtime(capsys):
     pipeline = Pipeline()
 
     inrate = 256
-    t0 = 0.0
-    num_buffers = 2
+    duration = 2
     pipeline.insert(
         RealTimeWhiteNoiseSrc(
             name="src",
             source_pad_names=("H1",),
             rate=inrate,
-            t0=t0,
-            num_buffers=num_buffers,
+            duration=duration,
         ),
         FakeSeriesSink(
             name="snk",

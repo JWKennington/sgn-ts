@@ -1,51 +1,51 @@
-from dataclasses import dataclass
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional, Union
 
 import numpy
 import numpy.typing
 from sgn.base import Frame
 
-from .array_ops import Array, NumpyBackend, TorchArray, _TorchBackend
-from .offset import Offset
-from .slice_tools import TSSlice, TSSlices
-
-from typing import Union, Optional, Iterable
+from sgnts.base.array_ops import Array, NumpyBackend, TorchArray, _TorchBackend
+from sgnts.base.offset import Offset
+from sgnts.base.slice_tools import TSSlice, TSSlices
+from sgnts.base.time import Time
 
 
 @dataclass
 class SeriesBuffer:
     """Timeseries buffer with associated metadata.
 
-    Parameters
-    ----------
-    offset : int
-        The number of offset samples (defined at sample rate Offset.OFFSET_RATE)
-        since Offset.offset_ref_t0. Similar to "t0".
-    sample_rate : int
-        The sample rate belonging to the set of Offset.ALLOWED_RATES
-    data : Sequence
-        The timeseries data or None.
-    shape : tuple
-        The shape of the data regardless of gaps. Required if data is None, and
-        represents the shape of the absent data.
+    Args:
+        offset:
+            int, the offset of the buffer. See Offset class for definitions.
+        sample_rate:
+            int, the sample rate belonging to the set of Offset.ALLOWED_RATES
+        data:
+            Optional[Union[int, Array]], the timeseries data or None.
+        shape:
+            tuple, the shape of the data regardless of gaps. Required if data is None
+            or int, and represents the shape of the absent data.
     """
 
-    offset: int = None
-    sample_rate: int = None
-    data: Union[Array, None] = None
-    shape: tuple = None
+    offset: int
+    sample_rate: int
+    data: Optional[Union[int, Array]] = None
+    shape: tuple = (-1,)
 
     def __post_init__(self):
         assert isinstance(self.offset, int)
         assert self.sample_rate in Offset.ALLOWED_RATES
         if self.data is None:
-            assert isinstance(self.shape, tuple)
+            assert self.shape != (-1,)
         elif isinstance(self.data, int) and self.data == 1:
-            assert isinstance(self.shape, tuple)
+            assert self.shape != (-1,)
             self.data = numpy.ones(self.shape)
         elif isinstance(self.data, int) and self.data == 0:
-            assert isinstance(self.shape, tuple)
+            assert self.shape != (-1,)
             self.data = numpy.zeros(self.shape)
-        elif self.shape is None:
+        elif self.shape == (-1,):
             self.shape = self.data.shape
         else:
             assert self.shape == self.data.shape
@@ -56,9 +56,25 @@ class SeriesBuffer:
     def fromoffsetslice(
         offslice: TSSlice,
         sample_rate: int,
-        data: Optional[Array] = None,
-        channels: Iterable = (),
+        data: Optional[Union[int, Array]] = None,
+        channels: tuple[int, ...] = (),
     ) -> "SeriesBuffer":
+        """Create a SeriesBuffer from a requested offset slice.
+
+        Args:
+            offslice:
+                TSSlice, the offset slices the buffer spans
+            sample_rate:
+                int, the sample rate of the buffer
+            data:
+                Optional[Union[int, Array]], the data in the buffer
+            channels:
+                tuple[int, ...], the number of channels except the last dimension of the
+                shape of the data, i.e., channels = data.shape[:-1]
+
+        Returns:
+            SeriesBuffer, the buffer that spans the requested offset slice
+        """
         shape = channels + (
             Offset.tosamples(offslice.stop - offslice.start, sample_rate),
         )
@@ -69,7 +85,8 @@ class SeriesBuffer:
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
             return (
-                "SeriesBuffer(offset=%d, offset_end=%d, shape=%s, sample_rate=%d, duration=%d, data=%s)"
+                "SeriesBuffer(offset=%d, offset_end=%d, shape=%s, sample_rate=%d,"
+                " duration=%d, data=%s)"
                 % (
                     self.offset,
                     self.end_offset,
@@ -83,15 +100,27 @@ class SeriesBuffer:
     def __bool__(self):
         return self.data is not None
 
-    def set_data(self, data):
-        if data is not None and self.data.shape != data.shape:
+    def set_data(self, data: Optional[Array] = None) -> None:
+        """Set the data attribute to the newly provided data.
+
+        Args:
+            data:
+                Optiona[Array], the new data to set to
+        """
+        if data is not None and self.shape != data.shape:
             raise ValueError("Data are incompatible shapes")
         # it really isn't clear to me if this should be by reference or copy...
         self.data = data
 
     @property
-    def tarr(self):
-        return numpy.arange(self.samples) / self.sample_rate + self.t0
+    def tarr(self) -> Array:
+        """An array of time stamps for each sample of the data in the buffer, in
+        seconds.
+
+        Returns:
+            Array, the time array
+        """
+        return numpy.arange(self.samples) / self.sample_rate + self.t0 / Time.SECONDS
 
     def __eq__(self, value: object) -> bool:
         is_series_buffer = isinstance(value, SeriesBuffer)
@@ -99,7 +128,7 @@ class SeriesBuffer:
             return False
         if not (value.shape == self.shape):
             return False
-        if type(self.data) != type(value.data):
+        if type(self.data) is not type(value.data):
             return False
         if isinstance(self.data, numpy.ndarray) and isinstance(
             value.data, numpy.ndarray
@@ -115,38 +144,88 @@ class SeriesBuffer:
         return share_data and share_offset and share_sample_rate
 
     @property
-    def slice(self):
+    def slice(self) -> TSSlice:
+        """The offset slice that the buffer spans.
+
+        Returns:
+            TSSlices, the offset slice
+        """
         return TSSlice(self.offset, self.end_offset)
 
     @property
-    def noffset(self):
+    def noffset(self) -> int:
+        """The number of offsets the buffer spans, which is the buffer's duration in
+        terms of offsets.
+
+        Returns:
+            int, the offset duration
+        """
         return Offset.fromsamples(self.samples, self.sample_rate)
 
     @property
-    def t0(self):
+    def t0(self) -> int:
+        """The start time of the buffer, in integer nanoseconds.
+
+        Returns:
+            int, buffer start time
+        """
         return Offset.offset_ref_t0 + Offset.tons(self.offset)
 
     @property
-    def duration(self):
+    def duration(self) -> int:
+        """The duration of the buffer, in integer nanoseconds.
+
+        Returns:
+            int, the buffer duration
+        """
         return Offset.tons(self.noffset)
 
     @property
-    def end(self):
+    def end(self) -> int:
+        """The end time of the buffer, in integer nanoseconds.
+
+        Returns:
+            int, buffer end time
+        """
         return self.t0 + self.duration
 
     @property
-    def end_offset(self):
+    def end_offset(self) -> int:
+        """The end offset of the buffer.
+
+        Returns:
+            int, buffer end offset
+        """
         return self.offset + self.noffset
 
     @property
-    def samples(self):
+    def samples(self) -> int:
+        """The number of samples the buffer carries.
+
+        Return:
+            int, the number of samples
+        """
         return self.shape[-1]
 
     @property
-    def is_gap(self):
+    def is_gap(self) -> bool:
+        """Whether the buffer is a gap. This is determined by whether the data is None.
+
+        Returns:
+            bool, whether the buffer is a gap
+        """
         return self.data is None
 
-    def filleddata(self, zeros_func):
+    def filleddata(self, zeros_func) -> Array:
+        """Fill the data with zeros if buffer is a gap, otherwise return the data.
+
+        Args:
+            zeros_func:
+                the function to produce a zeros array
+
+        Returns:
+            Array, the filled data
+        """
         if self.data is not None:
             return self.data
         else:
@@ -204,19 +283,14 @@ class SeriesBuffer:
     def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
         """Add two `SeriesBuffer`s, padding as necessary.
 
-        Parameters
-        ==========
-        item : SeriesBuffer
-            The other component of the addition.
-            Must be a SeriesBuffer, must have the
-            same sample rate as self, and its data
-            must be the same type (e.g. numpy array
-            or pytorch Tensor)
+        Args:
+            item:
+                SeriesBuffer, The other component of the addition. Must be a
+                SeriesBuffer, must have the same sample rate as self, and its data must
+                be the same type (e.g. numpy array or pytorch Tensor)
 
-        Returns
-        =======
-        SeriesBuffer
-            The SeriesBuffer resulting from the addition
+        Returns:
+            SeriesBuffer, The SeriesBuffer resulting from the addition
         """
         # Choose the correct backend
         # Handle polymorphism more smoothly in the future?
@@ -228,7 +302,9 @@ class SeriesBuffer:
         # - if one None fill the gap and add with other's backend
         # - if neither None but disagree raise an error
         backend = self._backend_from_data
-        if (backend != item._backend_from_data) and (item._backend_from_data is not None):
+        if (backend != item._backend_from_data) and (
+            item._backend_from_data is not None
+        ):
             raise TypeError("Incompatible data types")
         if backend is None and item._backend_from_data is not None:
             backend = item._backend_from_data
@@ -254,8 +330,20 @@ class SeriesBuffer:
 
         return new_buffer
 
-    def pad_buffer(self, off, data=None):
-        """Front-pad this buffer to the given offset"""
+    def pad_buffer(
+        self, off: int, data: Optional[Union[int, Array]] = None
+    ) -> "SeriesBuffer":
+        """Generate a buffer to pad before this buffer.
+
+        Args:
+            off:
+                int, the offset to start the padding. Must be earlier than this buffer.
+            data:
+                Optional[Union[int, Array]], the data of the pad buffer
+
+        Returns:
+            SeriesBuffer, the pad buffer
+        """
         assert off < self.offset
         return SeriesBuffer(
             offset=off,
@@ -265,16 +353,27 @@ class SeriesBuffer:
             + (Offset.tosamples(self.offset - off, self.sample_rate),),
         )
 
-    def sub_buffer(self, slc, gap=False):
+    def sub_buffer(self, slc: TSSlice, gap: bool = False) -> "SeriesBuffer":
+        """Generate a sub buffer whose offset slice is within this buffer.
+
+        Args:
+            slc:
+                TSSlice, the offset slice of the sub buffer
+            gap:
+                bool, if True, set the sub buffer to a gap
+
+        Returns:
+            SeriesBuffer, the sub buffer
+        """
         assert slc in self.slice
         startsamples, stopsamples = Offset.tosamples(
             slc.start - self.offset, self.sample_rate
         ), Offset.tosamples(slc.stop - self.offset, self.sample_rate)
-        gap = gap or self.data is None
-        if not gap:
+        if not gap and self.data is not None and not isinstance(self.data, int):
             data = self.data[..., startsamples:stopsamples]
         else:
             data = None
+
         return SeriesBuffer(
             offset=slc.start,
             sample_rate=self.sample_rate,
@@ -282,7 +381,21 @@ class SeriesBuffer:
             shape=self.shape[:-1] + (stopsamples - startsamples,),
         )
 
-    def split(self, boundaries, contiguous=False):
+    def split(
+        self, boundaries: Union[int, TSSlices], contiguous: bool = False
+    ) -> list["SeriesBuffer"]:
+        """Split the buffer according to the requested offset boundaries.
+
+        Args:
+            boundaries:
+                Union[int, TSSlices], the offset boundaries to split the buffer into.
+            contiguous:
+                bool, if True, will generate gap buffers when there are discontinuities
+
+        Returns:
+            list[SeriesBuffer], a list of SeriesBuffers split up according to the
+            offset boundaries
+        """
         out = []
         if isinstance(boundaries, int):
             boundaries = TSSlices(self.slice.split(boundaries))
@@ -302,18 +415,17 @@ class SeriesBuffer:
 class TSFrame(Frame):
     """An sgn Frame object that holds a list of buffers
 
-    Parameters
-    ----------
-    buffers : list
-        List of SeriesBuffers
-
+    Args:
+        buffers:
+            list[SeriesBuffer], An iterable of SeriesBuffers
     """
 
-    buffers: int = None
+    buffers: list[SeriesBuffer] = field(default_factory=list)
 
     def __post_init__(self):
         super().__post_init__()
         assert len(self.buffers) > 0
+        self.__sanity_check(self.buffers)
         self.is_gap = all([b.is_gap for b in self.buffers])
 
     def __getitem__(self, item):
@@ -328,22 +440,75 @@ class TSFrame(Frame):
             out += "\n\t%s" % buf
         return out
 
+    def __len__(self):
+        return len(self.buffers)
+
+    def __sanity_check(self, bufs: list[SeriesBuffer]) -> None:
+        """Sanity check that the buffers don't overlap nor have discontinuities.
+
+        Args:
+            bufs:
+                list[SeriesBuffer], the buffers to perform the sanity check on
+        """
+        # FIXME: is there a smart way using TSSlics?
+        if len(bufs) > 1:
+            slices = [buf.slice for buf in bufs]
+            off0 = slices[0].stop
+            for sl in slices[1:]:
+                assert off0 == sl.start
+                off0 = sl.stop
+
+    def set_buffers(self, bufs: list[SeriesBuffer]) -> None:
+        """Set the buffers attribute to the bufs provided.
+
+        Args:
+            bufs:
+                list[SeriesBuffers], the list of buffers to set to
+        """
+        self.__sanity_check(bufs)
+        self.buffers = bufs
+
     @property
-    def offset(self):
+    def offset(self) -> int:
+        """The offset of the TSFrame, which is the offset of the first buffer.
+
+        Returns:
+            int, the offset of the TSFrame
+        """
         return self.buffers[0].offset
 
     @property
-    def end_offset(self):
+    def end_offset(self) -> int:
+        """The end offset of the TSFrame, which is the end offset of the last buffer.
+
+        Returns:
+            int, the end offset of the TSFrame
+        """
         return self.buffers[-1].end_offset
 
     @property
-    def slice(self):
+    def slice(self) -> TSSlice:
+        """The offset slice of the TSFrame.
+
+        Returns:
+            TSSclie, the offset slice of the TSFrame
+        """
         return TSSlice(self.offset, self.end_offset)
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, ...]:
+        """The shape of the TSFrame.
+
+        Returns:
+            tuple[int, ...], the shape of the TSFrame
+        """
         return self.buffers[0].shape[:-1] + (sum(b.samples for b in self.buffers),)
 
     @property
-    def sample_rate(self):
+    def sample_rate(self) -> int:
+        """The sample rate of the TSFrame.
+
+        Returns:
+            int, the sample rate
+        """
         return self.buffers[0].sample_rate

@@ -40,7 +40,7 @@ def test_adder(capsys):
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
-            num_buffers=2,
+            end=2,
             rate=2048,
             signal_type="sin",
         ),

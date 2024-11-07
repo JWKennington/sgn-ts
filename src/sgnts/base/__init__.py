@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, Union
 
 import numpy as np
-from sgn.base import SinkElement, SourceElement, TransformElement
+from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
 
-from sgnts.base.array_ops import ArrayOps
+from sgnts.base.array_ops import Array, ArrayOps
 from sgnts.base.audioadapter import Audioadapter
 from sgnts.base.buffer import SeriesBuffer, TSFrame
 from sgnts.base.offset import Offset
@@ -17,24 +17,22 @@ from sgnts.base.time import Time
 
 @dataclass
 class AdapterConfig:
-    """
-    Config to hold parameters used for the audioadapter in _TSTransSink
+    """Config to hold parameters used for the audioadapter in _TSTransSink.
 
-    Parameters:
-    -----------
-    overlap: tuple[int, int]
-        the overlap before and after the data segment to process,
-        in samples
-    stride: int
-        the stride to produce, in samples
-    pad_zeros_startup: bool
-        when overlap is provided, whether to pad zeros in front of the
-        first buffer, or wait until there is enough data.
-    skip_gaps: bool
-        produce a whole gap buffer if there are any gaps in the copied data
-        segment
-    lib: ArrayOps
-        the ArrayOps wrapper
+    Args:
+        overlap:
+            tuple[int, int], the overlap before and after the data segment to process,
+            in samples
+        stride:
+            int, the stride to produce, in samples
+        pad_zeros_startup:
+            bool, when overlap is provided, whether to pad zeros in front of the
+            first buffer, or wait until there is enough data.
+        skip_gaps:
+            bool, produce a whole gap buffer if there are any gaps in the copied data
+            segment
+        lib:
+            ArrayOps, the ArrayOps wrapper
     """
 
     overlap: tuple[int, int] = (0, 0)
@@ -46,27 +44,21 @@ class AdapterConfig:
 
 @dataclass
 class _TSTransSink:
-    """
-    Base class for TSTransforms and TSSinks, will produce aligned frames
-    in preparedframes. If adapter_config is provided, will trigger
-    the audioadapter to queue data, and make padded or strided frames
-    in preparedframes.
+    """Base class for TSTransforms and TSSinks, will produce aligned frames in
+    preparedframes. If adapter_config is provided, will trigger the audioadapter to
+    queue data, and make padded or strided frames in preparedframes.
 
-    Parameters:
-    -----------
-    max_age: int
-        the max age before timeout, in nanoseconds
-    adapter_config: AdapterConfig
-        holds parameters used for audioadapter behavior
+    Args:
+        max_age:
+            int, the max age before timeout, in nanoseconds
+        adapter_config:
+            AdapterConfig, holds parameters used for audioadapter behavior
     """
 
-    max_age: Optional[int] = None
+    max_age: int = 100 * Time.SECONDS
     adapter_config: Optional[AdapterConfig] = None
 
     def __post_init__(self):
-        if self.max_age is None:
-            # FIXME is this what we want?
-            self.max_age = 100 * Time.SECONDS
 
         self._is_aligned = False
         self.inbufs = {p: Audioadapter() for p in self.sink_pads}
@@ -94,7 +86,17 @@ class _TSTransSink:
                 self.pad_zeros_samples = self.overlap[0]
             self.preparedoutoffsets = {p: None for p in self.sink_pads}
 
-    def pull(self, pad, frame):
+    def pull(self, pad: SinkPad, frame: TSFrame) -> None:
+        """Pull data from the input pads (source pads of upstream elements) and queue
+        data to perform alignment once frames from all pads are pulled.
+
+        Args:
+            pad:
+                SinkPad, The sink pad that is pulling the frame
+            frame:
+                Frame, The frame that is pulled to sink pad
+        """
+
         self.at_EOS |= frame.EOS
 
         # extend and check the buffers
@@ -108,59 +110,62 @@ class _TSTransSink:
         if all(self.__pulled.values()):
             self.__post_pull()
 
-    def __adapter(self, pad, bufs):
-        """
-        Use the audioadapter to handle streaming scenarios such
-        as padding with overlap before and after the target data,
-        and fixed stride frames.
+    def __adapter(self, pad: SinkPad, frame: TSFrame) -> list[SeriesBuffer]:
+        """Use the audioadapter to handle streaming scenarios such as padding with
+        overlap before and after the target output data, and producing fixed-stride
+        frames.
 
-        The self.preparedframes are padded with the requested
-        padding.  This method also produces a self.preparedoutoffsets,
-        that infers the metadata information for the output buffer,
-        with the data initialized as None.  Downstream transforms
-        can directly use the frames from self.preparedframes for
-        computation, and then use the offset and noffset information
-        in self.preparedoutoffsets to construct the output frame.
+        The self.preparedframes are padded with the requested overlap padding. This
+        method also produces a self.preparedoutoffsets, that infers the metadata
+        information for the output buffer, with the data initialized as None.
+        Downstream transforms can directly use the frames from self.preparedframes for
+        computation, and then use the offset and noffset information in
+        self.preparedoutoffsets to construct the output frame.
 
-        If stride is not provided, the audioadapter will push out as
-        many samples as it can. If the stride is smaller than the in
-        coming buffers, and the audioadapter has enough samples to
-        produce multiple strides, there will be multiple buffers in
-        preparedframes, and a list of offset, noffset pairs in
-        preparedoutoffsets, one for each stride.
+        If stride is not provided, the audioadapter will push out as many samples as it
+        can. If stride is provided, the audioadapter will wait until there are enough
+        samples to produce prepared frames.
+
+        Args:
+            pad:
+                SinkPad, the sink pad on which to prepare adapted frames
+            frame:
+                TSFrame, the aligned frame
+
+        Returns:
+            list[SeriesBuffers], a list of SeriesBuffers that are adapted according to
+            the adapter_config
+
+        Examples:
+            upsampling:
+                kernel length = 17
+                need to pad 8 samples before and after
+                overlap = (8, 8)
+                stride = 16
+                                                for output
+                preparedframes:     ________................________
+                                                stride=16
+                                    pad                     pad
+                                    samples=8               samples=8
 
 
-        Example 1 upsampling:
-        ----------------------
-        kernel length = 17
-        need to pad 8 samples before and after
-        overlap = (8, 8)
-        stride = 16
-                                        for output
-        preparedframes:     ________................________
-                                        stride=16
-                            pad                     pad
-                            samples=8               samples=8
-
-
-        Example 2 correlation:
-        ----------------------
-        filter length = 16
-        need to pad filter_length - 1 samples
-        overlap = (15, 0)
-        stride = 8
-                                            for output
-        preparedframes:     ----------------........
-                                            stride=8
-                            pad
-                            samples=15
+            correlation:
+                filter length = 16
+                need to pad filter_length - 1 samples
+                overlap = (15, 0)
+                stride = 8
+                                                    for output
+                preparedframes:     ----------------........
+                                                    stride=8
+                                    pad
+                                    samples=15
         """
         a = self.audioadapters[pad]
-        buf0 = bufs[0]
+        buf0 = frame[0]
         sample_rate = buf0.sample_rate
 
         # push all buffers in the frame into the audioadapter
-        for buf in bufs:
+        for buf in frame:
             a.push(buf)
 
         # Check whether we have enough samples to produce a frame
@@ -214,7 +219,7 @@ class _TSTransSink:
             else:
                 # copy out samples from head of audioadapter
                 data = a.copy_samples(num_copy_samples)
-                if self.pad_zeros_samples > 0:
+                if self.pad_zeros_samples > 0 and self.adapter_config is not None:
                     # pad zeros in front of buffer
                     data = self.adapter_config.lib.pad_func(
                         data, (self.pad_zeros_samples, 0)
@@ -247,7 +252,10 @@ class _TSTransSink:
 
         return preparedbufs
 
-    def __post_pull(self):
+    def __post_pull(self) -> None:
+        """Align buffers from all the sink pads. If AdapterConfig is provided, perform
+        the requested overlap/stride streaming of frames.
+        """
         # Reset
         self.__pulled = {p: False for p in self.sink_pads}
 
@@ -287,7 +295,8 @@ class _TSTransSink:
                     metadata=self.metadata[pad],
                 )
 
-    def _align(self):
+    def _align(self) -> None:
+        """Align the buffers in self.inbufs."""
 
         def slice_from_pad(inbufs):
             if len(inbufs) > 0:
@@ -303,32 +312,63 @@ class _TSTransSink:
         if not self._is_aligned and __can_align():
             self._is_aligned = True
 
-    def timeout(self, pad):
+    def timeout(self, pad: SinkPad) -> bool:
+        """Whether pad has timed-out due to oldest buffer exceeding max age.
+
+        Args:
+            pad:
+                SinkPad, the sink pad to check for timeout
+
+        Returns:
+            bool, whether pad has timed-out
+        """
         return self.inbufs[pad].end_offset - self.inbufs[pad].offset > Offset.fromns(
             self.max_age
         )
 
-    def latest_by_pad(self, pad):
+    def latest_by_pad(self, pad: SinkPad) -> int:
+        """The latest offset among the queued up buffers in this pad.
+
+        Args:
+            pad:
+                SinkPad, the requested sink pad
+
+        Returns:
+            int, the latest offset in the pad's buffer queue
+        """
         return self.inbufs[pad].end_offset if self.inbufs[pad] else -1
 
-    def earliest_by_pad(self, pad):
+    def earliest_by_pad(self, pad) -> int:
+        """The earliest offset among the queued up buffers in this pad.
+
+        Args:
+            pad:
+                SinkPad, the requested sink pad
+
+        Returns:
+            int, the earliest offset in the pad's buffer queue
+        """
         return self.inbufs[pad].offset if self.inbufs[pad] else -1
 
     @property
     def latest(self):
+        """The latest offset among all the buffers from all the pads."""
         return max(self.latest_by_pad(n) for n in self.inbufs)
 
     @property
     def earliest(self):
+        """The earliest offset among all the buffers from all the pads."""
         return min(self.earliest_by_pad(n) for n in self.inbufs)
 
     @property
     def min_latest(self):
+        """The earliest offset among each pad's latest offset."""
         return min(self.latest_by_pad(n) for n in self.inbufs)
 
 
 @dataclass
 class TSTransform(TransformElement, _TSTransSink):
+    """A time-series transform element."""
 
     pull = _TSTransSink.pull
 
@@ -336,12 +376,23 @@ class TSTransform(TransformElement, _TSTransSink):
         TransformElement.__post_init__(self)
         _TSTransSink.__post_init__(self)
 
-    def transform(self, pad):
+    def transform(self, pad: SourcePad) -> TSFrame:
+        """The transform function must be provided by the subclass. It should take the
+        source pad as an argument and return a new TSFrame.
+
+        Args:
+            pad:
+                SourcePad, The source pad that is producing the transformed frame
+
+        Returns:
+            TSFrame, The transformed frame
+        """
         raise NotImplementedError
 
 
 @dataclass
 class TSSink(SinkElement, _TSTransSink):
+    """A time-series sink element."""
 
     pull = _TSTransSink.pull
 
@@ -352,35 +403,101 @@ class TSSink(SinkElement, _TSTransSink):
 
 @dataclass
 class TSSource(SourceElement):
-    """
-    A time-series source that generates data in fixed-size buffers.
+    """A time-series source that generates data in fixed-size buffers.
 
-    Parameters:
-    -----------
-    t0: float
-        start time of first buffer, in seconds
-    max_num_frames: int
-        max number of frames to produce. Default = 9223372036854775807
+    Args:
+        t0:
+            float, start time of first buffer, in seconds
+        end:
+            float, end time of the last buffer, in seconds
     """
 
     t0: float = 0
-    max_num_frames: int = 9223372036854775807
+    end: float = float("+inf")
 
     def __post_init__(self):
         super().__post_init__()
         # FIXME should we be more careful about this?
+        # FIXME should this not be different by pad?
         self.offset = {
             p: Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
             for p in self.source_pads
         }
-        self.__cnt = {p: 0 for p in self.source_pads}
+        # FIXME should this be different by pad?
+        self.end_offset = Offset.fromsec(self.end - Offset.offset_ref_t0 / Time.SECONDS)
         self.__new_buffer_dict = {}
 
-    def setup_buffers_on_pad(self, channels, rate, pad):
-        self.__new_buffer_dict[pad] = {"sample_rate": rate, "shape": channels + (Offset.sample_stride(self.rate),)}
+    def num_samples(self, rate: int) -> int:
+        """The number of samples in the sample stride at the requested rate.
 
-    def prepare_frame(self, pad, EOS=False, metadata={}):
-        buf = SeriesBuffer(offset=self.offset[pad], data=0, **self.__new_buffer_dict[pad])
+        Args:
+            rate:
+                int, the sample rate
+
+        Returns:
+            int, the number of samples
+        """
+        return Offset.sample_stride(rate)
+
+    def setup_buffers_on_pad(
+        self, channels: tuple[int, ...], rate: int, pad: SourcePad
+    ) -> None:
+        """Setup variables on the pad that are needed to construct SeriesBuffers and
+        constant throughout the duration of the pipeline.
+
+        Args:
+            channels:
+                tuple[int, ...], the shape of the data except the last dimension, i.e.
+                channels=data.shape[:-1]
+            rate:
+                int, the sample rate of the data the pad will produce
+            pad:
+                SourcePad, the pad to setup buffers on
+        """
+        self.__new_buffer_dict[pad] = {
+            "sample_rate": rate,
+            "shape": channels + (self.num_samples(rate),),
+        }
+
+    def prepare_frame(
+        self,
+        pad: SourcePad,
+        data: Optional[Union[int, Array]] = None,
+        EOS: Optional[bool] = None,
+        metadata: Optional[dict] = None,
+    ) -> TSFrame:
+        """Prepare the next TSFrame that the source pad will produce, and advance the
+        offset by the stride in Offset.SAMPLE_STRIDE_AT_MAX_RATE.
+
+        Args:
+            pad:
+                SourcePad, the source pad to produce the TSFrame
+            data:
+                Optional[int, Array], the data in the buffers
+            EOS:
+                Optioinal[bool], whether the TSFrame is at EOS
+            metadata:
+                Optional[dict], the metadata in the TSFrame
+
+        Returns:
+            TSFrame, the TSFrame prepared on the source pad
+        """
+        buf = SeriesBuffer(
+            offset=self.offset[pad], data=data, **self.__new_buffer_dict[pad]
+        )
+        if buf.end_offset > self.end_offset:
+            # slice the buffer if the last buffer is not a full stride
+            buf = buf.sub_buffer(TSSlice(buf.offset, self.end_offset))
+
+        if EOS is None:
+            EOS = buf.end_offset == self.end_offset
+        if metadata is None:
+            metadata = {}
+
         self.offset[pad] += Offset.fromsamples(buf.samples, buf.sample_rate)
-        self.__cnt[pad] += 1
-        return TSFrame(buffers=[buf], EOS=EOS or self.__cnt[pad] >= self.max_num_frames, metadata=metadata)
+
+        return TSFrame(
+            buffers=[buf],
+            EOS=EOS,
+            metadata=metadata,
+        )
