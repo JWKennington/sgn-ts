@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
+from math import isinf
 from typing import Optional, Union
 
 import numpy as np
@@ -424,7 +425,12 @@ class TSSource(SourceElement):
             for p in self.source_pads
         }
         # FIXME should this be different by pad?
-        self.end_offset = Offset.fromsec(self.end - Offset.offset_ref_t0 / Time.SECONDS)
+        if not isinf(self.end):
+            self.end_offset = Offset.fromsec(
+                self.end - Offset.offset_ref_t0 / Time.SECONDS
+            )
+        else:
+            self.end_offset = float("+inf")
         self.__new_buffer_dict = {}
 
     def num_samples(self, rate: int) -> int:
