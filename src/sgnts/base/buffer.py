@@ -1,12 +1,14 @@
-from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
-import numpy
 
+import numpy
+import numpy.typing
 from sgn.base import Frame
 
+from .array_ops import Array, NumpyBackend, TorchArray, _TorchBackend
 from .offset import Offset
 from .slice_tools import TSSlice, TSSlices
+
+from typing import Union, Optional, Iterable
 
 
 @dataclass
@@ -29,7 +31,7 @@ class SeriesBuffer:
 
     offset: int = None
     sample_rate: int = None
-    data: Sequence[Any] = None
+    data: Union[Array, None] = None
     shape: tuple = None
 
     def __post_init__(self):
@@ -51,7 +53,12 @@ class SeriesBuffer:
                 assert isinstance(t, int)
 
     @staticmethod
-    def fromoffsetslice(offslice, sample_rate, data=None, channels=()):
+    def fromoffsetslice(
+        offslice: TSSlice,
+        sample_rate: int,
+        data: Optional[Array] = None,
+        channels: Iterable = (),
+    ) -> "SeriesBuffer":
         shape = channels + (
             Offset.tosamples(offslice.stop - offslice.start, sample_rate),
         )
@@ -86,6 +93,27 @@ class SeriesBuffer:
     def tarr(self):
         return numpy.arange(self.samples) / self.sample_rate + self.t0
 
+    def __eq__(self, value: object) -> bool:
+        is_series_buffer = isinstance(value, SeriesBuffer)
+        if not is_series_buffer:
+            return False
+        if not (value.shape == self.shape):
+            return False
+        if type(self.data) != type(value.data):
+            return False
+        if isinstance(self.data, numpy.ndarray) and isinstance(
+            value.data, numpy.ndarray
+        ):
+            share_data = NumpyBackend.all(self.data == value.data)
+        elif isinstance(self.data, TorchArray) and isinstance(value.data, TorchArray):
+            share_data = _TorchBackend.all(self.data == value.data)
+        else:
+            # Will need to expand this conditional if/when other data types are added
+            return False
+        share_offset = value.offset == self.offset
+        share_sample_rate = value.sample_rate == self.sample_rate
+        return share_data and share_offset and share_sample_rate
+
     @property
     def slice(self):
         return TSSlice(self.offset, self.end_offset)
@@ -116,10 +144,7 @@ class SeriesBuffer:
 
     @property
     def is_gap(self):
-        if self.data is None:
-            return True
-        else:
-            return False
+        return self.data is None
 
     def filleddata(self, zeros_func):
         if self.data is not None:
@@ -157,7 +182,80 @@ class SeriesBuffer:
         elif isinstance(item, SeriesBuffer):
             return self.end_offset > item.end_offset
 
+    def _insert(self, data, offset) -> None:
+        """TODO workshop the name
+        Adds data from a whose slice is
+        fully contained within self's into self.
+        Does not do safety checks."""
+        insertion_index = Offset.tosamples(
+            offset - self.offset, sample_rate=self.sample_rate
+        )
+        self.data[..., insertion_index : insertion_index + data.shape[-1]] += data
+
+    @property
+    def _backend_from_data(self):
+        if isinstance(self.data, numpy.ndarray):
+            return NumpyBackend
+        elif isinstance(self.data, TorchArray):
+            return _TorchBackend
+        else:
+            return None
+
+    def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
+        """Add two `SeriesBuffer`s, padding as necessary.
+
+        Parameters
+        ==========
+        item : SeriesBuffer
+            The other component of the addition.
+            Must be a SeriesBuffer, must have the
+            same sample rate as self, and its data
+            must be the same type (e.g. numpy array
+            or pytorch Tensor)
+
+        Returns
+        =======
+        SeriesBuffer
+            The SeriesBuffer resulting from the addition
+        """
+        # Choose the correct backend
+        # Handle polymorphism more smoothly in the future?
+        # It's python so maybe this is the best option available
+        if not isinstance(item, SeriesBuffer):
+            raise TypeError("Both arguments must be of the SeriesBuffer type")
+        # A bit convoluted, cases are:
+        # - if both None then output gap
+        # - if one None fill the gap and add with other's backend
+        # - if neither None but disagree raise an error
+        backend = self._backend_from_data
+        if (backend != item._backend_from_data) and (item._backend_from_data is not None):
+            raise TypeError("Incompatible data types")
+        if backend is None and item._backend_from_data is not None:
+            backend = item._backend_from_data
+        if self.shape[:-1] != item.shape[:-1]:
+            raise ValueError("All dimensions except the padding dimension must match")
+        if self.sample_rate != item.sample_rate:
+            raise ValueError("Sample rates must match")
+        new_buffer = self.fromoffsetslice(
+            self.slice | item.slice,
+            sample_rate=self.sample_rate,
+            data=None,
+            channels=self.shape[:-1],
+        )
+        if backend is None:
+            return new_buffer
+
+        new_buffer.data = new_buffer.filleddata(backend.zeros)
+        self_filled_data = self.filleddata(backend.zeros)
+        item_filled_data = item.filleddata(backend.zeros)
+
+        new_buffer._insert(self_filled_data, self.offset)
+        new_buffer._insert(item_filled_data, item.offset)
+
+        return new_buffer
+
     def pad_buffer(self, off, data=None):
+        """Front-pad this buffer to the given offset"""
         assert off < self.offset
         return SeriesBuffer(
             offset=off,
