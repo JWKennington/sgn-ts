@@ -1,9 +1,11 @@
-from .time import Time
 import numpy
+
+from sgnts.base.time import Time
 
 
 class Offset:
-    """
+    """A class for bookkeeping of sample points in the SGN-TS package.
+
     MAX_RATE:
       the maximum sample rate the pipeline will use. Should be a power of 2.
 
@@ -65,32 +67,106 @@ class Offset:
     SAMPLE_STRIDE_AT_MAX_RATE = 16384
 
     @staticmethod
-    def sample_stride(rate: int):
+    def sample_stride(rate: int) -> int:
+        """Given Offset.SAMPLE_STRIDE_AT_MAX_RATE, derive the sample stride at the
+        requested sample rate.
+
+        Args:
+            rate:
+                int, the sample rate to calculate the sample stride
+
+        Returns:
+           int, the number of samples in the stride at the requested sample rate
+        """
         return Offset.tosamples(Offset.SAMPLE_STRIDE_AT_MAX_RATE, rate)
 
     @staticmethod
     def tosec(offset: int) -> float:
+        """Convert offsets to seconds.
+
+        Args:
+            offset:
+                int, the offset to convert to seconds
+
+        Returns:
+            float, the time corresponding to the offset, in seconds
+        """
         return offset / Offset.MAX_RATE
 
     @staticmethod
     def tons(offset: int) -> int:
+        """Convert offsets to integer nanoseconds.
+
+        Args:
+            offset:
+                int, the offset to convert to nanoseconds
+
+        Returns:
+            int, the time corresponding to the offset, in nanoseconds
+        """
         return round(offset / Offset.MAX_RATE * Time.SECONDS)
 
     @staticmethod
     def fromsec(seconds: float) -> int:
+        """Convert seconds to offsets.
+
+        Args:
+            seconds:
+                float, the time to convert to offsets, in seconds
+
+        Returns:
+            int, the offset corresponding to the time
+        """
         return round(seconds * Offset.MAX_RATE)
 
     @staticmethod
     def fromns(nanoseconds: int) -> int:
+        """Convert nanoseconds to offsets.
+
+        Args:
+            nanoseconds:
+                int, the time to convert to offsets, in nanoseconds
+
+        Returns:
+            int, the offset corresponding to the time
+        """
         return round(nanoseconds / Time.SECONDS * Offset.MAX_RATE)
 
     @staticmethod
     def tosamples(offset: int, sample_rate: int) -> int:
+        """Convert offsets to number of sample points.
+
+        Args:
+            offset:
+                int, the offset to convert to number of samples. The offset must map to
+                integer number of sample points.
+            sample_rate:
+                int, the sample rate at which to calculate the number of samples
+
+        Returns:
+            int, the number of samples corresponding to the offset at the given sample
+            rate
+        """
         assert sample_rate in Offset.ALLOWED_RATES
-        assert not offset % (Offset.MAX_RATE // sample_rate)
+        assert not offset % (Offset.MAX_RATE // sample_rate), (
+            "Offset does not map to"
+            f" integer sample points. Offset: {offset}, sample rate: {sample_rate}"
+        )
         return offset // (Offset.MAX_RATE // sample_rate)
 
     @staticmethod
     def fromsamples(samples: int, sample_rate: int) -> int:
+        """Convert number of sample points to offsets.
+
+        Args:
+            samples:
+                int, the number of samples to convert to offsets
+            sample_rate:
+                int, the sample rate at which to calculate the offset
+
+        Returns:
+            int, the offset corresponding to the number of sample points at the given
+            sample rate
+        """
         assert sample_rate in Offset.ALLOWED_RATES
         return samples * Offset.MAX_RATE // sample_rate
