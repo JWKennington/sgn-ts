@@ -66,6 +66,11 @@ class Offset:
     ALLOWED_RATES = set(2**x for x in range(1 + int(numpy.log2(MAX_RATE))))
     SAMPLE_STRIDE_AT_MAX_RATE = 16384
 
+    @classmethod
+    def set_max_rate(cls, max_rate):
+        cls.MAX_RATE = max_rate
+        cls.ALLOWED_RATES = set(2**x for x in range(1 + int(numpy.log2(cls.MAX_RATE))))
+
     @staticmethod
     def sample_stride(rate: int) -> int:
         """Given Offset.SAMPLE_STRIDE_AT_MAX_RATE, derive the sample stride at the

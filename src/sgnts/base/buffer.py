@@ -46,7 +46,10 @@ class SeriesBuffer:
 
     def __post_init__(self):
         assert isinstance(self.offset, int)
-        assert self.sample_rate in Offset.ALLOWED_RATES
+        if self.sample_rate not in Offset.ALLOWED_RATES:
+            raise ValueError(
+                "%s not in allowed rates %s" % (self.sample_rate, Offset.ALLOWED_RATES)
+            )
         if self.data is None:
             assert self.shape != (-1,)
         elif isinstance(self.data, int) and self.data == 1:
