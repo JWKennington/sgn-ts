@@ -1,9 +1,14 @@
 from dataclasses import dataclass
-from ..base import TSTransform
+
+from sgn.base import SourcePad
+
+from sgnts.base import TSFrame, TSTransform
 
 
 @dataclass
 class Align(TSTransform):
+    """Align frames from multiple sink pads."""
+
     def __post_init__(self):
         assert set(self.source_pad_names) == set(self.sink_pad_names)
         super().__post_init__()
@@ -12,7 +17,16 @@ class Align(TSTransform):
             for p in self.source_pads
         }
 
-    def transform(self, pad):
+    def transform(self, pad: SourcePad) -> TSFrame:
+        """Produce aligned frames from multiple sink pads to multiple source pads.
+
+        Args:
+            pad:
+                SourcePad, the source pad to produce the aligned frames
+
+        Returns:
+            TSFrame, the output TSFrame
+        """
         out = self.preparedframes[self.pad_map[pad]]
         self.preparedframes[self.pad_map[pad]] = None
         return out

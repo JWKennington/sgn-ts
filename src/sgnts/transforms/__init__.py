@@ -5,5 +5,4 @@ from sgnts.transforms.gate import Gate
 from sgnts.transforms.matmul import Matmul
 from sgnts.transforms.multiplier import Multiplier
 from sgnts.transforms.resampler import Resampler
-from sgnts.transforms.sync import Sync
 from sgnts.transforms.threshold import Threshold

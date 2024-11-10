@@ -1,32 +1,24 @@
-from collections.abc import Sequence
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any
+from typing import Optional
 
 import numpy as np
+from sgn.base import SourcePad
 
-from ..base import SeriesBuffer, TSTransform, TSFrame
+from sgnts.base import Array, SeriesBuffer, TSFrame, TSTransform
 
 
 @dataclass
 class Matmul(TSTransform):
-    """
-    Performs matrix multiplication with provided matrix.
+    """Performs matrix multiplication with provided matrix.
 
-    If a pad receives more then one buffer, matmul will be performed
-    on the list of buffers one by one. The source pad will also output
-    a list of buffers.
-
-    Parameters:
-    -----------
-    matrix: Sequence[Any]
-        the matrix to multiply the data with, out = matrix x data
-
-    Assumptions:
-    ------------
-    - There is only one sink pad and one source pad
+    Args:
+        matrix:
+            Sequence[Any], the matrix to multiply the data with, out = matrix x data
     """
 
-    matrix: Sequence[Any] = None
+    matrix: Optional[Array] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -34,12 +26,30 @@ class Matmul(TSTransform):
             len(self.sink_pads) == 1 and len(self.source_pads) == 1
         ), "only one sink_pad and one source_pad is allowed"
 
-    def matmul(self, a, b):
+    def matmul(self, a: Array, b: Array) -> Array:
+        """Matrix multiplication of two arrays.
+            out = a x b
+
+        Args:
+            a:
+                Array, the first array
+            b:
+                Array, the second array
+
+        Returns:
+            Array, the result of the matrix multiplication
+        """
         return np.matmul(a, b)
 
-    def transform(self, pad):
-        """
-        Matmul over list of buffers
+    def transform(self, pad: SourcePad) -> TSFrame:
+        """Matmul of a matrix with the incoming data.
+
+        Args:
+            pad:
+                SourcePad, the source pad that outputs the transformed frame
+
+        Returns:
+            TSFrame, the output TSFrame
         """
         outbufs = []
         # loop over the input data, only perform matmul on non-gaps
