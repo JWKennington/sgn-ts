@@ -10,6 +10,7 @@ must be implemented in subclasses. The current set of operations includes:
 - `pad`: Pad an array with zeros
 - `full`: Create an array filled with a specified value
 - `zeros`: Create an array of zeros
+- `ones`: Create an array of ones
 - `stack`: Stack arrays along a new axis
 - `matmul`: Perform matrix multiplication of two arrays
 """
@@ -102,6 +103,19 @@ class ArrayBackend:
 
         Returns:
             Array: Array of zeros
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def ones(shape: Tuple[int, ...]) -> Array:
+        """Create an array of ones.
+
+        Args:
+            shape:
+                Tuple[int, ...]: Shape of the array
+
+        Returns:
+            Array: Array of ones
         """
         raise NotImplementedError
 
@@ -202,6 +216,19 @@ class NumpyBackend(ArrayBackend):
             NumpyArray, Array of zeros
         """
         return numpy.zeros(shape)
+
+    @staticmethod
+    def ones(shape: Tuple[int, ...]) -> NumpyArray:
+        """Create an array of ones.
+
+        Args:
+            shape:
+                Tuple[int, ...]: Shape of the array
+
+        Returns:
+            NumpyArray: Array of ones
+        """
+        return numpy.ones(shape)
 
     @classmethod
     def stack(cls, data: Iterable[NumpyArray], axis: int = 0) -> NumpyArray:
@@ -335,6 +362,20 @@ class TorchBackend(ArrayBackend):
         TorchBackend._check_torch()
         return torch.zeros(shape, device=cls.DEVICE, dtype=cls.DTYPE)
 
+    @classmethod
+    def ones(cls, shape: Tuple[int, ...]) -> TorchArray:
+        """Create an array of ones.
+
+        Args:
+            shape:
+                Tuple[int, ...]: Shape of the array
+
+        Returns:
+            Array: Array of ones
+        """
+        TorchBackend._check_torch()
+        return torch.ones(shape, device=cls.DEVICE, dtype=cls.DTYPE)
+
     @staticmethod
     def stack(data: Iterable[TorchArray], axis: int = 0) -> TorchArray:
         """Stack arrays along a new axis
@@ -365,6 +406,7 @@ class TorchBackend(ArrayBackend):
         Returns:
             TorchArray, the result of the matrix multiplication
         """
+        TorchBackend._check_torch()
         return torch.matmul(a, b)
 
     @staticmethod

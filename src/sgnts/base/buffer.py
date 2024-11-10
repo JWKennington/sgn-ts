@@ -4,10 +4,16 @@ from dataclasses import dataclass, field
 from typing import Optional, Union
 
 import numpy
-import numpy.typing
 from sgn.base import Frame
 
-from sgnts.base.array_ops import Array, NumpyBackend, TorchArray, TorchBackend
+from sgnts.base.array_ops import (
+    Array,
+    ArrayBackend,
+    NumpyArray,
+    NumpyBackend,
+    TorchArray,
+    TorchBackend,
+)
 from sgnts.base.offset import Offset
 from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.base.time import Time
@@ -27,12 +33,16 @@ class SeriesBuffer:
         shape:
             tuple, the shape of the data regardless of gaps. Required if data is None
             or int, and represents the shape of the absent data.
+        backend:
+            type[ArrayBackend], default NumpyBackend, the wrapper around array
+            operations
     """
 
     offset: int
     sample_rate: int
     data: Optional[Union[int, Array]] = None
     shape: tuple = (-1,)
+    backend: type[ArrayBackend] = NumpyBackend
 
     def __post_init__(self):
         assert isinstance(self.offset, int)
@@ -41,10 +51,10 @@ class SeriesBuffer:
             assert self.shape != (-1,)
         elif isinstance(self.data, int) and self.data == 1:
             assert self.shape != (-1,)
-            self.data = numpy.ones(self.shape)
+            self.data = self.backend.ones(self.shape)
         elif isinstance(self.data, int) and self.data == 0:
             assert self.shape != (-1,)
-            self.data = numpy.zeros(self.shape)
+            self.data = self.backend.zeros(self.shape)
         elif self.shape == (-1,):
             self.shape = self.data.shape
         else:
@@ -120,7 +130,10 @@ class SeriesBuffer:
         Returns:
             Array, the time array
         """
-        return numpy.arange(self.samples) / self.sample_rate + self.t0 / Time.SECONDS
+        return (
+            self.backend.arange(self.samples) / self.sample_rate
+            + self.t0 / Time.SECONDS
+        )
 
     def __eq__(self, value: object) -> bool:
         is_series_buffer = isinstance(value, SeriesBuffer)
@@ -130,9 +143,7 @@ class SeriesBuffer:
             return False
         if type(self.data) is not type(value.data):
             return False
-        if isinstance(self.data, numpy.ndarray) and isinstance(
-            value.data, numpy.ndarray
-        ):
+        if isinstance(self.data, NumpyArray) and isinstance(value.data, NumpyArray):
             share_data = NumpyBackend.all(self.data == value.data)
         elif isinstance(self.data, TorchArray) and isinstance(value.data, TorchArray):
             share_data = TorchBackend.all(self.data == value.data)
@@ -273,7 +284,7 @@ class SeriesBuffer:
 
     @property
     def _backend_from_data(self):
-        if isinstance(self.data, numpy.ndarray):
+        if isinstance(self.data, NumpyArray):
             return NumpyBackend
         elif isinstance(self.data, TorchArray):
             # FIXME: should this just throw an error?
