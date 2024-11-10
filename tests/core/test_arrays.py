@@ -38,6 +38,11 @@ class TestArrayBackend:
         with pytest.raises(NotImplementedError):
             ArrayBackend.zeros(shape=(1, 2))
 
+    def test_ones(self):
+        """Test the ones method of the ArrayBackend class"""
+        with pytest.raises(NotImplementedError):
+            ArrayBackend.ones(shape=(1, 2))
+
     def test_stack(self):
         """Test the stack method of the ArrayBackend class"""
         with pytest.raises(NotImplementedError):
@@ -82,6 +87,11 @@ class TestNumpyBackend:
         """Test the zeros method of the NumpyBackend class"""
         res = NumpyBackend.zeros(shape=(2, 3))
         assert numpy.all(res == numpy.zeros((2, 3)))
+
+    def test_ones(self):
+        """Test the ones method of the NumpyBackend class"""
+        res = NumpyBackend.ones(shape=(2, 3))
+        assert numpy.all(res == numpy.ones((2, 3)))
 
     def test_stack(self):
         """Test the stack method of the NumpyBackend class"""
@@ -143,6 +153,11 @@ class TestTorchBackendCPU:
         """Test the zeros method of the TorchBackend class"""
         res = TorchBackend.zeros(shape=(2, 3))
         assert torch.all(res == torch.zeros((2, 3)))
+
+    def test_ones(self):
+        """Test the ones method of the TorchBackend class"""
+        res = TorchBackend.ones(shape=(2, 3))
+        assert torch.all(res == torch.ones((2, 3)))
 
     def test_stack(self):
         """Test the stack method of the TorchBackend class"""
@@ -232,6 +247,13 @@ class TestTorchBackendGPU:
         res = TorchBackend.zeros(shape=(2, 3))
         assert torch.all(
             res == torch.zeros((2, 3), device=self.DEVICE, dtype=self.DTYPE)
+        )
+
+    def test_ones(self):
+        """Test the ones method of the TorchBackend class"""
+        res = TorchBackend.ones(shape=(2, 3))
+        assert torch.all(
+            res == torch.ones((2, 3), device=self.DEVICE, dtype=self.DTYPE)
         )
 
     def test_stack(self):
