@@ -53,6 +53,11 @@ class TestArrayBackend:
         with pytest.raises(NotImplementedError):
             ArrayBackend.matmul(None, None)
 
+    def test_arange(self):
+        """Test the arange method of the ArrayBackend class"""
+        with pytest.raises(NotImplementedError):
+            ArrayBackend.arange(0, 0, 0)
+
 
 class TestNumpyBackend:
     """Test group for NumpyBackend class"""
@@ -108,6 +113,11 @@ class TestNumpyBackend:
         """Test the matmul method of the NumpyBackend class"""
         res = NumpyBackend.matmul(numpy.ones((3, 3)), numpy.ones((3, 3)))
         assert numpy.all(res == numpy.ones((3, 3)) * 3)
+
+    def test_arange(self):
+        """Test the arange method of the NumpyBackend class"""
+        res = NumpyBackend.arange(10, start=1, step=2)
+        assert numpy.all(res == numpy.arange(start=1, stop=10, step=2))
 
 
 class TestTorchBackendCPU:
@@ -174,6 +184,11 @@ class TestTorchBackendCPU:
         """Test the matmul method of the TorchBackend class"""
         res = TorchBackend.matmul(torch.ones((3, 3)), torch.ones((3, 3)))
         assert torch.all(res == torch.ones((3, 3)) * 3)
+
+    def test_arange(self):
+        """Test the arange method of the TorchBackend class"""
+        res = TorchBackend.arange(10, start=1, step=2)
+        assert torch.all(res == torch.arange(start=1, end=10, step=2))
 
     def test_check_torch(self):
         """Test the check_torch method of the GPUTorchBackend class"""
@@ -280,4 +295,14 @@ class TestTorchBackendGPU:
         )
         assert torch.all(
             res == torch.ones((3, 3), device=self.DEVICE, dtype=self.DTYPE) * 3
+        )
+
+    def test_arange(self):
+        """Test the arange method of the TorchBackend class"""
+        res = TorchBackend.arange(10, start=1, step=2)
+        assert torch.all(
+            res
+            == torch.arange(
+                start=1, end=10, step=2, device=self.DEVICE, dtype=self.DTYPE
+            )
         )

@@ -1,10 +1,24 @@
 from dataclasses import dataclass
 
 import numpy as np
+import torch
 from scipy.signal import correlate
 from sgn.base import SourcePad
+from torch.nn.functional import conv1d as Fconv1d
 
-from sgnts.base import AdapterConfig, Array, Offset, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import (
+    AdapterConfig,
+    Array,
+    ArrayBackend,
+    NumpyArray,
+    NumpyBackend,
+    Offset,
+    SeriesBuffer,
+    TorchArray,
+    TorchBackend,
+    TSFrame,
+    TSTransform,
+)
 
 UP_HALF_LENGTH = 8
 DOWN_HALF_LENGTH = 32
@@ -19,10 +33,13 @@ class Resampler(TSTransform):
             int, sample rate of the input frames
         outrate:
             int, sample rate of the output frames
+        backend:
+            type[ArrayBackend], default NumpyBackend, a wrapper around array operations
     """
 
     inrate: int = -1
     outrate: int = -1
+    backend: type[ArrayBackend] = NumpyBackend
 
     def __post_init__(self):
         assert self.inrate in Offset.ALLOWED_RATES
@@ -45,8 +62,28 @@ class Resampler(TSTransform):
             # same rate
             raise ValueError("Inrate {self.inrate} is the same as outrate {outrate}")
 
+        if self.backend == TorchBackend:
+            # Convert the numpy kernel to torch tensors
+            if self.outrate < self.inrate:
+                # downsample
+                self.thiskernel = torch.from_numpy(self.thiskernel).view(1, 1, -1)
+            else:
+                # upsample
+                sub_kernel_length = int(2 * self.half_length + 1)
+                self.thiskernel = torch.tensor(self.thiskernel.copy()).view(
+                    self.outrate // self.inrate, 1, sub_kernel_length
+                )
+            self.thiskernel = self.thiskernel.to(TorchBackend.DEVICE).to(
+                TorchBackend.DTYPE
+            )
+            self.resample = self.resample_torch
+        else:
+            self.resample = self.resample_numpy
+
         if self.adapter_config is None:
-            self.adapter_config = AdapterConfig()
+            self.adapter_config = AdapterConfig(backend=self.backend)
+        else:
+            assert self.adapter_config.backend == self.backend
         self.adapter_config.overlap = (self.half_length, self.half_length)
         self.adapter_config.pad_zeros_startup = True
 
@@ -165,7 +202,9 @@ class Resampler(TSTransform):
 
         return vecs.reshape(int(factor), 1, sub_kernel_length)
 
-    def resample(self, data0: Array, outshape: tuple[int, ...]) -> Array:
+    def resample_numpy(
+        self, data0: NumpyArray, outshape: tuple[int, ...]
+    ) -> NumpyArray:
         """Correlate the data with the kernel.
 
         Args:
@@ -194,6 +233,37 @@ class Resampler(TSTransform):
                 ..., :: self.inrate // self.outrate
             ]
         return out.reshape(outshape)
+
+    def resample_torch(
+        self, data0: TorchArray, output_shape: tuple[int, ...]
+    ) -> TorchArray:
+        """Correlate the data with the kernel.
+
+        Args:
+            data0:
+                TorchArray, the data to be up/downsampled
+            outshape:
+                tuple[int, ...], the shape of the output array
+
+        Returns:
+            TorchArray, the resulting array of the up/downsamping
+        """
+        # FIXME: should this be in ArrayBackend?
+        # FIXME: include memeory format
+        data = data0.view(-1, 1, data0.shape[-1])
+        thiskernel = self.thiskernel
+        assert (
+            data.dtype == thiskernel.dtype
+        ), f"{self.name} {data.dtype} {thiskernel.dtype}"
+
+        if self.outrate > self.inrate:  # upsample
+            out = Fconv1d(data, thiskernel)
+            out = out.mT.reshape(data.shape[0], -1)
+        else:  # downsample
+            out = Fconv1d(data, thiskernel, stride=self.inrate // self.outrate)
+            out = out.squeeze(1)
+
+        return out.view(output_shape)
 
     def transform(self, pad: SourcePad) -> TSFrame:
         """Perform up/downsampling of incoming frames.

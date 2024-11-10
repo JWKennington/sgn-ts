@@ -15,7 +15,14 @@ from sgn.base import (
     TransformElement,
 )
 
-from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend, TorchBackend
+from sgnts.base.array_ops import (
+    Array,
+    ArrayBackend,
+    NumpyArray,
+    NumpyBackend,
+    TorchArray,
+    TorchBackend,
+)
 from sgnts.base.audioadapter import Audioadapter
 from sgnts.base.buffer import SeriesBuffer, TSFrame
 from sgnts.base.offset import Offset

@@ -150,6 +150,24 @@ class ArrayBackend:
         """
         raise NotImplementedError
 
+    @staticmethod
+    def arange(stop: float, start: float = 0, step: float = 1) -> Array:
+        """Returns a 1-D array with values from the interval `[start, stop)`, taken
+        with common difference `step` begining from `start`.
+
+        Args:
+            stop:
+                float, the stopping value for the set of points
+            start:
+                float, default 0, the starting value for the set of points
+            step:
+                float, default 1, the gap between each pair of adjacent points
+
+        Returns:
+            Array, an array of evenly spaced values
+        """
+        raise NotImplementedError
+
 
 class NumpyBackend(ArrayBackend):
     """Implementation of array operations using numpy."""
@@ -260,6 +278,24 @@ class NumpyBackend(ArrayBackend):
             NumpyArray, the result of the matrix multiplication
         """
         return numpy.matmul(a, b)
+
+    @staticmethod
+    def arange(stop: float, start: float = 0, step: float = 1) -> NumpyArray:
+        """Returns a 1-D array with values from the interval `[start, stop)`, taken
+        with common difference `step` begining from `start`.
+
+        Args:
+            stop:
+                float, the stopping value for the set of points
+            start:
+                float, default 0, the starting value for the set of points
+            step:
+                float, default 1, the gap between each pair of adjacent points
+
+        Returns:
+            NumpyArray, an array of evenly spaced values
+        """
+        return numpy.arange(start=start, stop=stop, step=step)
 
     @staticmethod
     @wraps(numpy.all)
@@ -408,6 +444,26 @@ class TorchBackend(ArrayBackend):
         """
         TorchBackend._check_torch()
         return torch.matmul(a, b)
+
+    @classmethod
+    def arange(cls, stop: float, start: float = 0, step: float = 1) -> TorchArray:
+        """Returns a 1-D array with values from the interval `[start, stop)`, taken
+        with common difference `step` begining from `start`.
+
+        Args:
+            stop:
+                float, the stopping value for the set of points
+            start:
+                float, default 0, the starting value for the set of points
+            step:
+                float, default 1, the gap between each pair of adjacent points
+
+        Returns:
+            TorchArray, an array of evenly spaced values
+        """
+        return torch.arange(
+            start=start, end=stop, step=step, device=cls.DEVICE, dtype=cls.DTYPE
+        )
 
     @staticmethod
     def all(input: TorchArray, out: Optional[TorchArray] = None):
