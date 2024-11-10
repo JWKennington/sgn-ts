@@ -12,6 +12,7 @@ class Multiplier(TSTransform):
         self.audioadapters = {}
 
     def pull(self, pad, buf):
+        super().pull(pad, buf)
         self.inbuf[pad] = buf
         if pad not in self.audioadapters:
             self.audioadapters[pad.name] = Audioadapter()

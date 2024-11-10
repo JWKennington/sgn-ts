@@ -1,52 +1,47 @@
 from dataclasses import dataclass
 
 import numpy as np
+from sgn.base import InternalPad
 
-from ..base import Time, TSSink
+from sgnts.base import Time, TSSink
 
 
 @dataclass
 class FakeSeriesSink(TSSink):
-    """
-    A fake sink element
+    """A fake series sink element.
+
+    Args:
+        verbose:
+            bool, be verbose
     """
 
     verbose: bool = False
 
-    def __post_init__(self):
-        super().__post_init__()
-        self.cnt = {p: 0 for p in self.sink_pads}
+    def internal(self, pad: InternalPad) -> None:
+        """Print frames if verbose.
 
-    def pull(self, pad, bufs):
+        Args:
+            pad:
+                InternalPad, the internal pad
         """
-        getting the buffer on the pad just modifies the name to show this final
-        graph point and the prints it to prove it all works.
-        """
-        super().pull(pad, bufs)
-        self.cnt[pad] += 1
-        bufs = self.preparedframes[pad]
-        if bufs.EOS:
-            self.mark_eos(pad)
-        if self.verbose is True:
-            print(self.cnt[pad], bufs)
-
-    @property
-    def EOS(self):
-        """
-        If buffers on any sink pads are End of Stream (EOS), then mark this whole element as EOS
-        """
-        return any(self.at_eos.values())
+        super().internal(pad)
+        for sink_pad in self.sink_pads:
+            frame = self.preparedframes[sink_pad]
+            if frame.EOS:
+                self.mark_eos(sink_pad)
+            if self.verbose is True:
+                print(frame)
 
 
 @dataclass
 class DumpSeriesSink(TSSink):
-    """
-    A sink element that dumps time series data to a txt file
+    """A sink element that dumps time series data to a txt file.
 
-    Parameters:
-    -----------
-    fname: str
-        output file name
+    Args:
+        fname:
+            str, output file name
+        verbose:
+            bool, be verbose
     """
 
     fname: str = "out.txt"
@@ -54,14 +49,28 @@ class DumpSeriesSink(TSSink):
 
     def __post_init__(self):
         super().__post_init__()
+        if len(self.sink_pads) != 1:
+            # FIXME: When will we use multiple sink pads here?
+            # Do we want to support writing multiple frames into the same file?
+            raise ValueError("Only supports one sink pad.")
+
+        self.sink_pad = self.sink_pads[0]
+
         # overwrite existing file
-        with open(self.fname, "w") as f:
+        with open(self.fname, "w"):
             pass
 
-    def write_to_file(self, buf):
+    def write_to_file(self, buf) -> None:
+        """Write time series data to txt file.
+
+        Args:
+            buf:
+                SeriesBuffer, the buffer with time series data to write out
+        """
         t0 = buf.t0
         duration = buf.duration
         data = buf.data
+        # FIXME: How to write multi-dimensional data?
         data = data.reshape(-1, data.shape[-1])
         ts = np.linspace(
             t0 / Time.SECONDS,
@@ -73,17 +82,20 @@ class DumpSeriesSink(TSSink):
         with open(self.fname, "a") as f:
             np.savetxt(f, out)
 
-    def pull(self, pad, bufs):
+    def internal(self, pad: InternalPad) -> None:
+        """Write out time-series data.
+
+        Args:
+            pad:
+                InternalPad
         """
-        getting the buffer on the pad just modifies the name to show this final
-        graph point and the prints it to prove it all works.
-        """
-        super().pull(pad, bufs)
-        bufs = self.preparedframes[pad]
-        if bufs.EOS:
-            self.mark_eos(pad)
+        super().internal(pad)
+        sink_pad = self.sink_pad
+        frame = self.preparedframes[sink_pad]
+        if frame.EOS:
+            self.mark_eos(sink_pad)
         if self.verbose is True:
-            print(bufs)
-        for buf in bufs:
+            print(frame)
+        for buf in frame:
             if not buf.is_gap:
                 self.write_to_file(buf)
