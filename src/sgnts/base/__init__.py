@@ -6,7 +6,14 @@ from math import isinf
 from typing import Optional, Union
 
 import numpy as np
-from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
+from sgn.base import (
+    InternalPad,
+    SinkElement,
+    SinkPad,
+    SourceElement,
+    SourcePad,
+    TransformElement,
+)
 
 from sgnts.base.array_ops import Array, ArrayOps
 from sgnts.base.audioadapter import Audioadapter
@@ -67,7 +74,6 @@ class _TSTransSink:
         self.at_EOS = False
         self._last_ts = {p: None for p in self.sink_pads}
         self._last_offset = {p: None for p in self.sink_pads}
-        self.__pulled = {p: False for p in self.sink_pads}
         self.metadata = {p: None for p in self.sink_pads}
         self.audioadapters = None
         if self.adapter_config is not None:
@@ -103,13 +109,9 @@ class _TSTransSink:
         # extend and check the buffers
         for buf in frame:
             self.inbufs[pad].push(buf)
-        self.__pulled[pad] = True
         self.metadata[pad] = frame.metadata
         if self.timeout(pad):
             raise ValueError("pad %s has timed out" % pad.name)
-
-        if all(self.__pulled.values()):
-            self.__post_pull()
 
     def __adapter(self, pad: SinkPad, frame: TSFrame) -> list[SeriesBuffer]:
         """Use the audioadapter to handle streaming scenarios such as padding with
@@ -253,13 +255,10 @@ class _TSTransSink:
 
         return preparedbufs
 
-    def __post_pull(self) -> None:
+    def internal(self, pad: InternalPad) -> None:
         """Align buffers from all the sink pads. If AdapterConfig is provided, perform
         the requested overlap/stride streaming of frames.
         """
-        # Reset
-        self.__pulled = {p: False for p in self.sink_pads}
-
         # align if possible
         self._align()
 
@@ -377,6 +376,9 @@ class TSTransform(TransformElement, _TSTransSink):
         TransformElement.__post_init__(self)
         _TSTransSink.__post_init__(self)
 
+    def internal(self, pad: InternalPad):
+        _TSTransSink.internal(self, pad)
+
     def transform(self, pad: SourcePad) -> TSFrame:
         """The transform function must be provided by the subclass. It should take the
         source pad as an argument and return a new TSFrame.
@@ -400,6 +402,9 @@ class TSSink(SinkElement, _TSTransSink):
     def __post_init__(self):
         SinkElement.__post_init__(self)
         _TSTransSink.__post_init__(self)
+
+    def internal(self, pad: InternalPad):
+        _TSTransSink.internal(self, pad)
 
 
 @dataclass
