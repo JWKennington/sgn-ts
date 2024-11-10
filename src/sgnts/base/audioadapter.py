@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Deque, Optional
 
-from sgnts.base.array_ops import Array, ArrayOps
+from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
 from sgnts.base.buffer import SeriesBuffer
 from sgnts.base.offset import Offset
 from sgnts.base.slice_tools import TSSlice
@@ -16,11 +16,11 @@ class Audioadapter:
     and flushing of data from the adapter.
 
     Args:
-        lib:
-            type[ArrayOps], the wrapper around array operations
+        backend:
+            type[ArrayBackend], the wrapper around array operations
     """
 
-    def __init__(self, lib: type[ArrayOps] = ArrayOps):
+    def __init__(self, backend: type[ArrayBackend] = NumpyBackend):
         self.buffers: Deque[SeriesBuffer] = deque()
         self.size: int = 0
         self.gap_size: int = 0
@@ -28,7 +28,7 @@ class Audioadapter:
         self.sample_rate: int = -1
         self.data_all: Optional[Array] = None
         self.data_all_offset_seg: Optional[tuple[int, int]] = None
-        self.lib: type[ArrayOps] = lib
+        self.backend: type[ArrayBackend] = backend
 
     def __len__(self) -> int:
         return len(self.buffers)
@@ -73,8 +73,8 @@ class Audioadapter:
                 bufs = self.buffers
                 self.data_all_offset_seg = self.get_available_offset_segment()
 
-            self.data_all = self.lib.cat_func(
-                [b.filleddata(self.lib.zeros_func) for b in bufs], axis=-1
+            self.data_all = self.backend.cat(
+                [b.filleddata(self.backend.zeros) for b in bufs], axis=-1
             )
 
     def push(self, buf: SeriesBuffer) -> None:
@@ -251,15 +251,15 @@ class Audioadapter:
                 if len(bufs) == 1:
                     out = bufs[0].data
                 else:
-                    out = self.lib.cat_func(
-                        [b.filleddata(self.lib.zeros_func) for b in bufs], axis=-1
+                    out = self.backend.cat(
+                        [b.filleddata(self.backend.zeros) for b in bufs], axis=-1
                     )
             else:
                 out = self.data_all[..., ni : ni + nsamples]
 
         # FIXME: the checks on out are to avoid mypy errors
         if pad_samples > 0 and out is not None and not isinstance(out, int):
-            out = self.lib.pad_func(out, (pad_samples, 0))
+            out = self.backend.pad(out, (pad_samples, 0))
 
         return out
 
@@ -341,9 +341,9 @@ class Audioadapter:
         Returns:
             Array, an array of booleans that flags whether buffers are gaps
         """
-        return self.lib.cat_func(
+        return self.backend.cat(
             [
-                self.lib.full_func((b.samples,), b.is_gap)
+                self.backend.full((b.samples,), b.is_gap)
                 for b in self.get_sliced_buffers(offset_segment)
             ],
             axis=-1,

@@ -15,7 +15,7 @@ from sgn.base import (
     TransformElement,
 )
 
-from sgnts.base.array_ops import Array, ArrayOps
+from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend, TorchBackend
 from sgnts.base.audioadapter import Audioadapter
 from sgnts.base.buffer import SeriesBuffer, TSFrame
 from sgnts.base.offset import Offset
@@ -39,15 +39,15 @@ class AdapterConfig:
         skip_gaps:
             bool, produce a whole gap buffer if there are any gaps in the copied data
             segment
-        lib:
-            ArrayOps, the ArrayOps wrapper
+        backend:
+            type[ArrayBackend], the ArrayBackendwrapper
     """
 
     overlap: tuple[int, int] = (0, 0)
     stride: int = 0
     pad_zeros_startup: bool = False
     skip_gaps: bool = False
-    lib: type[ArrayOps] = ArrayOps
+    backend: type[ArrayBackend] = NumpyBackend
 
 
 @dataclass
@@ -84,7 +84,8 @@ class _TSTransSink:
 
             # we need audioadapters
             self.audioadapters = {
-                p: Audioadapter(lib=self.adapter_config.lib) for p in self.sink_pads
+                p: Audioadapter(backend=self.adapter_config.backend)
+                for p in self.sink_pads
             }
             self.pad_zeros_samples = 0
             if self.pad_zeros_startup is True:
@@ -224,7 +225,7 @@ class _TSTransSink:
                 data = a.copy_samples(num_copy_samples)
                 if self.pad_zeros_samples > 0 and self.adapter_config is not None:
                     # pad zeros in front of buffer
-                    data = self.adapter_config.lib.pad_func(
+                    data = self.adapter_config.backend.pad(
                         data, (self.pad_zeros_samples, 0)
                     )
 
@@ -264,35 +265,35 @@ class _TSTransSink:
 
         # put in heartbeat buffer if not aligned
         if not self._is_aligned:
-            for pad in self.sink_pads:
-                self.preparedframes[pad] = TSFrame(
+            for sink_pad in self.sink_pads:
+                self.preparedframes[sink_pad] = TSFrame(
                     EOS=self.at_EOS,
                     buffers=[
                         SeriesBuffer(
                             offset=self.earliest,
-                            sample_rate=self.inbufs[pad].sample_rate,
+                            sample_rate=self.inbufs[sink_pad].sample_rate,
                             data=None,
-                            shape=self.inbufs[pad].buffers[0].shape[:-1] + (0,),
+                            shape=self.inbufs[sink_pad].buffers[0].shape[:-1] + (0,),
                         ),
                     ],
-                    metadata=self.metadata[pad],
+                    metadata=self.metadata[sink_pad],
                 )
         # Else pack all the buffers
         else:
             min_latest = self.min_latest
             earliest = self.earliest
-            for pad in self.sink_pads:
-                out = self.inbufs[pad].get_sliced_buffers(
+            for sink_pad in self.sink_pads:
+                out = self.inbufs[sink_pad].get_sliced_buffers(
                     (earliest, min_latest), pad_start=True
                 )
-                self.inbufs[pad].flush_samples_by_end_offset_segment(min_latest)
+                self.inbufs[sink_pad].flush_samples_by_end_offset_segment(min_latest)
                 assert len(out) > 0
                 if self.adapter_config is not None:
-                    out = self.__adapter(pad, out)
-                self.preparedframes[pad] = TSFrame(
+                    out = self.__adapter(sink_pad, out)
+                self.preparedframes[sink_pad] = TSFrame(
                     EOS=self.at_EOS,
                     buffers=out,
-                    metadata=self.metadata[pad],
+                    metadata=self.metadata[sink_pad],
                 )
 
     def _align(self) -> None:

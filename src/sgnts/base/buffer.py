@@ -7,7 +7,7 @@ import numpy
 import numpy.typing
 from sgn.base import Frame
 
-from sgnts.base.array_ops import Array, NumpyBackend, TorchArray, _TorchBackend
+from sgnts.base.array_ops import Array, NumpyBackend, TorchArray, TorchBackend
 from sgnts.base.offset import Offset
 from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.base.time import Time
@@ -135,7 +135,7 @@ class SeriesBuffer:
         ):
             share_data = NumpyBackend.all(self.data == value.data)
         elif isinstance(self.data, TorchArray) and isinstance(value.data, TorchArray):
-            share_data = _TorchBackend.all(self.data == value.data)
+            share_data = TorchBackend.all(self.data == value.data)
         else:
             # Will need to expand this conditional if/when other data types are added
             return False
@@ -276,7 +276,20 @@ class SeriesBuffer:
         if isinstance(self.data, numpy.ndarray):
             return NumpyBackend
         elif isinstance(self.data, TorchArray):
-            return _TorchBackend
+            # FIXME: should this just throw an error?
+            if self.data.device != TorchBackend.DEVICE:
+                print(
+                    f"Changing TorchBackend device from {TorchBackend.DEVICE} to"
+                    f" {self.data.device}"
+                )
+                TorchBackend.set_device(self.data.device)
+            if self.data.dtype != TorchBackend.DTYPE:
+                print(
+                    f"Changing TorchBackend dtype from {TorchBackend.DTYPE} to"
+                    f" {self.data.dtype}"
+                )
+                TorchBackend.set_dtype(self.data.dtype)
+            return TorchBackend
         else:
             return None
 

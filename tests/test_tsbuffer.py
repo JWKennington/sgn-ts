@@ -5,7 +5,7 @@ import pytest
 import torch
 from sgn.apps import Pipeline
 
-from sgnts.base.buffer import SeriesBuffer
+from sgnts.base import SeriesBuffer
 from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
 
@@ -170,6 +170,7 @@ def torch_f(f_params):
 @pytest.fixture
 def torch_g(g_params):
     return make_ones_buffer(torch.ones, **g_params)
+
 
 # @pytest.fixture
 # def empty_a(a_params):
@@ -347,4 +348,3 @@ def test_add_nonflat_torch(torch_c, torch_d):
     assert torch_c + torch_d == correct
     torch_c += torch_d
     assert torch_c == correct
-
