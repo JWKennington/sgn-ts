@@ -48,7 +48,7 @@ class SumIndex(TSTransform):
                     if sl.stop - sl.start == 1:
                         data_all.append((data[sl.start, :, :]))
                     else:
-                        data_all.append(self.backend.sum(data[sl, :, :], dim=0))
+                        data_all.append(self.backend.sum(data[sl, :, :], axis=0))
 
                 out = self.backend.stack(data_all)
 
