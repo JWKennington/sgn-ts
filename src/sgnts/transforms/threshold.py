@@ -1,47 +1,66 @@
-import numpy
 from dataclasses import dataclass
-from ..base import TSTransform, TSSlices, TSSlice, TSFrame, Offset
+
+import numpy
+from sgn.base import SourcePad
+
+from sgnts.base import Offset, SeriesBuffer, TSFrame, TSSlice, TSSlices, TSTransform
 
 
 @dataclass
 class Threshold(TSTransform):
-    """
-    Only allow data above or below a threshold to pass. data will otherwise be marked
+    """Only allow data above or below a threshold to pass. data will otherwise be marked
     as gap.
 
-    Parameters:
-    -----------
-    threshold: float
-        The absolute value threshold above which to allow data to pass
-    invert: bool
-        False: only data above a threshold will pass
-        True: only data below a threshold will pass
-    startwn: int
-        The number of samples ahead of the crossing to allow data to pass
-    stopwn: int
-        The number of samples ahead of the crossing to allow data to pass
+    Args:
+        threshold:
+            float, the absolute value threshold above which to allow data to pass
+        invert:
+            bool, If False, only data above a threshold will pass. If True: only data
+            below a threshold will pass
+        startwn:
+            int, the number of samples ahead of the crossing to allow data to pass
+        stopwn:
+            int, the number of samples after the crossing to allow data to pass
     """
 
-    threshold: float = None
+    threshold: float = float("+inf")
     invert: bool = False
-    startwn: int = None
-    stopwn: int = None
+    startwn: int = 0
+    stopwn: int = 0
 
     def __post_init__(self):
         super().__post_init__()
         assert len(self.sink_pads) == 1
         assert len(self.source_pads) == 1
-        assert self.threshold is not None
-        assert self.startwn is not None
-        assert self.stopwn is not None
         self.sinkpad = self.sink_pads[0]
         self.nongap_slices = TSSlices([])
 
     # Modified from: https://stackoverflow.com/questions/43258896/
     # extract-subarrays-of-numpy-array-whose-values-are-above-a-threshold
     def __split_above_threshold(
-        self, buffer, threshold, start_window=0, stop_window=0, invert=False
-    ):
+        self,
+        buffer: SeriesBuffer,
+        threshold: float,
+        start_window: int = 0,
+        stop_window: int = 0,
+    ) -> list[TSSlice]:
+        """Find subslices in buffer whose data are above threshold, along with
+        start_window samples ahead of and stop_window samples after the crossing.
+
+        Args:
+            buffer:
+                SeriesBuffer, the buffer from which to extract subslices
+            threshold:
+                float, the crossing threshold
+            start_window:
+                int, the number of samples ahead of the crossing to allow data to pass
+            stop_window:
+                int, the number of samples after the crossing to allow data to pass
+
+        Returns:
+            list[TSSlice], a list of TSSlices whose data value crossed a threshold,
+            along with a window around the crossing
+        """
         signal = buffer.data
         sample_rate = buffer.sample_rate
         off0 = buffer.offset
@@ -55,7 +74,17 @@ class Threshold(TSTransform):
             for i in range(0, len(idx), 2)
         ]
 
-    def transform(self, pad):
+    def transform(self, pad: SourcePad) -> TSFrame:
+        """Split buffers into subbuffers of gaps and nongaps depending on whether the
+        data passed a threshold.
+
+        Args:
+            pad:
+                SourcePad, the source pad to output the transformed frame
+
+        Returns:
+            TSFrame, the output TSFrame
+        """
         frame = self.preparedframes[self.sinkpad]
         boundary_offsets = TSSlice(
             frame[0].offset,
@@ -70,7 +99,6 @@ class Threshold(TSTransform):
                         self.threshold,
                         self.startwn,
                         self.stopwn,
-                        self.invert,
                     )
                     for b in frame
                     if b
