@@ -5,7 +5,7 @@ from typing import Optional
 
 from sgn.base import SourcePad
 
-from sgnts.base import ArrayOps, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import ArrayBackend, NumpyBackend, SeriesBuffer, TSFrame, TSTransform
 
 
 @dataclass
@@ -13,8 +13,8 @@ class Adder(TSTransform):
     """Add up all the frames from all the sink pads.
 
     Args:
-        lib:
-            type[ArrayOps], the wrapper around array operations
+        backend:
+            type[ArrayBackend], the wrapper around array operations
         coeff_map:
             Optional[dict[str, float]], a mapping of sink pad names to coefficients.
             Suppose coeff_map = {"sink_pad_name1": 2, "sink_pad_name2": 4}, and data1
@@ -35,7 +35,7 @@ class Adder(TSTransform):
                 out = data1[slice(2, 6), slice(0, 8), :] + data2
     """
 
-    lib: type[ArrayOps] = ArrayOps
+    backend: type[ArrayBackend] = NumpyBackend
     coeff_map: Optional[dict[str, float]] = None
     addslices_map: Optional[dict[str, tuple[slice, ...]]] = None
 
@@ -79,10 +79,10 @@ class Adder(TSTransform):
         else:
             # use the first frame as basis
             if len(frames[0]) == 1:
-                out = frames[0][0].filleddata(self.lib.zeros_func)
+                out = frames[0][0].filleddata(self.backend.zeros)
             else:
-                out = self.lib.cat_func(
-                    [buf.filleddata(self.lib.zeros_func) for buf in frames[0]], axis=-1
+                out = self.backend.cat(
+                    [buf.filleddata(self.backend.zeros) for buf in frames[0]], axis=-1
                 )
             if self.coeff_map is not None:
                 out *= self.coeff_map[self.sink_pad_names[0]]

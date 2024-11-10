@@ -3,10 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-import numpy as np
 from sgn.base import SourcePad
 
-from sgnts.base import Array, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import (
+    Array,
+    ArrayBackend,
+    NumpyBackend,
+    SeriesBuffer,
+    TSFrame,
+    TSTransform,
+)
 
 
 @dataclass
@@ -15,31 +21,19 @@ class Matmul(TSTransform):
 
     Args:
         matrix:
-            Sequence[Any], the matrix to multiply the data with, out = matrix x data
+            Optional[Array], the matrix to multiply the data with, out = matrix x data
+        backend:
+            type[ArrayBackend], the array backend for array operations
     """
 
     matrix: Optional[Array] = None
+    backend: type[ArrayBackend] = NumpyBackend
 
     def __post_init__(self):
         super().__post_init__()
         assert (
             len(self.sink_pads) == 1 and len(self.source_pads) == 1
         ), "only one sink_pad and one source_pad is allowed"
-
-    def matmul(self, a: Array, b: Array) -> Array:
-        """Matrix multiplication of two arrays.
-            out = a x b
-
-        Args:
-            a:
-                Array, the first array
-            b:
-                Array, the second array
-
-        Returns:
-            Array, the result of the matrix multiplication
-        """
-        return np.matmul(a, b)
 
     def transform(self, pad: SourcePad) -> TSFrame:
         """Matmul of a matrix with the incoming data.
@@ -60,7 +54,7 @@ class Matmul(TSTransform):
             if is_gap:
                 data = None
             else:
-                data = self.matmul(self.matrix, inbuf.data)
+                data = self.backend.matmul(self.matrix, inbuf.data)
 
             outbuf = SeriesBuffer(
                 offset=inbuf.offset,

@@ -11,7 +11,10 @@ must be implemented in subclasses. The current set of operations includes:
 - `full`: Create an array filled with a specified value
 - `zeros`: Create an array of zeros
 - `stack`: Stack arrays along a new axis
+- `matmul`: Perform matrix multiplication of two arrays
 """
+
+from __future__ import annotations
 
 from functools import wraps
 from typing import Any, ClassVar, Iterable, Optional, Tuple
@@ -60,14 +63,14 @@ class ArrayBackend:
         raise NotImplementedError
 
     @staticmethod
-    def pad(data: Array, pad_samples: tuple) -> Array:
+    def pad(data: Array, pad_samples: tuple[int, int]) -> Array:
         """Pad an array with zeros.
 
         Args:
             data:
                 Array: Array to pad
             pad_samples:
-                tuple: Number of samples to pad at the end of the array
+                tuple: Number of zeros to pad at each end of the array
 
         Returns:
             Array: Padded array
@@ -117,13 +120,21 @@ class ArrayBackend:
         """
         return ArrayBackend.cat(data, axis=axis)
 
-    # TODO Remove this backwards compatibility set of aliases when larger refactor
-    #  complete
-    pad_func = pad
-    zeros_func = zeros
-    full_func = full
-    cat_func = cat
-    stack_func = stack
+    @staticmethod
+    def matmul(a: Array, b: Array) -> Array:
+        """Matrix multiplication of two arrays.
+            out = a x b
+
+        Args:
+            a:
+                Array, the first array
+            b:
+                Array, the second array
+
+        Returns:
+            Array, the result of the matrix multiplication
+        """
+        raise NotImplementedError
 
 
 class NumpyBackend(ArrayBackend):
@@ -148,14 +159,14 @@ class NumpyBackend(ArrayBackend):
         return numpy.concatenate(data, axis=axis)
 
     @staticmethod
-    def pad(data: NumpyArray, pad_samples: tuple) -> NumpyArray:
+    def pad(data: NumpyArray, pad_samples: tuple[int, int]) -> NumpyArray:
         """Pad an array with zeros
 
         Args:
             data:
                 NumpyArray, Array to pad
             pad_samples:
-                tuple, Number of samples to pad at the end of the array
+                tuple, Number of zeros to pad at each end of the array
 
         Returns:
             NumpyArray, Padded array
@@ -208,27 +219,53 @@ class NumpyBackend(ArrayBackend):
         return numpy.stack(data, axis=axis)
 
     @staticmethod
+    def matmul(a: NumpyArray, b: NumpyArray) -> NumpyArray:
+        """Matrix multiplication of two arrays.
+            out = a x b
+
+        Args:
+            a:
+                NumpyArray, the first array
+            b:
+                NumpyArray, the second array
+
+        Returns:
+            NumpyArray, the result of the matrix multiplication
+        """
+        return numpy.matmul(a, b)
+
+    @staticmethod
     @wraps(numpy.all)
     def all(*args, **kwargs):
         return numpy.all(*args, **kwargs)
 
-    # TODO Remove this backwards compatibility set of aliases when larger refactor
-    #  complete
-    pad_func = pad
-    zeros_func = zeros
-    full_func = full
-    cat_func = cat
-    stack_func = stack
 
-
-# TODO remove this alias when refactor complete
-ArrayOps = NumpyBackend
-
-
-class _TorchBackend(ArrayBackend):
+class TorchBackend(ArrayBackend):
     """Implementation of array operations using PyTorch tensors."""
 
+    # FIXME: How to handle different device/dtypes in the same pipeline?
     DTYPE = None if torch is None else torch.float32
+    DEVICE = None if torch is None else "cpu"
+
+    @classmethod
+    def set_device(cls, device: str) -> None:
+        """Set the torch device.
+
+        Args:
+            device:
+                str, the device on which to create torch tensors
+        """
+        cls.DEVICE = device
+
+    @classmethod
+    def set_dtype(cls, dtype: torch.dtype) -> None:
+        """Set the torch data type.
+
+        Args:
+            dtype:
+                torch.dtype, the data type of the torch tensors
+        """
+        cls.DTYPE = dtype
 
     @staticmethod
     def _check_torch():
@@ -249,27 +286,27 @@ class _TorchBackend(ArrayBackend):
         Returns:
             TorchArray, concatenated array
         """
-        _TorchBackend._check_torch()
+        TorchBackend._check_torch()
         return torch.cat(data, dim=axis)
 
     @staticmethod
-    def pad(data: TorchArray, pad_samples: tuple) -> TorchArray:
+    def pad(data: TorchArray, pad_samples: tuple[int, int]) -> TorchArray:
         """Pad an array with zeros
 
         Args:
             data:
                 TorchArray, Array to pad
             pad_samples:
-                tuple, Number of samples to pad at the end of the array
+                tuple[int, int], Number of zeros to pad at each end of the array
 
         Returns:
             TorchArray, Padded array
         """
-        _TorchBackend._check_torch()
+        TorchBackend._check_torch()
         return torch.nn.functional.pad(data, pad_samples, "constant")
 
-    @staticmethod
-    def full(shape: Tuple[int, ...], fill_value: Any) -> TorchArray:
+    @classmethod
+    def full(cls, shape: Tuple[int, ...], fill_value: Any) -> TorchArray:
         """Create an array filled with a specified value
 
         Args:
@@ -281,8 +318,8 @@ class _TorchBackend(ArrayBackend):
         Returns:
             TorchArray, Array filled with the specified value
         """
-        _TorchBackend._check_torch()
-        return torch.full(shape, fill_value)
+        TorchBackend._check_torch()
+        return torch.full(shape, fill_value, device=cls.DEVICE, dtype=cls.DTYPE)
 
     @classmethod
     def zeros(cls, shape: Tuple[int, ...]) -> TorchArray:
@@ -295,7 +332,7 @@ class _TorchBackend(ArrayBackend):
         Returns:
             TorchArray, Array of zeros
         """
-        _TorchBackend._check_torch()
+        TorchBackend._check_torch()
         return torch.zeros(shape, device=cls.DEVICE, dtype=cls.DTYPE)
 
     @staticmethod
@@ -311,31 +348,27 @@ class _TorchBackend(ArrayBackend):
         Returns:
             TorchArray, Stacked array
         """
-        _TorchBackend._check_torch()
+        TorchBackend._check_torch()
         return torch.stack(data, axis)
+
+    @staticmethod
+    def matmul(a: TorchArray, b: TorchArray) -> TorchArray:
+        """Matrix multiplication of two arrays.
+            out = a x b
+
+        Args:
+            a:
+                TorchArray, the first array
+            b:
+                TorchArray, the second array
+
+        Returns:
+            TorchArray, the result of the matrix multiplication
+        """
+        return torch.matmul(a, b)
 
     @staticmethod
     def all(input: TorchArray, out: Optional[TorchArray] = None):
         """Returns true if all elements are true"""
-        _TorchBackend._check_torch()
+        TorchBackend._check_torch()
         return torch.all(input=input, out=out)
-
-    # TODO Remove this backwards compatibility set of aliases when larger refactor
-    #  complete
-    pad_func = pad
-    zeros_func = zeros
-    full_func = full
-    cat_func = cat
-    stack_func = stack
-
-
-class CPUTorchBackend(_TorchBackend):
-    """Implementation of array operations using PyTorch tensors on CPU."""
-
-    DEVICE = "cpu"
-
-
-class GPUTorchBackend(_TorchBackend):
-    """Implementation of array operations using PyTorch tensors on GPU."""
-
-    DEVICE = "cuda"
