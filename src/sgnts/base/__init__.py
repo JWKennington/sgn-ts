@@ -47,7 +47,7 @@ class AdapterConfig:
             bool, produce a whole gap buffer if there are any gaps in the copied data
             segment
         backend:
-            type[ArrayBackend], the ArrayBackendwrapper
+            type[ArrayBackend], the ArrayBackend wrapper
     """
 
     overlap: tuple[int, int] = (0, 0)
@@ -220,11 +220,7 @@ class _TSTransSink:
                 )
             )
 
-            if (
-                a.is_gap()
-                or not segment_has_nongap
-                or (self.skip_gaps and segment_has_gap)
-            ):
+            if not segment_has_nongap or (self.skip_gaps and segment_has_gap):
                 # produce a gap buffer if
                 # 1. the whole audioadapter is a gap or
                 # 2. the whole segment is a gap or
@@ -235,13 +231,12 @@ class _TSTransSink:
                 data = a.copy_samples(num_copy_samples)
                 if self.pad_zeros_offset > 0 and self.adapter_config is not None:
                     # pad zeros in front of buffer
-                    data = self.adapter_config.backend.pad(
-                        data, (pad_zeros_samples, 0)
-                    )
+                    data = self.adapter_config.backend.pad(data, (pad_zeros_samples, 0))
 
             # flush out samples from head of audioadapter
             num_flush_samples = num_copy_samples - sum(overlap_samples)
-            a.flush_samples(num_flush_samples)
+            if num_flush_samples > 0:
+                a.flush_samples(num_flush_samples)
 
             shape = buf0.shape[:-1] + (num_copy_samples + pad_zeros_samples,)
 
@@ -290,7 +285,8 @@ class _TSTransSink:
                 out = self.inbufs[sink_pad].get_sliced_buffers(
                     (earliest, min_latest), pad_start=True
                 )
-                self.inbufs[sink_pad].flush_samples_by_end_offset_segment(min_latest)
+                if min_latest > self.inbufs[sink_pad].offset:
+                    self.inbufs[sink_pad].flush_samples_by_end_offset(min_latest)
                 assert len(out) > 0
                 if self.adapter_config is not None:
                     out = self.__adapter(sink_pad, out)
