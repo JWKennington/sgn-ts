@@ -67,6 +67,7 @@ def test_lloid():
             name="corr2",
             source_pad_names=("H1",),
             sink_pad_names=("H1",),
+            sample_rate=512,
             filters=np.random.rand(10, 2048),
         ),
         Matmul(
@@ -86,6 +87,7 @@ def test_lloid():
             name="corr1",
             source_pad_names=("H1",),
             sink_pad_names=("H1",),
+            sample_rate=2048,
             filters=np.random.rand(10, 2048),
         ),
         Matmul(

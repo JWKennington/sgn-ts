@@ -84,7 +84,10 @@ class Resampler(TSTransform):
             self.adapter_config = AdapterConfig(backend=self.backend)
         else:
             assert self.adapter_config.backend == self.backend
-        self.adapter_config.overlap = (self.half_length, self.half_length)
+        self.adapter_config.overlap = (
+            Offset.fromsamples(self.half_length, self.inrate),
+            Offset.fromsamples(self.half_length, self.inrate),
+        )
         self.adapter_config.pad_zeros_startup = True
 
         super().__post_init__()

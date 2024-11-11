@@ -37,9 +37,9 @@ class AdapterConfig:
     Args:
         overlap:
             tuple[int, int], the overlap before and after the data segment to process,
-            in samples
+            in offsets
         stride:
-            int, the stride to produce, in samples
+            int, the stride to produce, in offsets
         pad_zeros_startup:
             bool, when overlap is provided, whether to pad zeros in front of the
             first buffer, or wait until there is enough data.
@@ -94,11 +94,11 @@ class _TSTransSink:
                 p: Audioadapter(backend=self.adapter_config.backend)
                 for p in self.sink_pads
             }
-            self.pad_zeros_samples = 0
+            self.pad_zeros_offset = 0
             if self.pad_zeros_startup is True:
                 # at startup, pad zeros in front of the first buffer to
                 # serve as history
-                self.pad_zeros_samples = self.overlap[0]
+                self.pad_zeros_offset = self.overlap[0]
             self.preparedoutoffsets = {p: None for p in self.sink_pads}
 
     def pull(self, pad: SinkPad, frame: TSFrame) -> None:
@@ -151,40 +151,43 @@ class _TSTransSink:
             upsampling:
                 kernel length = 17
                 need to pad 8 samples before and after
-                overlap = (8, 8)
-                stride = 16
+                overlap_samples = (8, 8)
+                stride_samples = 16
                                                 for output
                 preparedframes:     ________................________
-                                                stride=16
-                                    pad                     pad
+                                                stride
+                                    pad         samples=16  pad
                                     samples=8               samples=8
 
 
             correlation:
                 filter length = 16
                 need to pad filter_length - 1 samples
-                overlap = (15, 0)
-                stride = 8
+                overlap_samples = (15, 0)
+                stride_samples = 8
                                                     for output
                 preparedframes:     ----------------........
-                                                    stride=8
+                                                    stride_samples=8
                                     pad
                                     samples=15
         """
         a = self.audioadapters[pad]
         buf0 = frame[0]
         sample_rate = buf0.sample_rate
+        overlap_samples = tuple(Offset.tosamples(o, sample_rate) for o in self.overlap)
+        stride_samples = Offset.tosamples(self.stride, sample_rate)
+        pad_zeros_samples = Offset.tosamples(self.pad_zeros_offset, sample_rate)
 
         # push all buffers in the frame into the audioadapter
         for buf in frame:
             a.push(buf)
 
         # Check whether we have enough samples to produce a frame
-        min_samples = sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
+        min_samples = sum(overlap_samples) + (stride_samples or 1) - pad_zeros_samples
 
         # figure out the offset for preparedframes and preparedoutoffsets
-        offset = a.offset - Offset.fromsamples(self.pad_zeros_samples, sample_rate)
-        outoffset = offset + Offset.fromsamples(self.overlap[0], sample_rate)
+        offset = a.offset - self.pad_zeros_offset
+        outoffset = offset + self.overlap[0]
         preparedbufs = []
         if a.size < min_samples:
             # not enough samples to produce output yet
@@ -230,34 +233,28 @@ class _TSTransSink:
             else:
                 # copy out samples from head of audioadapter
                 data = a.copy_samples(num_copy_samples)
-                if self.pad_zeros_samples > 0 and self.adapter_config is not None:
+                if self.pad_zeros_offset > 0 and self.adapter_config is not None:
                     # pad zeros in front of buffer
                     data = self.adapter_config.backend.pad(
-                        data, (self.pad_zeros_samples, 0)
+                        data, (pad_zeros_samples, 0)
                     )
 
             # flush out samples from head of audioadapter
-            num_flush_samples = num_copy_samples - sum(self.overlap)
+            num_flush_samples = num_copy_samples - sum(overlap_samples)
             a.flush_samples(num_flush_samples)
 
-            shape = buf0.shape[:-1] + (num_copy_samples + self.pad_zeros_samples,)
+            shape = buf0.shape[:-1] + (num_copy_samples + pad_zeros_samples,)
 
             # update next zeros padding
-            self.pad_zeros_samples = -min(0, num_flush_samples)
+            self.pad_zeros_offset = -min(
+                0, Offset.fromsamples(num_flush_samples, sample_rate)
+            )
             pbuf = SeriesBuffer(
                 offset=offset, sample_rate=sample_rate, data=data, shape=shape
             )
             preparedbufs.append(pbuf)
-            outnoffset = pbuf.noffset - Offset.fromsamples(
-                sum(self.overlap), sample_rate
-            )
+            outnoffset = pbuf.noffset - sum(self.overlap)
             outoffsets.append({"offset": outoffset, "noffset": outnoffset})
-
-            offset += Offset.fromsamples(shape[-1], sample_rate)
-            outoffset += outnoffset
-            num_copy_samples = (
-                sum(self.overlap) + (self.stride or 1) - self.pad_zeros_samples
-            )
 
             self.preparedoutoffsets[pad] = outoffsets
 
