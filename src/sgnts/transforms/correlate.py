@@ -19,6 +19,7 @@ class Correlate(TSTransform):
             Array, the filter to correlate over
     """
 
+    sample_rate: int = None
     filters: Optional[Array] = None
 
     def __post_init__(self):
@@ -26,7 +27,10 @@ class Correlate(TSTransform):
         self.shape = self.filters.shape
         if self.adapter_config is None:
             self.adapter_config = AdapterConfig()
-        self.adapter_config.overlap = (self.shape[-1] - 1, 0)
+        self.adapter_config.overlap = (
+            Offset.fromsamples(self.shape[-1] - 1, self.sample_rate),
+            0,
+        )
         self.adapter_config.pad_zeros_startup = False
         super().__post_init__()
         assert (
@@ -65,6 +69,7 @@ class Correlate(TSTransform):
         outoffsets = self.preparedoutoffsets[self.sink_pads[0]]
         frames = self.preparedframes[self.sink_pads[0]]
         for i, buf in enumerate(frames):
+            assert buf.sample_rate == self.sample_rate
             if buf.is_gap:
                 data = None
             else:
