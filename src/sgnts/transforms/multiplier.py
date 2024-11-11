@@ -26,8 +26,8 @@ class Multiplier(TSTransform):
         metadata["name"] = "%s -> '%s'" % ("*".join(b.metadata["name"] for b in self.inbuf.values()), pad.name)
         
         #makes two dictionaries containing respective offset bounderies
-        minsegs = {str(n.name): [self.audioadapters[str(n.name)].get_available_offset_segment()[0]] for n in self.sink_pads} 
-        maxsegs = {str(n.name): [self.audioadapters[str(n.name)].get_available_offset_segment()[1]] for n in self.sink_pads} 
+        minsegs = {str(n.name): [self.audioadapters[str(n.name)].slice[0]] for n in self.sink_pads}
+        maxsegs = {str(n.name): [self.audioadapters[str(n.name)].slice[1]] for n in self.sink_pads}
 
         # Will only produce an output buffer with sum of the data in the overlap_segment
         overlap_segment = (max(minsegs.values())[0], min(maxsegs.values())[0]) #finds the overlap of the offsets that we are working with
@@ -47,7 +47,7 @@ class Multiplier(TSTransform):
                     metadata=metadata
                     )
         else:
-            bothgaps = all(self.audioadapters[str(n.name)].is_gap() for n in self.sink_pads)
+            bothgaps = all(self.audioadapters[str(n.name)].is_gap for n in self.sink_pads)
             # Check if all gaps
             if bothgaps:
                 return TSFrame(

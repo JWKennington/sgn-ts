@@ -26,8 +26,7 @@ class Audioadapter:
         self.gap_size: int = 0
         self.nongap_size: int = 0
         self.sample_rate: int = -1
-        self.data_all: Optional[Array] = None
-        self.data_all_offset_seg: Optional[tuple[int, int]] = None
+        self.pre_cat_data: Optional[SeriesBuffer] = None
         self.backend: type[ArrayBackend] = backend
 
     def __len__(self) -> int:
@@ -55,6 +54,25 @@ class Audioadapter:
             raise ValueError("Audioadapter not populated")
         return self.offset + Offset.fromsamples(self.size, self.sample_rate)
 
+    @property
+    def slice(self) -> tuple[int, int]:
+        """The offset slice of the audioadapter.
+
+        Returns:
+            tuple[int, int], the offset slice
+        """
+        return (self.offset, self.end_offset)
+
+    @property
+    def is_gap(self) -> bool:
+        """True if all buffers are gaps.
+
+        Returns:
+            bool, if True, the whole audioadapter is a gap. If False, there are nongap
+            buffers in the audioadapter
+        """
+        return self.nongap_size == 0
+
     def concatenate_data(
         self, offset_segment: Optional[tuple[int, int]] = None
     ) -> None:
@@ -68,13 +86,24 @@ class Audioadapter:
         if self.size > 0:
             if offset_segment is not None:
                 bufs = self.get_sliced_buffers(offset_segment)
-                self.data_all_offset_seg = offset_segment
             else:
                 bufs = self.buffers
-                self.data_all_offset_seg = self.get_available_offset_segment()
+                offset_segment = self.slice
 
-            self.data_all = self.backend.cat(
+            cat_all = self.backend.cat(
                 [b.filleddata(self.backend.zeros) for b in bufs], axis=-1
+            )
+
+            self.pre_cat_data = SeriesBuffer(
+                offset=offset_segment[0],
+                data=cat_all,
+                sample_rate=bufs[0].sample_rate,
+                shape=bufs[0].shape[:-1]
+                + (
+                    Offset.tosamples(
+                        offset_segment[1] - offset_segment[0], bufs[0].sample_rate
+                    ),
+                ),
             )
 
     def push(self, buf: SeriesBuffer) -> None:
@@ -115,18 +144,7 @@ class Audioadapter:
             self.nongap_size += nsamples
 
         self.buffers.append(buf)
-        self.data_all = None  # reset the data array
-        self.data_all_offset_seg = None
-
-    def get_available_offset_segment(self) -> tuple[int, int]:
-        """Return the full offset segment of the buffers in the audioadapter.
-
-        Returns:
-            tuple[int, int], the offset segment
-        """
-        if self.offset is None:
-            raise ValueError("Audioadapter not populated")
-        return (self.offset, self.end_offset)
+        self.pre_cat_data = None  # reset
 
     def get_sliced_buffers(
         self, offset_segment: tuple[int, int], pad_start: bool = False
@@ -155,7 +173,7 @@ class Audioadapter:
 
         if pad_start is False and start < self.offset:
             raise ValueError(
-                "Requested offset {start} outside of available offset {self.offset}"
+                f"Requested offset {start} outside of available offset {self.offset}"
             )
 
         bufs = deque(
@@ -188,66 +206,51 @@ class Audioadapter:
             Array, the array of copied samples
         """
         start_offset = Offset.fromsamples(start_sample, self.sample_rate) + self.offset
-        end_offset = Offset.fromsamples(nsamples, self.sample_rate) + self.offset
+        end_offset = Offset.fromsamples(nsamples, self.sample_rate) + start_offset
 
         return self.copy_samples_by_offset_segment((start_offset, end_offset))
 
     def copy_samples_by_offset_segment(
-        self, offset_segment: tuple[int, int], pad_zeros: bool = False
+        self, offset_segment: tuple[int, int], pad_start: bool = False
     ) -> Array:
         """Copy samples within the offset segment.
 
         Args:
             offset_segment:
                 tuple[int, int], the offset segment
-            pad_zeros:
+            pad_start:
                 bool, default False, pad zeros in front if offset_segment[0] is earlier
                 than the available segment
 
         Returns:
             Array, the array of copied samples
         """
-        if self.data_all_offset_seg is None:
-            avail_seg = (self.offset, self.end_offset)
+        if self.pre_cat_data is None:
+            avail_seg = self.slice
         else:
-            avail_seg = self.data_all_offset_seg
+            avail_seg = (self.pre_cat_data.offset, self.pre_cat_data.end_offset)
 
         assert offset_segment[1] <= avail_seg[1], (
             f"rate: {self.sample_rate} requested end segment outside of"
-            f"available segment, requested: {offset_segment}, available: {avail_seg}"
+            f" available segment, requested: {offset_segment}, available: {avail_seg}"
         )
 
-        if pad_zeros is False:
+        if pad_start is False:
             assert offset_segment[0] >= avail_seg[0], (
                 "requested start segment outside of available segment,"
-                f"requested: {offset_segment}, available: {avail_seg}"
+                f" requested: {offset_segment}, available: {avail_seg}"
             )
 
-        # find start sample
-        if self.data_all_offset_seg is not None:
-            offset = self.data_all_offset_seg[0]
-        else:
-            offset = self.offset
-
-        ni = Offset.tosamples(offset_segment[0] - offset, self.sample_rate)
-        nsamples = Offset.tosamples(
-            offset_segment[1] - offset_segment[0], self.sample_rate
+        segment_has_gaps, segment_has_nongaps = self.segment_gaps_info(
+            offset_segment, pad_start
         )
-
-        pad_samples = 0
-        if ni < 0 and pad_zeros is True:
-            pad_samples = -ni
-            ni = 0
-            nsamples -= pad_samples
-
-        segment_has_gaps, segment_has_nongaps = self.segment_gaps_info(offset_segment)
         # check gaps before copying
-        if self.nongap_size == 0 or not segment_has_nongaps:
+        if self.is_gap or not segment_has_nongaps:
             # no nongaps
             out = None
         else:
-            if self.data_all is None:
-                bufs = self.get_sliced_buffers(offset_segment)
+            if self.pre_cat_data is None:
+                bufs = self.get_sliced_buffers(offset_segment, pad_start=pad_start)
                 if len(bufs) == 1:
                     out = bufs[0].data
                 else:
@@ -255,11 +258,14 @@ class Audioadapter:
                         [b.filleddata(self.backend.zeros) for b in bufs], axis=-1
                     )
             else:
-                out = self.data_all[..., ni : ni + nsamples]
-
-        # FIXME: the checks on out are to avoid mypy errors
-        if pad_samples > 0 and out is not None and not isinstance(out, int):
-            out = self.backend.pad(out, (pad_samples, 0))
+                # find start sample
+                ni = Offset.tosamples(
+                    offset_segment[0] - self.pre_cat_data.offset, self.sample_rate
+                )
+                nsamples = Offset.tosamples(
+                    offset_segment[1] - offset_segment[0], self.sample_rate
+                )
+                out = self.pre_cat_data.data[..., ni : ni + nsamples]
 
         return out
 
@@ -270,31 +276,26 @@ class Audioadapter:
             nsamples:
                 int, the number of samples to flush from the head of the audioadapter
         """
-        self.flush_samples_by_end_offset_segment(
+        self.flush_samples_by_end_offset(
             self.offset + Offset.fromsamples(nsamples, self.sample_rate)
         )
 
-    def flush_samples_by_end_offset_segment(self, end_offset_segment: int) -> None:
-        """Flush nsamples from the head of the deque up to the end of the offset
-        segment.
+    def flush_samples_by_end_offset(self, end_offset: int) -> None:
+        """Flush nsamples from the head of the deque up to the end of the offset.
 
         Args:
-            end_offset_segment:
-                int, the end offset segment
+            end_offset:
+                int, the end offset
         """
-        avail = self.get_available_offset_segment()
-        if end_offset_segment < avail[0]:
-            return
-
-        if end_offset_segment > avail[1]:
+        avail = self.slice
+        if end_offset < avail[0] or end_offset > avail[1]:
             raise ValueError(
-                f"offset segment outside of available segment"
-                f" {end_offset_segment} {avail}"
+                f"offset segment outside of available segment" f" {end_offset} {avail}"
             )
 
         while self.size > 0:
             b = self.buffers[0]
-            if b.end_offset <= end_offset_segment:
+            if b.end_offset <= end_offset:
                 # pop out old buffers
                 self.buffers.popleft()
                 if b.is_gap:
@@ -303,9 +304,9 @@ class Audioadapter:
                     self.nongap_size -= b.samples
                 self.size -= b.samples
             else:
-                if b.offset < end_offset_segment:
-                    # if the end_offset_segment lies within a buffer, split the buffer
-                    l, r = b.split(end_offset_segment)
+                if b.offset < end_offset:
+                    # if the end_offset lies within a buffer, split the buffer
+                    l, r = b.split(end_offset)
                     self.buffers[0] = r
                     if l.is_gap:
                         self.gap_size -= l.samples
@@ -314,21 +315,28 @@ class Audioadapter:
                     self.size -= l.samples
                 break
 
-        self.data_all = None
-        self.data_all_offset_seg = None
+        self.pre_cat_data = None
 
-    def buffers_gaps_info(self, offset_segment: tuple[int, int]) -> list[bool]:
+    def buffers_gaps_info(
+        self, offset_segment: tuple[int, int], pad_start: bool = False
+    ) -> list[bool]:
         """Return a list of booleans that flag buffers based on whether they are gaps.
         True: is_gap, False: is_nongap
 
         Args:
             offset_segment:
                 tuple[int, int], the offset segment to get gaps info from
+            pad_start:
+                bool, default False, pad zeros in front if offset_segment[0] is earlier
+                than the available segment
 
         Returns:
             list[bool], a list of booleans that flags whether buffers are gaps
         """
-        return [b.is_gap for b in self.get_sliced_buffers(offset_segment)]
+        return [
+            b.is_gap
+            for b in self.get_sliced_buffers(offset_segment, pad_start=pad_start)
+        ]
 
     def samples_gaps_info(self, offset_segment: tuple[int, int]) -> Array:
         """Return an array of booleans that flag samples based on whether they are gaps.
@@ -349,27 +357,24 @@ class Audioadapter:
             axis=-1,
         )
 
-    def segment_gaps_info(self, offset_segment: tuple[int, int]) -> tuple[bool, bool]:
+    def segment_gaps_info(
+        self, offset_segment: tuple[int, int], pad_start: bool = False
+    ) -> tuple[bool, bool]:
         """Identify whether there are gaps or nongaps in the requested offset_segment.
 
         Args:
             offset_segment:
                 tuple[int, int], the offset segment to check for gaps and nongaps
+            pad_start:
+                bool, default False, pad zeros in front if offset_segment[0] is earlier
+                than the available segment
 
         Returns:
             tuple[bool, bool], the tuple representing gaps information in the form
             (has_gaps, has_nongaps)
         """
-        gaps = self.buffers_gaps_info(offset_segment)
-        has_gaps = True in gaps
-        has_nongaps = False in gaps
-        return has_gaps, has_nongaps
-
-    def is_gap(self) -> bool:
-        """True if all buffers are gaps.
-
-        Returns:
-            bool, if True, the whole audioadapter is a gap. If False, there are nongap
-            buffers in the audioadapter
-        """
-        return self.nongap_size == 0
+        if self.is_gap:
+            return True, False
+        else:
+            gaps = self.buffers_gaps_info(offset_segment, pad_start=pad_start)
+            return True in gaps, False in gaps
