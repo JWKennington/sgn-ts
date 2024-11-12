@@ -154,6 +154,72 @@ It is possible to increase the maximum sample rate globally in an application
 SeriesBuffer(offset=0, offset_end=262144, shape=(32768,), sample_rate=32768, duration=1000000000, data=[-0.08916502 ...  0.89236118])
 ```
 
+Buffers are not the primary data type passed around between element in sgnts.  Rather, it is a `TSFrame`.  TSFrames hold lists of buffers
+
+```
+>>> import numpy
+>>> from sgnts.base.buffer import SeriesBuffer, TSFrame
+>>> 
+>>> # An example of just one buffer
+>>> buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
+>>> frame = TSFrame(buffers=[buf1])
+>>> print (frame)
+
+	SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=[-0.04094335 ... -1.49758223])
+>>> 
+>>> # An example of two contiguous buffers
+>>> buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
+>>> buf2 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
+>>> frame = TSFrame(buffers=[buf1, buf2])
+>>> print (frame)
+
+	SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=[-1.56771352 ... -0.20928693])
+	SeriesBuffer(offset=16384, offset_end=32768, shape=(2048,), sample_rate=2048, duration=1000000000, data=[-1.00442217 ... -0.75684022])
+>>> 
+>>> # An example of two non contiguous buffers. NOTE THIS SHOULDN'T WORK!!
+>>> buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
+>>> buf2 = SeriesBuffer(offset=12345, sample_rate=2048, data=numpy.random.randn(2048))
+>>> frame = TSFrame(buffers=[buf1, buf2])
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "<string>", line 8, in __init__
+  File "/Users/crh184/Library/Python/3.9/lib/python/site-packages/sgnts/base/buffer.py", line 455, in __post_init__
+    self.__sanity_check(self.buffers)
+  File "/Users/crh184/Library/Python/3.9/lib/python/site-packages/sgnts/base/buffer.py", line 485, in __sanity_check
+    assert off0 == sl.start
+AssertionError
+```
+
+Note in the above that TSFrames only support contiguous buffers
+
+TSFrames offer some additional methods to describe their contents, e.g.,
+
+```python
+>>> buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
+>>> buf2 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
+>>> frame = TSFrame(buffers=[buf1, buf2])
+>>> 
+>>> # Get the offset of the first buffer
+>>> print (frame.offset)
+0
+>>> 
+>>> # Get the offset end of the last buffer
+>>> print (frame.end_offset)
+32768
+>>> 
+>>> # Get the sample rate
+>>> print (frame.sample_rate)
+2048
+>>> 
+>>> # Iterate over the buffers
+>>> for buf in frame:
+...     print (buf)
+... 
+SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=[0.01658589 ... 0.76543937])
+SeriesBuffer(offset=16384, offset_end=32768, shape=(2048,), sample_rate=2048, duration=1000000000, data=[0.76470737 ... 0.89438121])
+```
+
+
 ## Example
 
 This [MR](https://git.ligo.org/greg/sgn-ts/-/merge_requests/46) is pending but would make this example simpler
