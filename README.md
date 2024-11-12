@@ -219,6 +219,29 @@ SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, durati
 SeriesBuffer(offset=16384, offset_end=32768, shape=(2048,), sample_rate=2048, duration=1000000000, data=[0.76470737 ... 0.89438121])
 ```
 
+TSFrames must be initialized with at least one buffer because metadata are
+derived from the buffer(s).  If you want to have an empty frame, you still have
+to set one buffer with the correct metadata, e.g., 
+
+```python
+>>> # empty buffer
+>>> buf = SeriesBuffer(offset=0, sample_rate=2048, shape=(2048,), data=None)
+>>> frame = TSFrame(buffers=[buf])
+```
+
+#### Advanced TSFrame techniques
+
+There are shortcuts for producing a new empty TSFrame that might be useful if your goal is to just spit out some similar empty frames to fill in, e.g.,
+
+```python
+>>> frame = TSFrame.from_buffer_kwargs(offset=0, sample_rate=2048, shape=(2048,))
+>>> print (frame)
+
+	SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=None)
+>>> print (next(frame))
+
+	SeriesBuffer(offset=16384, offset_end=32768, shape=(2048,), sample_rate=2048, duration=1000000000, data=None)
+```
 
 ## Example
 
