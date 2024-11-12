@@ -3,7 +3,7 @@
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import SegmentSrc, FakeSeriesSrc
+from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Threshold
 
 
@@ -15,7 +15,7 @@ def test_threshold(capsys):
     #         ---------
     #        | datasrc |
     #         ---------
-    #             | 
+    #             |
     #        -----------
     #       | threshold |
     #        -----------
@@ -42,10 +42,10 @@ def test_threshold(capsys):
             name="threshold",
             source_pad_names=("threshold",),
             sink_pad_names=("data",),
-            threshold = threshold,
-            startwn = startwn,
-            stopwn = stopwn,
-            ),
+            threshold=threshold,
+            startwn=startwn,
+            stopwn=stopwn,
+        ),
         FakeSeriesSink(
             name="snk",
             sink_pad_names=("threshold",),

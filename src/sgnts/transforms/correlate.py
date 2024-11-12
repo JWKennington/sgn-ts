@@ -19,11 +19,13 @@ class Correlate(TSTransform):
             Array, the filter to correlate over
     """
 
-    sample_rate: int = None
+    sample_rate: int = -1
     filters: Optional[Array] = None
 
     def __post_init__(self):
+        # FIXME: read sample_rate from data
         assert self.filters is not None
+        assert self.sample_rate != -1
         self.shape = self.filters.shape
         if self.adapter_config is None:
             self.adapter_config = AdapterConfig()
@@ -49,9 +51,9 @@ class Correlate(TSTransform):
         """
         # FIXME: try with array ops
         os = []
-        shape = self.filters.shape
+        shape = self.shape
         self.filters = self.filters.reshape(-1, shape[-1])
-        for j in range(self.filters.shape[0]):
+        for j in range(self.shape[0]):
             os.append(scipy.signal.correlate(data, self.filters[j], mode="valid"))
         return np.vstack(os).reshape(shape[:-1] + (-1,))
 

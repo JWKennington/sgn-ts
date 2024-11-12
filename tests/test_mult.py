@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 from sgn.apps import Pipeline
+
 from sgnts.sinks import FakeSeriesSink
-from sgnts.transforms import Multiplier
 from sgnts.sources import FakeSeriesSrc
+from sgnts.transforms import Multiplier
 
 
 def test_tsgraph(capsys):

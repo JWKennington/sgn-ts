@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import Optional
 
 from sgn.base import SourcePad
 
@@ -16,11 +19,12 @@ class SumIndex(TSTransform):
             type[ArrayBackend], the wrapper around array operations.
     """
 
-    sl: list[slice] = None
+    sl: Optional[list[slice]] = None
     backend: type[ArrayBackend] = NumpyBackend
 
     def __post_init__(self):
         super().__post_init__()
+        assert self.sl is not None
         for sl in self.sl:
             assert isinstance(sl, slice)
 

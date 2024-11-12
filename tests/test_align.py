@@ -3,8 +3,8 @@
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
-from sgnts.transforms import Align
 from sgnts.sources import FakeSeriesSrc
+from sgnts.transforms import Align
 
 
 def test_align(capsys):
@@ -32,10 +32,6 @@ def test_align(capsys):
     V1_t0 = 6
     max_age = 100 * 1e9
     duration = 10
-
-    print_message = (
-        "f' duration {bufs[-1].duration} data_is_none {bufs[-1].data is None}'"
-    )
 
     pipeline.insert(
         FakeSeriesSrc(
