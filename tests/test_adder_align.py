@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from sgn.apps import Pipeline
+
 from sgnts.base import AdapterConfig, Offset
 from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
@@ -65,11 +66,7 @@ def test_adder(capsys):
             max_age=max_age,
             adapter_config=AdapterConfig(stride=Offset.fromsec(2)),
         ),
-        FakeSeriesSink(
-            name="snk1",
-            sink_pad_names=("H1",),
-            verbose=True
-        ),
+        FakeSeriesSink(name="snk1", sink_pad_names=("H1",), verbose=True),
         link_map={
             "down:sink:H1": "src1:src:H1",
             "up:sink:H1": "down:src:H1",

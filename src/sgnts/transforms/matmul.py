@@ -34,6 +34,8 @@ class Matmul(TSTransform):
         assert (
             len(self.sink_pads) == 1 and len(self.source_pads) == 1
         ), "only one sink_pad and one source_pad is allowed"
+        assert self.matrix is not None
+        self.shape = self.matrix.shape
 
     def transform(self, pad: SourcePad) -> TSFrame:
         """Matmul of a matrix with the incoming data.
@@ -60,7 +62,7 @@ class Matmul(TSTransform):
                 offset=inbuf.offset,
                 sample_rate=inbuf.sample_rate,
                 data=data,
-                shape=self.matrix.shape[:-1] + (inbuf.samples,),
+                shape=self.shape[:-1] + (inbuf.samples,),
             )
             outbufs.append(outbuf)
 

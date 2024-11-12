@@ -3,7 +3,7 @@
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import SegmentSrc, FakeSeriesSrc
+from sgnts.sources import FakeSeriesSrc, SegmentSrc
 from sgnts.transforms import Gate
 
 
