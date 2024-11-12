@@ -539,3 +539,26 @@ class TSFrame(Frame):
             int, the sample rate
         """
         return self.buffers[0].sample_rate
+
+    @classmethod
+    def from_buffer_kwargs(cls, **kwargs):
+        """A short hand for the following:
+
+        >>> buf = SeriesBuffer(**kwargs)
+        >>> frame = TSFrame(buffers=[buf])
+        """
+        return cls(buffers=[SeriesBuffer(**kwargs)])
+
+    def __next__(self):
+        """
+        return a new empty frame that is like the current one but advanced to the next offset, e.g.,
+
+        >>> frame = TSFrame.from_buffer_kwargs(offset=0, sample_rate=2048, shape=(2048,))
+        >>> print (frame)
+
+                SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=None)
+        >>> print (next(frame))
+        """
+        return self.from_buffer_kwargs(
+            offset=self.end_offset, sample_rate=self.sample_rate, shape=self.shape
+        )
