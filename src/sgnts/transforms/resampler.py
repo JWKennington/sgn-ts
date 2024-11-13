@@ -6,18 +6,14 @@ from scipy.signal import correlate
 from sgn.base import SourcePad
 from torch.nn.functional import conv1d as Fconv1d
 
-from sgnts.base import (
-    AdapterConfig,
+from sgnts.base import AdapterConfig, Offset, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base.array_ops import (
     Array,
     ArrayBackend,
     NumpyArray,
     NumpyBackend,
-    Offset,
-    SeriesBuffer,
     TorchArray,
     TorchBackend,
-    TSFrame,
-    TSTransform,
 )
 
 UP_HALF_LENGTH = 8

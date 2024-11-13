@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from math import isinf
 from typing import Optional, Union
 
-import numpy as np
 from sgn.base import (
     InternalPad,
     SinkElement,
@@ -15,14 +13,7 @@ from sgn.base import (
     TransformElement,
 )
 
-from sgnts.base.array_ops import (
-    Array,
-    ArrayBackend,
-    NumpyArray,
-    NumpyBackend,
-    TorchArray,
-    TorchBackend,
-)
+from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
 from sgnts.base.audioadapter import Audioadapter
 from sgnts.base.buffer import SeriesBuffer, TSFrame
 from sgnts.base.offset import Offset
