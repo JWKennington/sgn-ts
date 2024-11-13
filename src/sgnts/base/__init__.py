@@ -461,7 +461,7 @@ class TSSource(SourceElement):
     def setup_buffers_on_pad(
         self,
         pad: SourcePad,
-        channels: tuple[int, ...],
+        sample_shape: tuple[int, ...],
         rate: int,
     ) -> None:
         """Setup variables on the pad that are needed to construct SeriesBuffers.
@@ -472,16 +472,18 @@ class TSSource(SourceElement):
         Args:
             pad:
                 SourcePad, the pad to setup buffers on
-            channels:
-                tuple[int, ...], the shape of the data except the last dimension, i.e.
-                channels=data.shape[:-1]
+            sample_shape:
+                tuple[int, ...], the shape of a single sample of the
+                data, or put another way, the shape of the data except
+                for the last (time) dimension,
+                i.e. sample_shape=data.shape[:-1]
             rate:
                 int, the sample rate of the data the pad will produce
 
         """
         self.__new_buffer_dict[pad] = {
             "sample_rate": rate,
-            "shape": channels + (self.num_samples(rate),),
+            "shape": sample_shape + (self.num_samples(rate),),
         }
 
     def prepare_frame(
