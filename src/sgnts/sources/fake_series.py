@@ -58,7 +58,7 @@ class FakeSeriesSrc(TSSource):
 
         # setup buffers
         for pad in self.source_pads:
-            self.setup_buffers_on_pad(
+            self.set_pad_buffer_params(
                 pad=pad, sample_shape=self.sample_shape, rate=self.rate
             )
 

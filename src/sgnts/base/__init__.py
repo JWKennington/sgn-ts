@@ -458,13 +458,13 @@ class TSSource(SourceElement):
         """
         return Offset.sample_stride(rate)
 
-    def setup_buffers_on_pad(
+    def set_pad_buffer_params(
         self,
         pad: SourcePad,
         sample_shape: tuple[int, ...],
         rate: int,
     ) -> None:
-        """Setup variables on the pad that are needed to construct SeriesBuffers.
+        """Set variables on the pad that are needed to construct SeriesBuffers.
 
         These should remain constant throughout the duration of the
         pipeline.
