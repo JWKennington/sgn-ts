@@ -35,7 +35,7 @@ class SegmentSrc(TSSource):
         ).simplify()
 
         for pad in self.source_pads:
-            self.setup_buffers_on_pad(channels=(), rate=self.rate, pad=pad)
+            self.setup_buffers_on_pad(pad=pad, channels=(), rate=self.rate)
 
     def new(self, pad: SourcePad) -> TSFrame:
         """New TSFrames are created on "pad" with stride matching the stride specified

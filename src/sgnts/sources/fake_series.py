@@ -55,7 +55,7 @@ class FakeSeriesSrc(TSSource):
 
         # setup buffers
         for pad in self.source_pads:
-            self.setup_buffers_on_pad(channels=self.channels, rate=self.rate, pad=pad)
+            self.setup_buffers_on_pad(pad=pad, channels=self.channels, rate=self.rate)
 
         if self.random_seed is not None and (
             self.signal_type == "white" or self.signal_type == "impulse"
