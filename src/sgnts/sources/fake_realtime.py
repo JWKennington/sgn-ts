@@ -35,7 +35,7 @@ class RealTimeWhiteNoiseSrc(TSSource):
         super().__post_init__()
 
         for pad in self.source_pads:
-            self.setup_buffers_on_pad(channels=(), rate=self.rate, pad=pad)
+            self.set_pad_buffer_params(pad=pad, sample_shape=(), rate=self.rate)
 
     def new(self, pad: SourcePad) -> TSFrame:
         """New TSFrames are created on "pad" at fixed time intervals that keeps up with

@@ -16,12 +16,14 @@ class FakeSeriesSrc(TSSource):
     Args:
         rate:
             int, the sample rate of the data
-        channels:
-            tuple[int, ...], the number of channels of the data in each dimension except
-            the last, i.e., channels = data.shape[:-1]. For example, if the data is a
-            multi-dimensional array and has shape=(2, 4, 16) then channels = (2, 4).
-            Note that if data is one dimensional and has shape (16,), channels would be
-            an empty tuple ().
+        sample_shape:
+            tuple[int, ...], the shape of a sample of data, or the
+            shape of the data in each dimension except the last (time)
+            dimension, i.e., sample_shape = data.shape[:-1]. For
+            example, if the data is a multi-dimensional array and has
+            shape=(2, 4, 16) then sample_shape = (2, 4).  Note that if
+            data is one dimensional and has shape (16,), sample_shape
+            would be an empty tuple ().
         signal_type:
             str, currently supported types: (1) 'white': white noise data. (2) 'sin' or
             'sine': sine wave data. (3) 'impulse': creates an impulse data, where the
@@ -37,10 +39,11 @@ class FakeSeriesSrc(TSSource):
         impulse_position:
             int, the sample point position to place the impulse. If -1, then the
             impulse will be generated randomly.
+
     """
 
     rate: int = 2048
-    channels: tuple[int, ...] = ()
+    sample_shape: tuple[int, ...] = ()
     signal_type: str = "white"
     fsin: float = 5
     ngap: int = 0
@@ -55,14 +58,16 @@ class FakeSeriesSrc(TSSource):
 
         # setup buffers
         for pad in self.source_pads:
-            self.setup_buffers_on_pad(channels=self.channels, rate=self.rate, pad=pad)
+            self.set_pad_buffer_params(
+                pad=pad, sample_shape=self.sample_shape, rate=self.rate
+            )
 
         if self.random_seed is not None and (
             self.signal_type == "white" or self.signal_type == "impulse"
         ):
             np.random.seed(self.random_seed)
         if self.signal_type == "impulse":
-            assert self.channels == ()
+            assert self.sample_shape == ()
             assert len(self.source_pads) == 1
             if self.impulse_position == -1:
                 self.impulse_position = np.random.randint(0, int(self.end * self.rate))
@@ -122,7 +127,7 @@ class FakeSeriesSrc(TSSource):
                 self.fsin
                 * np.tile(
                     np.linspace(t0, t0 + duration, buf.samples, endpoint=False),
-                    self.channels + (1,),
+                    self.sample_shape + (1,),
                 )
             )
         elif self.signal_type == "impulse":

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from math import isinf
 from typing import Optional, Union
 
-import numpy as np
 from sgn.base import (
     InternalPad,
     SinkElement,
@@ -15,14 +13,7 @@ from sgn.base import (
     TransformElement,
 )
 
-from sgnts.base.array_ops import (
-    Array,
-    ArrayBackend,
-    NumpyArray,
-    NumpyBackend,
-    TorchArray,
-    TorchBackend,
-)
+from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
 from sgnts.base.audioadapter import Audioadapter
 from sgnts.base.buffer import EventBuffer, EventFrame, SeriesBuffer, TSFrame
 from sgnts.base.offset import Offset
@@ -59,15 +50,18 @@ class AdapterConfig:
 
 @dataclass
 class _TSTransSink:
-    """Base class for TSTransforms and TSSinks, will produce aligned frames in
-    preparedframes. If adapter_config is provided, will trigger the audioadapter to
-    queue data, and make padded or strided frames in preparedframes.
+    """Base class for TSTransforms and TSSinks.
+
+    This will produce aligned frames in preparedframes. If
+    adapter_config is provided, will trigger the audioadapter to queue
+    data, and make padded or strided frames in preparedframes.
 
     Args:
         max_age:
             int, the max age before timeout, in nanoseconds
         adapter_config:
             AdapterConfig, holds parameters used for audioadapter behavior
+
     """
 
     max_age: int = 100 * Time.SECONDS
@@ -122,9 +116,10 @@ class _TSTransSink:
             raise ValueError("pad %s has timed out" % pad.name)
 
     def __adapter(self, pad: SinkPad, frame: TSFrame) -> list[SeriesBuffer]:
-        """Use the audioadapter to handle streaming scenarios such as padding with
-        overlap before and after the target output data, and producing fixed-stride
-        frames.
+        """Use the audioadapter to handle streaming scenarios.
+
+        This will pad with overlap before and after the target output
+        data, and produce fixed-stride frames.
 
         The self.preparedframes are padded with the requested overlap padding. This
         method also produces a self.preparedoutoffsets, that infers the metadata
@@ -170,6 +165,7 @@ class _TSTransSink:
                                                     stride_samples=8
                                     pad
                                     samples=15
+
         """
         a = self.audioadapters[pad]
         buf0 = frame[0]
@@ -256,8 +252,11 @@ class _TSTransSink:
         return preparedbufs
 
     def internal(self, pad: InternalPad) -> None:
-        """Align buffers from all the sink pads. If AdapterConfig is provided, perform
-        the requested overlap/stride streaming of frames.
+        """Align buffers from all the sink pads.
+
+        If AdapterConfig is provided, perform the requested
+        overlap/stride streaming of frames.
+
         """
         # align if possible
         self._align()
@@ -322,6 +321,7 @@ class _TSTransSink:
 
         Returns:
             bool, whether pad has timed-out
+
         """
         return self.inbufs[pad].end_offset - self.inbufs[pad].offset > Offset.fromns(
             self.max_age
@@ -336,6 +336,7 @@ class _TSTransSink:
 
         Returns:
             int, the latest offset in the pad's buffer queue
+
         """
         return self.inbufs[pad].end_offset if self.inbufs[pad] else -1
 
@@ -348,6 +349,7 @@ class _TSTransSink:
 
         Returns:
             int, the earliest offset in the pad's buffer queue
+
         """
         return self.inbufs[pad].offset if self.inbufs[pad] else -1
 
@@ -381,8 +383,10 @@ class TSTransform(TransformElement, _TSTransSink):
         _TSTransSink.internal(self, pad)
 
     def transform(self, pad: SourcePad) -> TSFrame:
-        """The transform function must be provided by the subclass. It should take the
-        source pad as an argument and return a new TSFrame.
+        """The transform function must be provided by the subclass.
+
+        It should take the source pad as an argument and return a new
+        TSFrame.
 
         Args:
             pad:
@@ -390,6 +394,7 @@ class TSTransform(TransformElement, _TSTransSink):
 
         Returns:
             TSFrame, The transformed frame
+
         """
         raise NotImplementedError
 
@@ -417,6 +422,7 @@ class TSSource(SourceElement):
             float, start time of first buffer, in seconds
         end:
             float, end time of the last buffer, in seconds
+
     """
 
     t0: float = 0
@@ -448,27 +454,36 @@ class TSSource(SourceElement):
 
         Returns:
             int, the number of samples
+
         """
         return Offset.sample_stride(rate)
 
-    def setup_buffers_on_pad(
-        self, channels: tuple[int, ...], rate: int, pad: SourcePad
+    def set_pad_buffer_params(
+        self,
+        pad: SourcePad,
+        sample_shape: tuple[int, ...],
+        rate: int,
     ) -> None:
-        """Setup variables on the pad that are needed to construct SeriesBuffers and
-        constant throughout the duration of the pipeline.
+        """Set variables on the pad that are needed to construct SeriesBuffers.
+
+        These should remain constant throughout the duration of the
+        pipeline.
 
         Args:
-            channels:
-                tuple[int, ...], the shape of the data except the last dimension, i.e.
-                channels=data.shape[:-1]
-            rate:
-                int, the sample rate of the data the pad will produce
             pad:
                 SourcePad, the pad to setup buffers on
+            sample_shape:
+                tuple[int, ...], the shape of a single sample of the
+                data, or put another way, the shape of the data except
+                for the last (time) dimension,
+                i.e. sample_shape=data.shape[:-1]
+            rate:
+                int, the sample rate of the data the pad will produce
+
         """
         self.__new_buffer_dict[pad] = {
             "sample_rate": rate,
-            "shape": channels + (self.num_samples(rate),),
+            "shape": sample_shape + (self.num_samples(rate),),
         }
 
     def prepare_frame(
@@ -478,8 +493,10 @@ class TSSource(SourceElement):
         EOS: Optional[bool] = None,
         metadata: Optional[dict] = None,
     ) -> TSFrame:
-        """Prepare the next TSFrame that the source pad will produce, and advance the
-        offset by the stride in Offset.SAMPLE_STRIDE_AT_MAX_RATE.
+        """Prepare the next TSFrame that the source pad will produce.
+
+        The offset will be advanced by the stride in
+        Offset.SAMPLE_STRIDE_AT_MAX_RATE.
 
         Args:
             pad:
@@ -493,6 +510,7 @@ class TSSource(SourceElement):
 
         Returns:
             TSFrame, the TSFrame prepared on the source pad
+
         """
         buf = SeriesBuffer(
             offset=self.offset[pad], data=data, **self.__new_buffer_dict[pad]
