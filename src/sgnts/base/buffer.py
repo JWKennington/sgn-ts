@@ -20,6 +20,120 @@ from sgnts.base.time import Time
 
 
 @dataclass
+class EventBuffer:
+    """Event buffer with associated metadata.
+
+    Args:
+        ts:
+            int, Start time of event buffer in ns
+        te:
+            int, End time of event buffer in ns
+        data:
+            Any, Data of the event
+    """
+
+    ts: int = None
+    te: int = None
+    data: Any = None
+
+    def __post_init__(self):
+        assert isinstance(self.ts, int) and isinstance(self.te, int)
+        assert self.ts <= self.te
+
+    def __repr__(self):
+        with numpy.printoptions(threshold=3, edgeitems=1):
+            return "EventBuffer(ts=%d, te=%d, data=%s)" % (
+                self.ts,
+                self.te,
+                self.data,
+            )
+
+    def __bool__(self):
+        return self.data is not None
+
+    @property
+    def slice(self):
+        return TSSlice(self.ts, self.te)
+
+    @property
+    def duration(self):
+        return self.te - self.ts
+
+    @property
+    def is_gap(self):
+        if self.data is None:
+            return True
+        else:
+            return False
+
+    def __contains__(self, item):
+        if isinstance(item, int):
+            return self.ts <= item <= self.te
+        else:
+            return False
+
+    def __lt__(self, item):
+        if isinstance(item, int):
+            return self.te < item
+        elif isinstance(item, EventBuffer):
+            return self.te < item.te
+
+    def __le__(self, item):
+        if isinstance(item, int):
+            return self.te <= item
+        elif isinstance(item, EventBuffer):
+            return self.te <= item.te
+
+    def __ge__(self, item):
+        if isinstance(item, int):
+            return self.ts >= item
+        elif isinstance(item, EventBuffer):
+            return self.te >= item.te
+
+    def __gt__(self, item):
+        if isinstance(item, int):
+            return self.ts > item
+        elif isinstance(item, EventBuffer):
+            return self.te > item.te
+
+    def pad_buffer(self, ts, te, data=None):
+        assert ts < self.ts
+        return EventBuffer(
+            ts=ts,
+            te=self.ts,
+            data=data,
+        )
+
+
+@dataclass
+class EventFrame(Frame):
+    """An sgn Frame object that holds a dictionary of events.
+
+    Args:
+        events:
+            dict, Dictionary of EventBuffers
+    """
+
+    events: dict = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        assert len(self.events) > 0
+
+    def __getitem__(self, item):
+        return self.events[item]
+
+    def __iter__(self):
+        return iter(self.events)
+
+    def __repr__(self):
+        out = ""
+        for evt, v in self.events.items():
+            out += "\n\t%s\n\t\t%s" % (evt, v)
+        return out
+
+
+@dataclass
 class SeriesBuffer:
     """Timeseries buffer with associated metadata.
 
