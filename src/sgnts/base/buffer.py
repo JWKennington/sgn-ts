@@ -23,14 +23,13 @@ from sgnts.base.time import Time
 class EventBuffer:
     """Event buffer with associated metadata.
 
-    Parameters
-    ----------
-    ts: int
-        Start time of event buffer in ns
-    te: int
-        End time of event buffer in ns
-    data: Any
-        Data of the event
+    Args:
+        ts:
+            int, Start time of event buffer in ns
+        te:
+            int, End time of event buffer in ns
+        data:
+            Any, Data of the event
     """
 
     ts: int = None
@@ -108,13 +107,11 @@ class EventBuffer:
 
 @dataclass
 class EventFrame(Frame):
-    """An sgn Frame object that holds a dictionary of events
+    """An sgn Frame object that holds a dictionary of events.
 
-    Parameters
-    ----------
-    events : dict
-        Dictionary of EventBuffers
-
+    Args:
+        events:
+            dict, Dictionary of EventBuffers
     """
 
     events: dict = None

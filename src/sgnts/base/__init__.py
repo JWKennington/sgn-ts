@@ -24,7 +24,7 @@ from sgnts.base.array_ops import (
     TorchBackend,
 )
 from sgnts.base.audioadapter import Audioadapter
-from sgnts.base.buffer import SeriesBuffer, TSFrame
+from sgnts.base.buffer import EventBuffer, EventFrame, SeriesBuffer, TSFrame
 from sgnts.base.offset import Offset
 from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.base.time import Time
