@@ -425,19 +425,20 @@ class TSSource(SourceElement):
 
     """
 
-    t0: float = 0
-    end: float = float("+inf")
+    t0: float | None = None
+    end: float | None = None
 
     def __post_init__(self):
         super().__post_init__()
+        t0 = self.t0 or 0
         # FIXME should we be more careful about this?
         # FIXME should this not be different by pad?
         self.offset = {
-            p: Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
+            p: Offset.fromsec(t0 - Offset.offset_ref_t0 / Time.SECONDS)
             for p in self.source_pads
         }
         # FIXME should this be different by pad?
-        if not isinf(self.end):
+        if self.end is not None and not isinf(self.end):
             self.end_offset = Offset.fromsec(
                 self.end - Offset.offset_ref_t0 / Time.SECONDS
             )
