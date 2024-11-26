@@ -2,8 +2,8 @@
 
 from sgn.apps import Pipeline
 
-from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSource, SegmentSource
+from sgnts.sinks import NullSeriesSink
 from sgnts.transforms import Gate
 
 
@@ -50,7 +50,7 @@ def test_gate():
             sink_pad_names=("data", "control"),
             control="control",
         ),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk",
             sink_pad_names=("gate",),
             verbose=True,

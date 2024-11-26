@@ -3,8 +3,8 @@
 from sgn.apps import Pipeline
 
 from sgnts.base import AdapterConfig, Offset
-from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSource
+from sgnts.sinks import NullSeriesSink
 from sgnts.transforms import Adder, Resampler
 
 
@@ -68,7 +68,7 @@ def test_adder():
             adapter_config=AdapterConfig(stride=Offset.fromsec(2)),
             addslices_map={"A": (slice(0, 2),), "B": (slice(0, 2),)},
         ),
-        FakeSeriesSink(name="snk1", sink_pad_names=("H1",), verbose=True),
+        NullSeriesSink(name="snk1", sink_pad_names=("H1",), verbose=True),
         link_map={
             "down:snk:H1": "src1:src:H1",
             "up:snk:H1": "down:src:H1",

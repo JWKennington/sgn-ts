@@ -2,8 +2,8 @@
 import pytest
 from sgn.apps import Pipeline
 
-from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSource
+from sgnts.sinks import NullSeriesSink
 
 
 @pytest.mark.skip(reason="Multiplier has bugs and will need to be reworked")
@@ -48,7 +48,7 @@ def test_tsgraph():
             sink_pad_names={",".join(["pad" + str(n)]) for n in range(num_pads)},
             num_samples=2048,
         ),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk1",
             sink_pad_names=("L1",),
             verbose=True,

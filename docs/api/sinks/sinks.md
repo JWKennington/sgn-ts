@@ -1,5 +1,5 @@
 ::: sgnts.sinks
     options:
       members:
-      - FakeSeriesSink
+      - NullSeriesSink
       - DumpSeriesSink

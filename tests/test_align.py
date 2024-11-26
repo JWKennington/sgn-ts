@@ -2,8 +2,8 @@
 
 from sgn.apps import Pipeline
 
-from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSource
+from sgnts.sinks import NullSeriesSink
 from sgnts.transforms import Align
 
 
@@ -47,7 +47,7 @@ def test_align(capsys):
             source_pad_names=("H1", "L1", "V1"),
             max_age=max_age,
         ),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
             verbose=True,
@@ -59,7 +59,7 @@ def test_align(capsys):
             t0=L1_t0,
             end=L1_t0 + duration,
         ),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk2",
             sink_pad_names=("L1",),
             verbose=True,
@@ -71,7 +71,7 @@ def test_align(capsys):
             t0=V1_t0,
             end=V1_t0 + duration,
         ),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk3",
             sink_pad_names=("V1",),
             verbose=True,

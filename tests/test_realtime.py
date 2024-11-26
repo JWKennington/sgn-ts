@@ -2,7 +2,7 @@
 
 from sgn.apps import Pipeline
 import time
-from sgnts.sinks import FakeSeriesSink
+from sgnts.sinks import NullSeriesSink
 from sgnts.sources import FakeSeriesSource
 from sgnts.base import TSTransform
 
@@ -33,7 +33,7 @@ def test_realtime(capsys):
             real_time=True,
         ),
         Slow(name="slow", source_pad_names=("H1",), sink_pad_names=("H1",)),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk",
             sink_pad_names=("H1",),
             verbose=True,

@@ -2,8 +2,8 @@
 
 from sgn.apps import Pipeline
 
-from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import SegmentSource
+from sgnts.sinks import NullSeriesSink
 
 
 def test_align(capsys):
@@ -32,7 +32,7 @@ def test_align(capsys):
             end=end,
             segments=segments,
         ),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk1",
             sink_pad_names=("seg",),
             verbose=True,
