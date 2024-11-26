@@ -127,9 +127,10 @@ class EventFrame(Frame):
         return iter(self.events)
 
     def __repr__(self):
-        out = ""
+        out = f"EventFrame(EOS={self.EOS}, is_gap={self.is_gap}, metadata={self.metadata}, events={{\n"
         for evt, v in self.events.items():
-            out += "\n\t%s\n\t\t%s" % (evt, v)
+            out += f"    {evt}: {v}\n"
+        out += "}})"
         return out
 
 
@@ -576,9 +577,10 @@ class TSFrame(Frame):
         return iter(self.buffers)
 
     def __repr__(self):
-        out = ""
+        out = f"TSFrame(EOS={self.EOS}, is_gap={self.is_gap}, metadata={self.metadata}, buffers=[\n"
         for buf in self:
-            out += "\n\t%s" % buf
+            out += f"    {buf}\n"
+        out += "])"
         return out
 
     def __len__(self):
