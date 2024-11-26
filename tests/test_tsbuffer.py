@@ -237,7 +237,7 @@ def test_add_self_numpy(numpy_a, a_params):
 def test_add_overlapping_numpy(numpy_a, numpy_b):
     # At srate of 1024 b's offset of 1024
     # is 64 samples behind that of a
-    data = numpy.concat(
+    data = numpy.concatenate(
         [
             numpy.ones(64),
             2 * numpy.ones(960),
@@ -255,7 +255,7 @@ def test_add_overlapping_numpy(numpy_a, numpy_b):
 def test_add_different_shape_numpy(numpy_a, numpy_g):
     # g starts 512 samples after a
     # and is 2048 samples long
-    data = numpy.concat([numpy.ones(512), 2 * numpy.ones(512), numpy.ones(1536)])
+    data = numpy.concatenate([numpy.ones(512), 2 * numpy.ones(512), numpy.ones(1536)])
     correct = SeriesBuffer(offset=0, sample_rate=1024, shape=data.shape, data=data)
     assert numpy_a + numpy_g == correct
     numpy_a += numpy_g
@@ -267,7 +267,7 @@ def test_add_disjoint_numpy(numpy_a, numpy_f):
     # 4096 samples after offset of 0
     # since a has shape 1024 that leaves 3072 zeros
     # between a and f
-    data = numpy.concat([numpy.ones(1024), numpy.zeros(3072), numpy.ones(1024)])
+    data = numpy.concatenate([numpy.ones(1024), numpy.zeros(3072), numpy.ones(1024)])
     correct = SeriesBuffer(offset=0, sample_rate=1024, shape=data.shape, data=data)
     assert numpy_a + numpy_f == correct
     numpy_a += numpy_f
@@ -279,7 +279,7 @@ def test_add_nonflat_numpy(numpy_c, numpy_d):
     # 128 samples after offset of 1028
     # since c and d have time shape 1024
     # There are 128 samples on either side
-    data = numpy.concat([numpy.ones(128), 2 * numpy.ones(896), numpy.ones(128)])
+    data = numpy.concatenate([numpy.ones(128), 2 * numpy.ones(896), numpy.ones(128)])
     data = numpy.expand_dims(data, axis=1)
     data = data.transpose()
     data = data.repeat(2, axis=0)
