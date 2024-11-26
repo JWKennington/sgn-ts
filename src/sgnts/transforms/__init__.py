@@ -1,5 +1,6 @@
 from sgnts.transforms.adder import Adder
 from sgnts.transforms.align import Align
+from sgnts.transforms.amplify import Amplify
 from sgnts.transforms.converter import Converter
 from sgnts.transforms.correlate import Correlate
 from sgnts.transforms.gate import Gate
