@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import wraps
 
 import numpy as np
 import torch
@@ -264,16 +265,8 @@ class Resampler(TSTransform):
 
         return out.view(output_shape)
 
+    @wraps(TSTransform.new)
     def new(self, pad: SourcePad) -> TSFrame:
-        """Perform up/downsampling of incoming frames.
-
-        Args:
-            pad:
-                SourcePad, the source pad to output the transformed frame
-
-        Returns:
-            TSFrame, the output TSFrame
-        """
         frame = self.preparedframes[self.sink_pad]
         assert frame.sample_rate == self.inrate
         outoffsets = self.preparedoutoffsets[self.sink_pad]

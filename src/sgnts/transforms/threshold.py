@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import wraps
 
 import numpy
 from sgn.base import SourcePad
@@ -74,17 +75,8 @@ class Threshold(TSTransform):
             for i in range(0, len(idx), 2)
         ]
 
+    @wraps(TSTransform.new)
     def new(self, pad: SourcePad) -> TSFrame:
-        """Split buffers into subbuffers of gaps and nongaps depending on whether the
-        data passed a threshold.
-
-        Args:
-            pad:
-                SourcePad, the source pad to output the transformed frame
-
-        Returns:
-            TSFrame, the output TSFrame
-        """
         frame = self.preparedframes[self.sinkpad]
         boundary_offsets = TSSlice(
             frame[0].offset,
