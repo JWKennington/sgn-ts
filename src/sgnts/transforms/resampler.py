@@ -264,7 +264,7 @@ class Resampler(TSTransform):
 
         return out.view(output_shape)
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """Perform up/downsampling of incoming frames.
 
         Args:

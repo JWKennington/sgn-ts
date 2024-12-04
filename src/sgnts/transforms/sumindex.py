@@ -28,7 +28,7 @@ class SumIndex(TSTransform):
         for sl in self.sl:
             assert isinstance(sl, slice)
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """Sum the data over slices in the zero-th dimension. The zero-th dimension
         will now have a length of len(self.sl).
 

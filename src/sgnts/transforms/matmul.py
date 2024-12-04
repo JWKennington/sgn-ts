@@ -37,7 +37,7 @@ class Matmul(TSTransform):
         assert self.matrix is not None
         self.shape = self.matrix.shape
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """Matmul of a matrix with the incoming data.
 
         Args:

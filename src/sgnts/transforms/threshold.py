@@ -74,7 +74,7 @@ class Threshold(TSTransform):
             for i in range(0, len(idx), 2)
         ]
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """Split buffers into subbuffers of gaps and nongaps depending on whether the
         data passed a threshold.
 

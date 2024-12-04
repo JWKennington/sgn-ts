@@ -33,7 +33,7 @@ class Adder(TSTransform):
     def __post_init__(self):
         super().__post_init__()
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """Add up all the frames from all the aligned sink pads.
 
         Args:

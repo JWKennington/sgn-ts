@@ -17,7 +17,7 @@ class Align(TSTransform):
             for p in self.source_pads
         }
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """Produce aligned frames from multiple sink pads to multiple source pads.
 
         Args:

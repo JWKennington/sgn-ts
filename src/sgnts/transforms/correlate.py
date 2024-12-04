@@ -57,7 +57,7 @@ class Correlate(TSTransform):
             os.append(scipy.signal.correlate(data, self.filters[j], mode="valid"))
         return np.vstack(os).reshape(shape[:-1] + (-1,))
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """Correlate data in the buffers in the frames with filters.
 
         Args:

@@ -23,7 +23,7 @@ class Amplify(TSTransform):
         ), "only one sink_pad and one source_pad is allowed"
         self.sink_pad = self.sink_pads[0]
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """Amplify incoming data by a factor.
 
         Args:

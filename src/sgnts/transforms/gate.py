@@ -29,7 +29,7 @@ class Gate(TSTransform):
             % (self.name, list(set(self.sink_pad_names) - set([self.control]))[0])
         ]
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """Gate out sub-buffers when buffers from the control pad is a gap.
 
         Args:

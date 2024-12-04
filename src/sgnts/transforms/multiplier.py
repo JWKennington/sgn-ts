@@ -23,7 +23,7 @@ class Multiplier(TSTransform):
         for n in buf:
             self.audioadapters[pad.name].push(n)
 
-    def transform(self, pad):
+    def new(self, pad):
         EOS = any(b.EOS for b in self.inbuf.values())
         sample_rate = (
             self.audioadapters[str(self.sink_pads[0].name)].buffers[0].sample_rate

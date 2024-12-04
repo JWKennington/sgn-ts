@@ -59,7 +59,7 @@ class Converter(TSTransform):
             for p in self.source_pads
         }
 
-    def transform(self, pad):
+    def new(self, pad):
         frame = self.preparedframes[self.pad_map[pad]]
         self.preparedframes[self.pad_map[pad]] = None
 
