@@ -299,7 +299,7 @@ def test_add_self_torch(torch_a, a_params):
 def test_add_overlapping_torch(torch_a, torch_b):
     # At srate of 1024 b's offset of 1024
     # is 64 samples behind that of a
-    data = torch.concat(
+    data = torch.concatenate(
         [
             torch.ones(64),
             2 * torch.ones(960),
@@ -317,7 +317,7 @@ def test_add_overlapping_torch(torch_a, torch_b):
 def test_add_different_shape_torch(torch_a, torch_g):
     # g starts 512 samples after a
     # and is 2048 samples long
-    data = torch.concat([torch.ones(512), 2 * torch.ones(512), torch.ones(1536)])
+    data = torch.concatenate([torch.ones(512), 2 * torch.ones(512), torch.ones(1536)])
     correct = SeriesBuffer(offset=0, sample_rate=1024, shape=(2560,), data=data)
     assert torch_a + torch_g == correct
     torch_a += torch_g
@@ -329,7 +329,7 @@ def test_add_disjoint_torch(torch_a, torch_f):
     # 4096 samples after offset of 0
     # since a has shape 1024 that leaves 3072 zeros
     # between a and f
-    data = torch.concat([torch.ones(1024), torch.zeros(3072), torch.ones(1024)])
+    data = torch.concatenate([torch.ones(1024), torch.zeros(3072), torch.ones(1024)])
     correct = SeriesBuffer(offset=0, sample_rate=1024, shape=data.shape, data=data)
     assert torch_a + torch_f == correct
     torch_a += torch_f
@@ -341,7 +341,7 @@ def test_add_nonflat_torch(torch_c, torch_d):
     # 128 samples after offset of 1028
     # since c and d have time shape 1024
     # There are 128 samples on either side
-    data = torch.concat([torch.ones(128), 2 * torch.ones(896), torch.ones(128)])
+    data = torch.concatenate([torch.ones(128), 2 * torch.ones(896), torch.ones(128)])
     data = data[None, :]
     data = data.repeat((2, 1))
     correct = SeriesBuffer(offset=2048, sample_rate=1024, shape=data.shape, data=data)
