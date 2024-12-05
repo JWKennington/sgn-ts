@@ -4,14 +4,7 @@ from dataclasses import dataclass
 from math import isinf
 from typing import Optional, Union
 
-from sgn.base import (
-    InternalPad,
-    SinkElement,
-    SinkPad,
-    SourceElement,
-    SourcePad,
-    TransformElement,
-)
+from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
 
 from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
 from sgnts.base.audioadapter import Audioadapter
@@ -251,7 +244,7 @@ class _TSTransSink:
 
         return preparedbufs
 
-    def internal(self, pad: InternalPad) -> None:
+    def internal(self) -> None:
         """Align buffers from all the sink pads.
 
         If AdapterConfig is provided, perform the requested
@@ -379,8 +372,8 @@ class TSTransform(TransformElement, _TSTransSink):
         TransformElement.__post_init__(self)
         _TSTransSink.__post_init__(self)
 
-    def internal(self, pad: InternalPad):
-        _TSTransSink.internal(self, pad)
+    def internal(self):
+        _TSTransSink.internal(self)
 
     def transform(self, pad: SourcePad) -> TSFrame:
         """The transform function must be provided by the subclass.
@@ -409,8 +402,8 @@ class TSSink(SinkElement, _TSTransSink):
         SinkElement.__post_init__(self)
         _TSTransSink.__post_init__(self)
 
-    def internal(self, pad: InternalPad):
-        _TSTransSink.internal(self, pad)
+    def internal(self):
+        _TSTransSink.internal(self)
 
 
 @dataclass

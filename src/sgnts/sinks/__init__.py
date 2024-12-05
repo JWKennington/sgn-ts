@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 import numpy as np
-from sgn.base import InternalPad
 
 from sgnts.base import Time, TSSink
 
@@ -17,14 +16,9 @@ class FakeSeriesSink(TSSink):
 
     verbose: bool = False
 
-    def internal(self, pad: InternalPad) -> None:
-        """Print frames if verbose.
-
-        Args:
-            pad:
-                InternalPad, the internal pad
-        """
-        super().internal(pad)
+    def internal(self) -> None:
+        """Print frames if verbose."""
+        super().internal()
         for sink_pad in self.sink_pads:
             frame = self.preparedframes[sink_pad]
             if frame.EOS:
@@ -82,14 +76,9 @@ class DumpSeriesSink(TSSink):
         with open(self.fname, "a") as f:
             np.savetxt(f, out)
 
-    def internal(self, pad: InternalPad) -> None:
-        """Write out time-series data.
-
-        Args:
-            pad:
-                InternalPad
-        """
-        super().internal(pad)
+    def internal(self) -> None:
+        """Write out time-series data."""
+        super().internal()
         sink_pad = self.sink_pad
         frame = self.preparedframes[sink_pad]
         if frame.EOS:
