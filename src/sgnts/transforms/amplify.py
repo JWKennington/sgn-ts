@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import wraps
 
 from sgn.base import SourcePad
 
@@ -23,16 +24,8 @@ class Amplify(TSTransform):
         ), "only one sink_pad and one source_pad is allowed"
         self.sink_pad = self.sink_pads[0]
 
-    def transform(self, pad: SourcePad) -> TSFrame:
-        """Amplify incoming data by a factor.
-
-        Args:
-            pad:
-                SourcePad, the source pad that outputs the transformed frame
-
-        Returns:
-            TSFrame, the output TSFrame
-        """
+    @wraps(TSTransform.new)
+    def new(self, pad: SourcePad) -> TSFrame:
         outbufs = []
         # loop over the input data, only amplify non-gap data
         frame = self.preparedframes[self.sink_pad]

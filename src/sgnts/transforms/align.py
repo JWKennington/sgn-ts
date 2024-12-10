@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import wraps
 
 from sgn.base import SourcePad
 
@@ -17,16 +18,8 @@ class Align(TSTransform):
             for p in self.source_pads
         }
 
-    def transform(self, pad: SourcePad) -> TSFrame:
-        """Produce aligned frames from multiple sink pads to multiple source pads.
-
-        Args:
-            pad:
-                SourcePad, the source pad to produce the aligned frames
-
-        Returns:
-            TSFrame, the output TSFrame
-        """
+    @wraps(TSTransform.new)
+    def new(self, pad: SourcePad) -> TSFrame:
         out = self.preparedframes[self.pad_map[pad]]
         self.preparedframes[self.pad_map[pad]] = None
         return out

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import wraps
 from typing import Optional
 
 from sgn.base import SourcePad
@@ -28,17 +29,8 @@ class SumIndex(TSTransform):
         for sl in self.sl:
             assert isinstance(sl, slice)
 
-    def transform(self, pad: SourcePad) -> TSFrame:
-        """Sum the data over slices in the zero-th dimension. The zero-th dimension
-        will now have a length of len(self.sl).
-
-        Args:
-            pad:
-                SourcePad, the source pad to produce the transformed frame
-
-        Returns:
-            TSFrame, the output TSFrame
-        """
+    @wraps(TSTransform.new)
+    def new(self, pad: SourcePad) -> TSFrame:
         frame = self.preparedframes[self.sink_pads[0]]
 
         outbufs = []

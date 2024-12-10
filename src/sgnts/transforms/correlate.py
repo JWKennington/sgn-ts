@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import wraps
 from typing import Optional
 
 import numpy as np
@@ -57,16 +58,8 @@ class Correlate(TSTransform):
             os.append(scipy.signal.correlate(data, self.filters[j], mode="valid"))
         return np.vstack(os).reshape(shape[:-1] + (-1,))
 
-    def transform(self, pad: SourcePad) -> TSFrame:
-        """Correlate data in the buffers in the frames with filters.
-
-        Args:
-            pad:
-                SourcePad, the source pad to produce frames
-
-        Returns:
-            TSFrame, the output TSFrame
-        """
+    @wraps(TSTransform.new)
+    def new(self, pad: SourcePad) -> TSFrame:
         outbufs = []
         outoffsets = self.preparedoutoffsets[self.sink_pads[0]]
         frames = self.preparedframes[self.sink_pads[0]]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import wraps
 from typing import Optional
 
 from sgn.base import SourcePad
@@ -37,16 +38,8 @@ class Matmul(TSTransform):
         assert self.matrix is not None
         self.shape = self.matrix.shape
 
-    def transform(self, pad: SourcePad) -> TSFrame:
-        """Matmul of a matrix with the incoming data.
-
-        Args:
-            pad:
-                SourcePad, the source pad that outputs the transformed frame
-
-        Returns:
-            TSFrame, the output TSFrame
-        """
+    @wraps(TSTransform.new)
+    def new(self, pad: SourcePad) -> TSFrame:
         outbufs = []
         # loop over the input data, only perform matmul on non-gaps
         frame = self.preparedframes[self.sink_pads[0]]

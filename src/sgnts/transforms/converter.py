@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import wraps
 
 import numpy as np
 import torch
@@ -59,7 +60,8 @@ class Converter(TSTransform):
             for p in self.source_pads
         }
 
-    def transform(self, pad):
+    @wraps(TSTransform.new)
+    def new(self, pad):
         frame = self.preparedframes[self.pad_map[pad]]
         self.preparedframes[self.pad_map[pad]] = None
 

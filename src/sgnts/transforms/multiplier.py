@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import wraps
 
 import numpy as np
 
@@ -15,6 +16,7 @@ class Multiplier(TSTransform):
         self.inbuf = {}
         self.audioadapters = {}
 
+    @wraps(TSTransform.pull)
     def pull(self, pad, buf):
         super().pull(pad, buf)
         self.inbuf[pad] = buf
@@ -23,7 +25,8 @@ class Multiplier(TSTransform):
         for n in buf:
             self.audioadapters[pad.name].push(n)
 
-    def transform(self, pad):
+    @wraps(TSTransform.new)
+    def new(self, pad):
         EOS = any(b.EOS for b in self.inbuf.values())
         sample_rate = (
             self.audioadapters[str(self.sink_pads[0].name)].buffers[0].sample_rate

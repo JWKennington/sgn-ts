@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import wraps
 
 from sgn.base import SourcePad
 
@@ -29,16 +30,8 @@ class Gate(TSTransform):
             % (self.name, list(set(self.sink_pad_names) - set([self.control]))[0])
         ]
 
-    def transform(self, pad: SourcePad) -> TSFrame:
-        """Gate out sub-buffers when buffers from the control pad is a gap.
-
-        Args:
-            pad:
-                SourcePad, the source pad that outputs the gated data
-
-        Returns:
-            TSFrame, the output TSFrame
-        """
+    @wraps(TSTransform.new)
+    def new(self, pad: SourcePad) -> TSFrame:
         nongap_slices = TSSlices(
             [b.slice for b in self.preparedframes[self.controlpad] if b]
         )

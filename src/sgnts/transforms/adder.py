@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import wraps
 from typing import Optional
 
 from sgn.base import SourcePad
@@ -33,16 +34,8 @@ class Adder(TSTransform):
     def __post_init__(self):
         super().__post_init__()
 
-    def transform(self, pad: SourcePad) -> TSFrame:
-        """Add up all the frames from all the aligned sink pads.
-
-        Args:
-            pad:
-                SourcePad, the pad to output the transform element
-
-        Returns:
-            TSFrame, the output TSFrame
-        """
+    @wraps(TSTransform.new)
+    def new(self, pad: SourcePad) -> TSFrame:
         frames = [self.preparedframes[self.snks[snk]] for snk in self.sink_pad_names]
 
         # Sanity check frames
