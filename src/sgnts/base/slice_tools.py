@@ -34,6 +34,13 @@ class TSSlice:
         else:
             return slice(-1, -1, 1)
 
+    def __getitem__(self, item):
+        assert item in (0, 1)
+        if item == 0:
+            return self.start
+        else:
+            return self.stop
+
     def __and__(self, o):
         """Find the intersection of two TSSlices
 
