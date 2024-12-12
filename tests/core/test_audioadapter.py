@@ -206,7 +206,7 @@ class TestPush:
         a = Audioadapter()
         b1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.rand(2048))
         b2 = SeriesBuffer(
-            offset=b1.end_offset * 2, sample_rate=1024, data=numpy.random.rand(2048)
+            offset=b1.end_offset, sample_rate=1024, data=numpy.random.rand(2048)
         )
         a.push(b1)
         with pytest.raises(ValueError):
@@ -607,6 +607,52 @@ class TestFlushSamplesByEndOffset:
         assert a.is_gap is False
         assert a.gap_size == 0
         assert a.nongap_size == 512
+        assert a.sample_rate == b1.sample_rate
+        assert a.pre_cat_data is None
+        assert len(a) == 1
+
+    def test_flush_samples_by_end_offset6(self):
+        """Test flush_samples_end_offset method"""
+        a = Audioadapter()
+        b1 = SeriesBuffer(
+            offset=Offset.fromsec(1), sample_rate=2048, data=None, shape=(2048,)
+        )
+        b2 = SeriesBuffer(
+            offset=b1.end_offset, sample_rate=2048, data=numpy.arange(2048, 4096)
+        )
+        a.push(b1)
+        a.push(b2)
+        a.flush_samples_by_end_offset(Offset.fromsec(3))
+        assert a.offset == Offset.fromsec(3)
+        assert a.end_offset == b2.end_offset
+        assert a.slice == (Offset.fromsec(3), b2.end_offset)
+        assert a.size == 0
+        assert a.is_gap is True
+        assert a.gap_size == 0
+        assert a.nongap_size == 0
+        assert a.sample_rate == b1.sample_rate
+        assert a.pre_cat_data is None
+        assert len(a) == 1
+
+    def test_flush_samples_by_end_offset7(self):
+        """Test flush_samples_end_offset method"""
+        a = Audioadapter()
+        b1 = SeriesBuffer(
+            offset=Offset.fromsec(1), sample_rate=2048, data=None, shape=(2048,)
+        )
+        b2 = SeriesBuffer(
+            offset=b1.end_offset, sample_rate=2048, data=None, shape=(2048,)
+        )
+        a.push(b1)
+        a.push(b2)
+        a.flush_samples_by_end_offset(Offset.fromsec(3))
+        assert a.offset == Offset.fromsec(3)
+        assert a.end_offset == b2.end_offset
+        assert a.slice == (Offset.fromsec(3), b2.end_offset)
+        assert a.size == 0
+        assert a.is_gap is True
+        assert a.gap_size == 0
+        assert a.nongap_size == 0
         assert a.sample_rate == b1.sample_rate
         assert a.pre_cat_data is None
         assert len(a) == 1
