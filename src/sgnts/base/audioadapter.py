@@ -118,6 +118,14 @@ class Audioadapter:
             # is a zero length buffer, still push it into the adapter
             return
 
+        # Check if the start time is as expected
+        # FIXME should we support discontinuities?
+        if self.sample_rate != -1 and buf.offset != self.end_offset:
+            raise ValueError(
+                f"Got an unexpected buffer offset: {buf.offset=}"
+                f" instead of {self.end_offset=} {buf=}"
+            )
+
         if self.sample_rate == -1:
             self.sample_rate = buf.sample_rate
         elif buf.sample_rate != self.sample_rate:
@@ -125,14 +133,6 @@ class Audioadapter:
             raise ValueError(
                 f"Inconsistent sample rate, buffer sample rate: {buf.sample_rate}"
                 f" audioadpater sample rate: {self.sample_rate}"
-            )
-
-        # Check if the start time is as expected
-        # FIXME should we support discontinuities?
-        if len(self) > 0 and buf.offset != self.end_offset:
-            raise ValueError(
-                f"Got an unexpected buffer offset: {buf.offset=}"
-                f" instead of {self.end_offset=} {buf=}"
             )
 
         # Store gap information
@@ -295,7 +295,7 @@ class Audioadapter:
 
         while self.size > 0:
             b = self.buffers[0]
-            if b.end_offset <= end_offset:
+            if b.end_offset < end_offset:
                 # pop out old buffers
                 self.buffers.popleft()
                 if b.is_gap:
@@ -303,6 +303,18 @@ class Audioadapter:
                 else:
                     self.nongap_size -= b.samples
                 self.size -= b.samples
+            elif b.end_offset == end_offset:
+                # if b.end_offset == end_offset, have a zero-length buffer in the
+                # adapter to record metadata
+                self.buffers[0] = b.sub_buffer(
+                    slc=TSSlice(end_offset, end_offset), gap=True
+                )
+                if b.is_gap:
+                    self.gap_size -= b.samples
+                else:
+                    self.nongap_size -= b.samples
+                self.size -= b.samples
+                break
             else:
                 if b.offset < end_offset:
                     # if the end_offset lies within a buffer, split the buffer
