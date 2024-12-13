@@ -210,6 +210,21 @@ class SeriesBuffer:
             offset=offslice.start, sample_rate=sample_rate, data=data, shape=shape
         )
 
+    def new(
+        self,
+        offslice: Optional[TSSlice] = None,
+        data: Optional[Union[int, Array]] = None,
+    ):
+        """
+        Return a new buffer from an existing one and optionally change the offsets.
+        """
+        return SeriesBuffer.fromoffsetslice(
+            self.slice if offslice is None else offslice,
+            self.sample_rate,
+            data,
+            self.shape[:-1],
+        )
+
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
             return (
@@ -227,6 +242,9 @@ class SeriesBuffer:
 
     def __bool__(self):
         return self.data is not None
+
+    def __len__(self):
+        return 0 if self.data is None else len(self.data)
 
     def set_data(self, data: Optional[Array] = None) -> None:
         """Set the data attribute to the newly provided data.

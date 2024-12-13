@@ -5,6 +5,7 @@ from math import isinf
 from typing import Optional, Union
 
 from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
+from sgn.sources import SignalEOS
 
 from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
 from sgnts.base.audioadapter import Audioadapter
@@ -39,6 +40,33 @@ class AdapterConfig:
     pad_zeros_startup: bool = False
     skip_gaps: bool = False
     backend: type[ArrayBackend] = NumpyBackend
+
+    def valid_buffer(self, buf, data: Optional[Union[int, Array]] = 0):
+        """
+        Return a new buffer corresponding to the non overlapping part of a
+        buffer "buf" as defined by this classes overlap properties As a special case,
+        if the buffer is shape zero (a heartbeat buffer) a new heartbeat buffer is
+        returned with the offsets shifted by overlap[0].
+        Otherwise, in order for the buffer to be valid it must be what is expected
+        based on the adapter's overlap and stride etc.
+        """
+
+        if buf.shape == (0,):
+            new_slice = TSSlice(
+                buf.slice[0] + self.overlap[0], buf.slice[0] + self.overlap[0]
+            )
+            return buf.new(new_slice, data=None)
+        else:
+            expected_shape = (
+                Offset.tosamples(self.overlap[0], buf.sample_rate)
+                + Offset.tosamples(self.overlap[1], buf.sample_rate)
+                + Offset.sample_stride(buf.sample_rate),
+            )
+            assert buf.shape == expected_shape
+            new_slice = TSSlice(
+                buf.slice[0] + self.overlap[0], buf.slice[1] - self.overlap[1]
+            )
+            return buf.new(new_slice, data)
 
 
 @dataclass
@@ -375,7 +403,7 @@ class TSTransform(TransformElement, _TSTransSink):
     def internal(self):
         _TSTransSink.internal(self)
 
-    def transform(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:
         """The transform function must be provided by the subclass.
 
         It should take the source pad as an argument and return a new
@@ -407,7 +435,7 @@ class TSSink(SinkElement, _TSTransSink):
 
 
 @dataclass
-class TSSource(SourceElement):
+class TSSource(SourceElement, SignalEOS):
     """A time-series source that generates data in fixed-size buffers.
 
     Args:
@@ -513,8 +541,11 @@ class TSSource(SourceElement):
             # slice the buffer if the last buffer is not a full stride
             buf = buf.sub_buffer(TSSlice(buf.offset, self.end_offset))
 
-        if EOS is None:
-            EOS = buf.end_offset == self.end_offset
+        EOS = (
+            (buf.end_offset == self.end_offset or self.signaled_eos())
+            if EOS is None
+            else (EOS or (buf.end_offset == self.end_offset) or self.signaled_eos())
+        )
         if metadata is None:
             metadata = {}
 
