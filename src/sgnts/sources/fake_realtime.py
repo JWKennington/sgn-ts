@@ -21,12 +21,15 @@ class RealTimeWhiteNoiseSrc(TSSource):
     rate: int = 2048
     duration: float = float("+inf")
 
+    def time_now(self):
+        return time.time()
+
     def __post_init__(self):
         self.stride = Offset.SAMPLE_STRIDE_AT_MAX_RATE
 
         # init start time
         # FIXME: How to define t0? Currently derived from time.time()
-        self.t0_offset = Offset.fromsec(time.time()) // self.stride * self.stride
+        self.t0_offset = Offset.fromsec(self.time_now()) // self.stride * self.stride
         self.t0 = Offset.tosec(self.t0_offset)
         self.next_time = self.t0_offset + self.stride
 
@@ -51,7 +54,7 @@ class RealTimeWhiteNoiseSrc(TSSource):
         """
 
         # Produce buffers at every fixed interval
-        now = Offset.fromsec(time.time())
+        now = Offset.fromsec(self.time_now())
         sleep = Offset.tosec(self.next_time - now)
         if sleep > 0:
             # There might be cases where sleep < 0 and we are behind? In that case
