@@ -239,9 +239,8 @@ class _TSTransSink:
 
             if not segment_has_nongap or (self.skip_gaps and segment_has_gap):
                 # produce a gap buffer if
-                # 1. the whole audioadapter is a gap or
-                # 2. the whole segment is a gap or
-                # 3. there are gaps in the segment and we are skipping gaps
+                # 1. the whole segment is a gap or
+                # 2. there are gaps in the segment and we are skipping gaps
                 data = None
             else:
                 # copy out samples from head of audioadapter

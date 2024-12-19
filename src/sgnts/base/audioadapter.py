@@ -143,7 +143,13 @@ class Audioadapter:
         else:
             self.nongap_size += nsamples
 
-        self.buffers.append(buf)
+        if len(self) > 0 and self.buffers[-1].duration == 0:
+            if buf.duration > 0:
+                # Replace heartbeat buffers
+                self.buffers[-1] = buf
+        else:
+            self.buffers.append(buf)
+
         self.pre_cat_data = None  # reset
 
     def get_sliced_buffers(
