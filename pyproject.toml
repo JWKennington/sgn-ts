@@ -43,11 +43,14 @@ test = [
     "pytest",
     "pytest-cov",
     "sgn-ts[torch]",
+    "pytest-markdown-docs",
 ]
 docs = [
-    "furo",
-    "myst-parser",
-    "sphinx",
+    "mkdocs",
+    "mkdocstrings",
+    "mkdocstrings-python",
+    "mkdocs-material",
+    "pymdown-extensions",
 ]
 lint = [
     "black",
@@ -100,7 +103,7 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-p no:warnings --cov=sgnts"
+addopts = "-p no:warnings --cov=sgnts  --markdown-docs --markdown-docs-syntax=superfences"
 
 [tool.flake8]
 max-line-length = 88

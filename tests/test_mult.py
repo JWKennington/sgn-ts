@@ -6,27 +6,28 @@ from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Multiplier
 
 
-def test_tsgraph(capsys):
-    #   ----------   ----------     ----------
-    #  |src1      | |src2      |...|srcN      |
-    #   ----------   ----------     ----------
-    #        \           |          /
-    #         \          |         /
-    #          \         |        /
-    #           \        |       /
-    #            \       |      /
-    #             \      |     /
-    #              \     |    /
-    #               ----------
-    #              |multiply  |
-    #               ----------
-    #                   |
-    #                   |
-    #               ----------
-    #              |sink1     |
-    #               ----------
+def test_tsgraph():
+    """Test the tsgraph function
 
-    global num_pads
+       ----------   ----------     ----------
+      |src1      | |src2      |...|srcN      |
+       ----------   ----------     ----------
+            \           |          /
+             \          |         /
+              \         |        /
+               \        |       /
+                \       |      /
+                 \      |     /
+                  \     |    /
+                   ----------
+                  |multiply  |
+                   ----------
+                       |
+                       |
+                   ----------
+                  |sink1     |
+                   ----------
+    """
     num_pads = 2  # sets the number of src pads
     pipeline = Pipeline()
     pipeline.insert(
@@ -56,6 +57,3 @@ def test_tsgraph(capsys):
 
     pipeline.run()
 
-
-if __name__ == "__main__":
-    test_tsgraph(None)
