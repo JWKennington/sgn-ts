@@ -171,9 +171,49 @@ class TestPush:
         a.push(b1)
         a.push(b2)
         assert a.offset == 0
-        assert a.offset == 0
         assert a.end_offset == 0
         assert a.slice == (0, 0)
+        assert a.size == 0
+        assert a.is_gap is True
+        assert a.gap_size == 0
+        assert a.nongap_size == 0
+        assert a.sample_rate == b2.sample_rate
+        assert a.pre_cat_data is None
+        assert len(a) == 1
+
+    def test_push_zero_length3(self):
+        """Test push zero length buffer"""
+        a = Audioadapter()
+        b1 = SeriesBuffer(offset=0, sample_rate=2048, data=None, shape=(0,))
+        b2 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.rand(2048))
+        a.push(b1)
+        a.push(b2)
+        assert a.offset == 0
+        assert a.end_offset == Offset.fromsec(1)
+        assert a.slice == (0, Offset.fromsec(1))
+        assert a.size == 2048
+        assert a.is_gap is False
+        assert a.gap_size == 0
+        assert a.nongap_size == 2048
+        assert a.sample_rate == b2.sample_rate
+        assert a.pre_cat_data is None
+        assert len(a) == 1
+
+    def test_push_zero_length4(self):
+        """Test push zero length buffer"""
+        a = Audioadapter()
+        b1 = SeriesBuffer(offset=0, sample_rate=2048, data=None, shape=(0,))
+        b2 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.rand(2048))
+        b3 = SeriesBuffer(
+            offset=Offset.fromsec(1), sample_rate=2048, data=None, shape=(0,)
+        )
+        a.push(b1)
+        a.push(b2)
+        a.flush_samples_by_end_offset(Offset.fromsec(1))
+        a.push(b3)
+        assert a.offset == Offset.fromsec(1)
+        assert a.end_offset == Offset.fromsec(1)
+        assert a.slice == (Offset.fromsec(1), Offset.fromsec(1))
         assert a.size == 0
         assert a.is_gap is True
         assert a.gap_size == 0
