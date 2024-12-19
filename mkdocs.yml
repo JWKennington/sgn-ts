@@ -1,7 +1,7 @@
 site_name: SGN-TS Documentation
 
 nav:
-  - Home: README.md
+  - Home: index.md
   - User Guide:
     - Introduction: user-guide/index.md
     - Key Concepts: user-guide/concepts.md
