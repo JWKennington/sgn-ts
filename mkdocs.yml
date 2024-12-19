@@ -4,8 +4,7 @@ nav:
   - Home: index.md
   - User Guide:
     - Introduction: user-guide/index.md
-    - Key Concepts: user-guide/concepts.md
-    - Advanced Topics: user-guide/advanced.md
+    - Buffers and Frames: user-guide/buffers.md
   - Developer Guide:
     - Contributing: dev-guide/contributing.md
   - API Reference:
