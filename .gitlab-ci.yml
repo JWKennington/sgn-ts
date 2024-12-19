@@ -14,18 +14,11 @@ include:
         - "3.10"
         - "3.11"
         - "3.12"
-  - component: git.ligo.org/computing/gitlab/components/sphinx/apidoc@1
+  - component: git.ligo.org/computing/gitlab/components/mkdocs/build@1
     inputs:
-      image: python:3.12
-      module_dir: "src/sgnts"
-      sphinx_sourcedir: "docs"
+      project_dir: "."
       requirements: ".[docs]"
-  - component: git.ligo.org/computing/gitlab/components/sphinx/build@1
-    inputs:
-      image: python:3.12
-      sphinx_sourcedir: "docs"
-      requirements: ".[docs]"
-  - component: git.ligo.org/computing/gitlab/components/sphinx/pages@1
+  - component: git.ligo.org/computing/gitlab/components/mkdocs/pages@1
     inputs:
       pages_when: "default"
 

@@ -56,7 +56,7 @@ which holds a list of
 Here we can get some familiarity with both of these objects and along the way,
 other classes and concepts relevant for sgnts.
 
-```python
+```python notest
 >>> import numpy
 >>> from sgnts.base.buffer import SeriesBuffer
 >>> buf = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
@@ -92,7 +92,7 @@ multidimensional) time series data.
 
 Now revisiting the above
 
-```python
+```python notest
 >>> buf = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
 >>> print (buf)
 SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=[0.56649291 ... 1.39569688])
@@ -109,7 +109,7 @@ max sample rate.  It is critical for accurate internal bookkeeping.  You also
 see `shape=(2048,)` which indicates single channel time series.  Try the
 following for an example of multichannel audio:
 
-```python
+```python notest
 >>> buf = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2,2048))
 >>> print (buf)
 SeriesBuffer(offset=0, offset_end=16384, shape=(2, 2048), sample_rate=2048, duration=1000000000, data=[[ 0.01684876 ... -1.6963346 ]
@@ -119,7 +119,7 @@ SeriesBuffer(offset=0, offset_end=16384, shape=(2, 2048), sample_rate=2048, dura
 Note what happens to the offset if you change the sample rate (and in this case
 also the data size)
 
-```python
+```python notest
 >>> buf = SeriesBuffer(offset=0, sample_rate=1024, data=numpy.random.randn(2,1024))
 >>> buf
 SeriesBuffer(offset=0, offset_end=16384, shape=(2, 1024), sample_rate=1024, duration=1000000000, data=[[-0.13116052 ...  1.2223811 ]
@@ -132,7 +132,7 @@ theoretical maximum sample rate which is defined in offset.py.
 Only power of two sample rates are allowed at present to ensure that bookeeping
 remains simple and accurate. 
 
-```python
+```python notest
 >>> buf = SeriesBuffer(offset=0, sample_rate=1000, data=numpy.random.randn(2,1000))
 Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
@@ -144,7 +144,7 @@ ValueError: 1000 not in allowed rates {32, 1, 2, 64, 4, 128, 256, 512, 8, 1024, 
 
 It is possible to increase the maximum sample rate globally in an application
 
-```python
+```python notest
 >>> import numpy
 >>> from sgnts.base.buffer import SeriesBuffer
 >>> from sgnts.base.offset import Offset
@@ -194,7 +194,7 @@ Note in the above that TSFrames only support contiguous buffers
 
 TSFrames offer some additional methods to describe their contents, e.g.,
 
-```python
+```python notest
 >>> buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
 >>> buf2 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
 >>> frame = TSFrame(buffers=[buf1, buf2])
@@ -223,7 +223,7 @@ TSFrames must be initialized with at least one buffer because metadata are
 derived from the buffer(s).  If you want to have an empty frame, you still have
 to set one buffer with the correct metadata, e.g., 
 
-```python
+```python notest
 >>> # empty buffer
 >>> buf = SeriesBuffer(offset=0, sample_rate=2048, shape=(2048,), data=None)
 >>> frame = TSFrame(buffers=[buf])
@@ -233,7 +233,7 @@ to set one buffer with the correct metadata, e.g.,
 
 There are shortcuts for producing a new empty TSFrame that might be useful if your goal is to just spit out some similar empty frames to fill in, e.g.,
 
-```python
+```python notest
 >>> frame = TSFrame.from_buffer_kwargs(offset=0, sample_rate=2048, shape=(2048,))
 >>> print (frame)
 
