@@ -1,17 +1,41 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
-from sgn.base import SourcePad
+from sgn.base import SourcePad, get_sgn_logger
 
 from sgnts.base import Array, Offset, SeriesBuffer, TSFrame, TSSource
+
+LOGGER = get_sgn_logger("sgn-ts")
+
+try:
+    from gwpy.time import tconvert
+
+    gpsnow = lambda: float(tconvert("now"))
+except ImportError:
+    try:
+        from gpstime import gpsnow  # type: ignore
+    except ImportError:
+        # accurate for "now" as of this writing
+        gpsnow = lambda: time.time() - 315964782  # type: ignore
+        LOGGER.warning(
+            (
+                "A GPS time function could not be imported, GPS times will not "
+                "be leap second accurate.  For more accurate times install the "
+                "'gwpy' or 'gpstime' package."
+            )
+        )
 
 
 @dataclass
 class FakeSeriesSource(TSSource):
     """A time-series source that generates fake data in fixed-size buffers.
+
+    If `t0` is not specified the current GPS time will be used as the
+    start time.
 
     Args:
         rate:
@@ -39,6 +63,11 @@ class FakeSeriesSource(TSSource):
         impulse_position:
             int, the sample point position to place the impulse. If -1, then the
             impulse will be generated randomly.
+        real_time:
+            bool, run the source in "real time", such that frames are
+            produced at the rate corresponding to their relative
+            offsets.  In real time mode, if t0 is not specified it wil
+            lbe set to the current GPS time.
 
     """
 
@@ -49,9 +78,15 @@ class FakeSeriesSource(TSSource):
     ngap: int = 0
     random_seed: Optional[int] = None
     impulse_position: int = -1
+    real_time: bool = False
     verbose: bool = False
 
     def __post_init__(self):
+        # set the start and end times if not specified
+        if self.real_time and self.t0 is None:
+            # if t0 not specified set t0 to be the next GPS second
+            self.t0 = int(gpsnow()) + 1
+
         super().__post_init__()
 
         self.cnt = {p: 0 for p in self.source_pads}
@@ -73,6 +108,10 @@ class FakeSeriesSource(TSSource):
                 self.impulse_position = np.random.randint(0, int(self.end * self.rate))
             if self.verbose:
                 print("Placing impulse at sample point", self.impulse_position)
+
+        # for real time tracking record to t0 time relative to current
+        # real time
+        self._start_offset_from_realtime = gpsnow() - self.t0
 
     def create_impulse_data(self, offset: int, num_samples: int, rate: int) -> Array:
         """Create the impulse data, where data is zero everywhere, and equals one at one
@@ -134,6 +173,18 @@ class FakeSeriesSource(TSSource):
             return self.create_impulse_data(offset, buf.samples, buf.sample_rate)
         else:
             raise ValueError("Unknown signal type")
+
+    def internal(self):
+        if self.real_time:
+            # get the next time from the new offset.  all pads
+            # *should* have the same offset, so just take the offset
+            # from the first pad.
+            next_time = Offset.tosec(list(self.offset.values())[0])
+            sleep = next_time - gpsnow() + self._start_offset_from_realtime
+            if sleep < 0:
+                LOGGER.warning("Warning: FakeSeriesSource falling behind real time")
+            else:
+                time.sleep(sleep)
 
     def new(self, pad: SourcePad) -> TSFrame:
         """New buffers are created on "pad" with an instance specific count and a name
