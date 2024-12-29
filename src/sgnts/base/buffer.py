@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy
 from sgn.base import Frame
@@ -127,7 +127,10 @@ class EventFrame(Frame):
         return iter(self.events)
 
     def __repr__(self):
-        out = f"EventFrame(EOS={self.EOS}, is_gap={self.is_gap}, metadata={self.metadata}, events={{\n"
+        out = (
+            f"EventFrame(EOS={self.EOS}, is_gap={self.is_gap}, "
+            f"metadata={self.metadata}, events={{\n"
+        )
         for evt, v in self.events.items():
             out += f"    {evt}: {v},\n"
         out += "}})"
@@ -595,7 +598,10 @@ class TSFrame(Frame):
         return iter(self.buffers)
 
     def __repr__(self):
-        out = f"TSFrame(EOS={self.EOS}, is_gap={self.is_gap}, metadata={self.metadata}, buffers=[\n"
+        out = (
+            f"TSFrame(EOS={self.EOS}, is_gap={self.is_gap}, "
+            f"metadata={self.metadata}, buffers=[\n"
+        )
         for buf in self:
             out += f"    {buf},\n"
         out += "])"
@@ -685,12 +691,15 @@ class TSFrame(Frame):
 
     def __next__(self):
         """
-        return a new empty frame that is like the current one but advanced to the next offset, e.g.,
+        return a new empty frame that is like the current one but advanced to
+        the next offset, e.g.,
 
-        >>> frame = TSFrame.from_buffer_kwargs(offset=0, sample_rate=2048, shape=(2048,))
+        >>> frame = TSFrame.from_buffer_kwargs(offset=0,
+                        sample_rate=2048, shape=(2048,))
         >>> print (frame)
 
-                SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=None)
+                SeriesBuffer(offset=0, offset_end=16384, shape=(2048,),
+                             sample_rate=2048, duration=1000000000, data=None)
         >>> print (next(frame))
         """
         return self.from_buffer_kwargs(

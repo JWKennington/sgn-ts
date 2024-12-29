@@ -9,24 +9,24 @@ from sgnts.transforms import Multiplier
 def test_tsgraph():
     """Test the tsgraph function
 
-       ----------   ----------     ----------
-      |src1      | |src2      |...|srcN      |
-       ----------   ----------     ----------
-            \           |          /
-             \          |         /
-              \         |        /
-               \        |       /
-                \       |      /
-                 \      |     /
-                  \     |    /
-                   ----------
-                  |multiply  |
-                   ----------
-                       |
-                       |
-                   ----------
-                  |sink1     |
-                   ----------
+     ----------   ----------     ----------
+    |src1      | |src2      |...|srcN      |
+     ----------   ----------     ----------
+          \           |          /
+           \          |         /
+            \         |        /
+             \        |       /
+              \       |      /
+               \      |     /
+                \     |    /
+                 ----------
+                |multiply  |
+                 ----------
+                     |
+                     |
+                 ----------
+                |sink1     |
+                 ----------
     """
     num_pads = 2  # sets the number of src pads
     pipeline = Pipeline()
@@ -56,4 +56,3 @@ def test_tsgraph():
     )
 
     pipeline.run()
-

@@ -140,7 +140,8 @@ class Resampler(TSTransform):
         The baseline kernel is defined as
 
         $$\\begin{align}
-        g(k) &= \\sin(\\pi / f * (k-c)) / (\\pi / f * (k-c)) * (1 - (k-c)^2 / c / c)  & k != c \\\\
+        g(k) &= \\sin(\\pi / f * (k-c)) /
+                (\\pi / f * (k-c)) * (1 - (k-c)^2 / c / c)  & k != c \\\\
         g(k) &= 1 & k = c
         \\end{align}$$
 
