@@ -323,15 +323,19 @@ class NumpyBackend(ArrayBackend):
         """
         return numpy.zeros(shape)
 
+
+TorchBackend: Any
+TorchArray: Any
 try:
     import torch
+    TorchArray = torch.Tensor
 
     # Set some global PyTorch settings
     torch.backends.cudnn.benchmark = True
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
-    class TorchBackend(ArrayBackend):
+    class _TorchBackend(ArrayBackend):
         """Implementation of array operations using PyTorch tensors."""
     
         # FIXME: How to handle different device/dtypes in the same pipeline?
@@ -503,5 +507,16 @@ try:
             """
             return torch.zeros(shape, device=cls.DEVICE, dtype=cls.DTYPE)
 
+    TorchBackend = _TorchBackend
+
 except ImportError:
-    pass
+    class _TorchBackendStub(ArrayBackend):
+        """A nonfunctional TorchBackend stub"""
+    
+        # FIXME: How to handle different device/dtypes in the same pipeline?
+        DTYPE = None
+        DEVICE = None
+
+    TorchBackend = _TorchBackendStub
+    TorchArray = None
+

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from math import isinf
 from typing import Optional, Union
 
-from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
+from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement, ElementLike
 from sgn.sources import SignalEOS
 
 from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
@@ -70,7 +70,7 @@ class AdapterConfig:
 
 
 @dataclass
-class _TSTransSink:
+class _TSTransSink(ElementLike):
     """Base class for TSTransforms and TSSinks.
 
     This will produce aligned frames in preparedframes. If
@@ -393,7 +393,8 @@ class _TSTransSink:
 class TSTransform(TransformElement, _TSTransSink):
     """A time-series transform element."""
 
-    pull = _TSTransSink.pull
+    # FIXME mypy complains that this takes a TSFrame instead of a Frame.  Not sure what the right fix is.
+    pull = _TSTransSink.pull # type: ignore
 
     def __post_init__(self):
         TransformElement.__post_init__(self)
@@ -423,7 +424,8 @@ class TSTransform(TransformElement, _TSTransSink):
 class TSSink(SinkElement, _TSTransSink):
     """A time-series sink element."""
 
-    pull = _TSTransSink.pull
+    # FIXME mypy complains that this takes a TSFrame instead of a Frame.  Not sure what the right fix is.
+    pull = _TSTransSink.pull # type: ignore
 
     def __post_init__(self):
         SinkElement.__post_init__(self)

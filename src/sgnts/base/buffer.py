@@ -32,8 +32,8 @@ class EventBuffer:
             Any, Data of the event
     """
 
-    ts: int = None
-    te: int = None
+    ts: Union[int,None] = None
+    te: Union[int,None] = None
     data: Any = None
 
     def __post_init__(self):
@@ -114,7 +114,7 @@ class EventFrame(Frame):
             dict, Dictionary of EventBuffers
     """
 
-    events: dict = None
+    events: Union[dict,None] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -274,7 +274,7 @@ class SeriesBuffer:
             + self.t0 / Time.SECONDS
         )
 
-    def __eq__(self, value: object) -> bool:
+    def __eq__(self, value: Union[SeriesBuffer, Any]) -> bool:
         is_series_buffer = isinstance(value, SeriesBuffer)
         if not is_series_buffer:
             return False
@@ -411,7 +411,7 @@ class SeriesBuffer:
         elif isinstance(item, SeriesBuffer):
             return self.end_offset > item.end_offset
 
-    def _insert(self, data, offset) -> None:
+    def _insert(self, data: Array, offset) -> None:
         """TODO workshop the name
         Adds data from a whose slice is
         fully contained within self's into self.
@@ -419,7 +419,11 @@ class SeriesBuffer:
         insertion_index = Offset.tosamples(
             offset - self.offset, sample_rate=self.sample_rate
         )
-        self.data[..., insertion_index : insertion_index + data.shape[-1]] += data
+	# FIXME: this is a thorny issue because of how generous we are with the type
+	# of data and the type of Array.  Fixing this will involve being
+	# stricter about types and more careful throughout the array_ops
+	# module.
+        self.data[..., insertion_index : insertion_index + data.shape[-1]] += data #type: ignore
 
     @property
     def _backend_from_data(self):
