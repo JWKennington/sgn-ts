@@ -2,8 +2,9 @@ from dataclasses import dataclass
 from functools import wraps
 
 import numpy as np
+from sgn.base import SourcePad
 
-from ..base import Audioadapter, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import Audioadapter, SeriesBuffer, TSFrame, TSTransform
 
 
 @dataclass
@@ -16,17 +17,22 @@ class Multiplier(TSTransform):
         self.inbuf = {}
         self.audioadapters = {}
 
-    @wraps(TSTransform.pull)
-    def pull(self, pad, buf):
-        super().pull(pad, buf)
-        self.inbuf[pad] = buf
+    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
+    # that a future version of mypy will be able to handle this
+    # FIXME This element needs to be rewritten to not reimplement the pull method.
+    @wraps(TSTransform.pull)  # type: ignore
+    def pull(self, pad: SourcePad, frame: TSFrame) -> None:  # type: ignore
+        super().pull(pad, frame)  # type: ignore
+        self.inbuf[pad] = frame
         if pad not in self.audioadapters:
             self.audioadapters[pad.name] = Audioadapter()
-        for n in buf:
+        for n in frame:
             self.audioadapters[pad.name].push(n)
 
+    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
+    # that a future version of mypy will be able to handle this
     @wraps(TSTransform.new)
-    def new(self, pad):
+    def new(self, pad):  # type: ignore
         EOS = any(b.EOS for b in self.inbuf.values())
         sample_rate = (
             self.audioadapters[str(self.sink_pads[0].name)].buffers[0].sample_rate

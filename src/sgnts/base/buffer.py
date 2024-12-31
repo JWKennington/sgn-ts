@@ -32,8 +32,8 @@ class EventBuffer:
             Any, Data of the event
     """
 
-    ts: Union[int,None] = None
-    te: Union[int,None] = None
+    ts: Union[int, None] = None
+    te: Union[int, None] = None
     data: Any = None
 
     def __post_init__(self):
@@ -114,7 +114,7 @@ class EventFrame(Frame):
             dict, Dictionary of EventBuffers
     """
 
-    events: Union[dict,None] = None
+    events: Union[dict, None] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -419,11 +419,13 @@ class SeriesBuffer:
         insertion_index = Offset.tosamples(
             offset - self.offset, sample_rate=self.sample_rate
         )
-	# FIXME: this is a thorny issue because of how generous we are with the type
-	# of data and the type of Array.  Fixing this will involve being
-	# stricter about types and more careful throughout the array_ops
-	# module.
-        self.data[..., insertion_index : insertion_index + data.shape[-1]] += data #type: ignore
+        # FIXME: this is a thorny issue because of how generous we are with the type
+        # of data and the type of Array.  Fixing this will involve being
+        # stricter about types and more careful throughout the array_ops
+        # module.
+        self.data[
+            ..., insertion_index : insertion_index + data.shape[-1]
+        ] += data  # type: ignore
 
     @property
     def _backend_from_data(self):

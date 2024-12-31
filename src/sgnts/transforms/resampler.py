@@ -268,8 +268,10 @@ class Resampler(TSTransform):
 
         return out.view(output_shape)
 
+    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
+    # that a future version of mypy will be able to handle this
     @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
         frame = self.preparedframes[self.sink_pad]
         assert frame.sample_rate == self.inrate
         outoffsets = self.preparedoutoffsets[self.sink_pad]

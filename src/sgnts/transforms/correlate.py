@@ -53,13 +53,17 @@ class Correlate(TSTransform):
         # FIXME: try with array ops
         os = []
         shape = self.shape
+        if self.filters is None:
+            raise ValueError("filters cannot be None")
         self.filters = self.filters.reshape(-1, shape[-1])
         for j in range(self.shape[0]):
             os.append(scipy.signal.correlate(data, self.filters[j], mode="valid"))
         return np.vstack(os).reshape(shape[:-1] + (-1,))
 
+    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
+    # that a future version of mypy will be able to handle this
     @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
         outbufs = []
         outoffsets = self.preparedoutoffsets[self.sink_pads[0]]
         frames = self.preparedframes[self.sink_pads[0]]

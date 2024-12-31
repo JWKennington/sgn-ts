@@ -8,7 +8,7 @@ from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Adder, Resampler
 
 
-def test_adder(capsys):
+def test_adder():
 
     pipeline = Pipeline()
     max_age = 1000000000000
@@ -41,7 +41,7 @@ def test_adder(capsys):
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
-            end=2,
+            end=4,
             rate=2048,
             signal_type="sin",
         ),
@@ -80,4 +80,4 @@ def test_adder(capsys):
 
 
 if __name__ == "__main__":
-    test_adder(None)
+    test_adder()

@@ -34,8 +34,10 @@ class Adder(TSTransform):
     def __post_init__(self):
         super().__post_init__()
 
+    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
+    # that a future version of mypy will be able to handle this
     @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
         frames = [self.preparedframes[self.snks[snk]] for snk in self.sink_pad_names]
 
         # Sanity check frames

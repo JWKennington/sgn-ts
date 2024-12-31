@@ -126,6 +126,7 @@ per-file-ignores = [
     "_version.py:BLK100",
     "docs/conf.py:E501",
     "tests/*.py:E731",
+    "tests/test_mult.py:W605",
 ]
 exclude = [
     "build",

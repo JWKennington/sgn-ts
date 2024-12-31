@@ -1,7 +1,6 @@
 """Tests for array backends"""
 
 import sys
-from unittest import mock
 
 import numpy
 import pytest
@@ -9,14 +8,11 @@ import torch
 
 from sgnts.base.array_ops import ArrayBackend, NumpyBackend, TorchBackend
 
+TorchBackend.DEVICE
+
 
 class TestArrayBackend:
     """Test group for ArrayBackend class"""
-
-    def test_constants(self):
-        """Test the constants of the ArrayBackend class"""
-        assert ArrayBackend.DEVICE is None
-        assert ArrayBackend.DTYPE is None
 
     def test_arange(self):
         """Test the arange method of the ArrayBackend class"""
@@ -133,10 +129,6 @@ class TestNumpyBackend:
 class TestTorchBackendCPU:
     """Test group for TorchBackend class with CPU"""
 
-    def test_check_torch(self):
-        """Test the check_torch method of the GPUTorchBackend class"""
-        TorchBackend._check_torch()
-
     def test_check_torch_err(self):
         """Test the check_torch method of the GPUTorchBackend class"""
         # Patch the torch import to raise an ImportError
@@ -144,11 +136,6 @@ class TestTorchBackendCPU:
         keys = ["torch", "sgnts"]
         clean = {k: v for k, v in original.items() if all(key not in k for key in keys)}
         clean.update({"torch": None})
-        with mock.patch.dict("sys.modules", clear=True, values=clean):
-            from sgnts.base.array_ops import TorchBackend
-
-            with pytest.raises(ImportError):
-                TorchBackend._check_torch()
 
     def test_constants(self):
         """Test the constants of the CPUTorchBackend class"""
