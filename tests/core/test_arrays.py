@@ -5,6 +5,7 @@ import sys
 import numpy
 import pytest
 import torch
+from unittest import mock
 
 from sgnts.base.array_ops import ArrayBackend, NumpyBackend, TorchBackend
 
@@ -136,16 +137,21 @@ class TestTorchBackendCPU:
         keys = ["torch", "sgnts"]
         clean = {k: v for k, v in original.items() if all(key not in k for key in keys)}
         clean.update({"torch": None})
+        with mock.patch.dict("sys.modules", clear=True, values=clean):
+            from sgnts.base.array_ops import TorchBackend
+
+            assert TorchBackend.DEVICE is None
+            assert TorchBackend.DTYPE is None
 
     def test_constants(self):
         """Test the constants of the CPUTorchBackend class"""
-        assert TorchBackend.DEVICE == "cpu"
+        assert TorchBackend.DEVICE == torch.device("cpu")
         assert TorchBackend.DTYPE == torch.float32
 
     def test_set_device(self):
         """Test the set device method of the TorchBackend class"""
         TorchBackend.set_device("cpu")
-        assert TorchBackend.DEVICE == "cpu"
+        assert TorchBackend.DEVICE == torch.device("cpu")
 
     def test_set_dtype(self):
         """Test the set dtype method of the TorchBackend class"""

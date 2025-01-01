@@ -1,6 +1,38 @@
 #!/usr/bin/env python3
-
+import pytest
 from sgnts.base.slice_tools import TSSlice, TSSlices
+
+
+def test_valid_slice():
+    with pytest.raises(ValueError):
+        TSSlice(0, None)
+    with pytest.raises(ValueError):
+        TSSlice(None, 0)
+    with pytest.raises(ValueError):
+        TSSlice(1.0, 1.0)
+    with pytest.raises(ValueError):
+        TSSlice(1, 0)
+    assert TSSlice(1, 2).slice == slice(1, 2, 1)
+    assert TSSlice(None, None).slice == slice(-1, -1, 1)
+    slc = TSSlice(1, 2)
+    assert slc[0] == 1
+    assert slc[1] == 2
+    slc2 = TSSlice(2, 3)
+    assert slc2 >= slc
+    assert slc <= slc2
+    assert slc.isfinite()
+    assert not TSSlice(None, None).isfinite()
+
+
+def test_valid_slices():
+    slcs = TSSlices([TSSlice(1, 2), TSSlice(3, 4)])
+    assert slcs.invert(TSSlice(0, 5)) == TSSlices(
+        slices=[
+            TSSlice(start=0, stop=1),
+            TSSlice(start=2, stop=3),
+            TSSlice(start=4, stop=5),
+        ]
+    )
 
 
 def test_slices(capsys):

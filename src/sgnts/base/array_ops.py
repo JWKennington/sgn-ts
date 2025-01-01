@@ -340,7 +340,7 @@ try:
 
         # FIXME: How to handle different device/dtypes in the same pipeline?
         DTYPE = torch.float32
-        DEVICE = "cpu"
+        DEVICE = torch.device("cpu")
 
         @staticmethod
         def all(input: torch.Tensor, out: Optional[torch.Tensor] = None):
@@ -442,14 +442,14 @@ try:
             return torch.nn.functional.pad(data, pad_samples, "constant")
 
         @classmethod
-        def set_device(cls, device: str) -> None:
+        def set_device(cls, device: Union[torch.device, str]) -> None:
             """Set the torch device.
 
             Args:
                 device:
-                    str, the device on which to create torch tensors
+                    str|device the device on which to create torch tensors
             """
-            cls.DEVICE = device
+            cls.DEVICE = torch.device(device)
 
         @classmethod
         def set_dtype(cls, dtype: torch.dtype) -> None:

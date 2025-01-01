@@ -37,8 +37,12 @@ class EventBuffer:
     data: Any = None
 
     def __post_init__(self):
-        assert isinstance(self.ts, int) and isinstance(self.te, int)
-        assert self.ts <= self.te
+        if (
+            not isinstance(self.ts, int)
+            or not isinstance(self.te, int)
+            or not (self.ts <= self.te)
+        ):
+            raise ValueError("ts and te must be integers and ts must be <= te")
 
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
@@ -67,6 +71,7 @@ class EventBuffer:
             return False
 
     def __contains__(self, item):
+        # FIXME should this conditional actually be open from above?
         if isinstance(item, int):
             return self.ts <= item <= self.te
         else:
@@ -97,6 +102,8 @@ class EventBuffer:
             return self.te > item.te
 
     def pad_buffer(self, ts, te, data=None):
+        # FIXME this needs to be renamed to e.g., pad_buffer_start or similar.
+        # What is this actually used for???
         assert ts < self.ts
         return EventBuffer(
             ts=ts,
@@ -124,6 +131,7 @@ class EventFrame(Frame):
         return self.events[item]
 
     def __iter__(self):
+        # FIXME this will just iterate over event keys. Is that what we want?
         return iter(self.events)
 
     def __repr__(self):
@@ -169,19 +177,27 @@ class SeriesBuffer:
                 "%s not in allowed rates %s" % (self.sample_rate, Offset.ALLOWED_RATES)
             )
         if self.data is None:
-            assert self.shape != (-1,)
+            if self.shape == (-1,):
+                raise ValueError("if data is None self.shape must be given")
         elif isinstance(self.data, int) and self.data == 1:
-            assert self.shape != (-1,)
+            if self.shape == (-1,):
+                raise ValueError("if data is 1 self.shape must be given")
             self.data = self.backend.ones(self.shape)
         elif isinstance(self.data, int) and self.data == 0:
-            assert self.shape != (-1,)
+            if self.shape == (-1,):
+                raise ValueError("if data is 0 self.shape must be given")
             self.data = self.backend.zeros(self.shape)
         elif self.shape == (-1,):
             self.shape = self.data.shape
         else:
-            assert self.shape == self.data.shape
-            for t in self.shape:
-                assert isinstance(t, int)
+            if self.shape != self.data.shape:
+                raise ValueError("self.shape and self.data.shape must agree")
+
+    # FIXME this seems like an impossible outcome at this point. The
+    # non integer shape will have been captured by now
+    # for t in self.shape:
+    #    if not isinstance(t, int):
+    #        raise ValueError("all components of shape must be integers")
 
     @staticmethod
     def fromoffsetslice(
@@ -275,20 +291,27 @@ class SeriesBuffer:
         )
 
     def __eq__(self, value: Union[SeriesBuffer, Any]) -> bool:
+        # FIXME this is a bit convoluted.  In order for some of these tests to
+        # be triggered strange manipulation of objects would have to occur.
+        # Consider making the SeriesBuffer properties read only where possible.
         is_series_buffer = isinstance(value, SeriesBuffer)
         if not is_series_buffer:
             return False
         if not (value.shape == self.shape):
             return False
+        # FIXME is this the right check? Or do we want to check dtype? Under
+        # what circumstances will this check fail?
         if type(self.data) is not type(value.data):
             return False
         if isinstance(self.data, NumpyArray) and isinstance(value.data, NumpyArray):
             share_data = NumpyBackend.all(self.data == value.data)
         elif isinstance(self.data, TorchArray) and isinstance(value.data, TorchArray):
             share_data = TorchBackend.all(self.data == value.data)
+        elif self.data is None and value.data is None:
+            share_data = True
         else:
             # Will need to expand this conditional if/when other data types are added
-            return False
+            raise ValueError("invalid data object")
         share_offset = value.offset == self.offset
         share_sample_rate = value.sample_rate == self.sample_rate
         return share_data and share_offset and share_sample_rate
@@ -382,6 +405,7 @@ class SeriesBuffer:
             return zeros_func(self.shape)
 
     def __contains__(self, item):
+        # FIXME, is this what we want?
         if isinstance(item, int):
             return self.offset <= item < self.end_offset
         else:
@@ -432,19 +456,11 @@ class SeriesBuffer:
         if isinstance(self.data, NumpyArray):
             return NumpyBackend
         elif isinstance(self.data, TorchArray):
-            # FIXME: should this just throw an error?
-            if self.data.device != TorchBackend.DEVICE:
-                print(
-                    f"Changing TorchBackend device from {TorchBackend.DEVICE} to"
-                    f" {self.data.device}"
-                )
-                TorchBackend.set_device(self.data.device)
-            if self.data.dtype != TorchBackend.DTYPE:
-                print(
-                    f"Changing TorchBackend dtype from {TorchBackend.DTYPE} to"
-                    f" {self.data.dtype}"
-                )
-                TorchBackend.set_dtype(self.data.dtype)
+            if (
+                self.data.device != TorchBackend.DEVICE
+                or self.data.dtype != TorchBackend.DTYPE
+            ):
+                raise ValueError("TorchArray and data backends are incompatable")
             return TorchBackend
         else:
             return None
@@ -471,8 +487,10 @@ class SeriesBuffer:
         # - if one None fill the gap and add with other's backend
         # - if neither None but disagree raise an error
         backend = self._backend_from_data
-        if (backend != item._backend_from_data) and (
-            item._backend_from_data is not None
+        if (
+            (backend != item._backend_from_data)
+            and (item._backend_from_data is not None)
+            and (backend is not None)
         ):
             raise TypeError("Incompatible data types")
         if backend is None and item._backend_from_data is not None:
