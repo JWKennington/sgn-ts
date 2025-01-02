@@ -10,7 +10,7 @@ from sgnts.base import Array, Offset, SeriesBuffer, TSFrame, TSSource
 
 
 @dataclass
-class FakeSeriesSrc(TSSource):
+class FakeSeriesSource(TSSource):
     """A time-series source that generates fake data in fixed-size buffers.
 
     Args:

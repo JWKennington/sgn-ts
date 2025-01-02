@@ -6,7 +6,7 @@ from sgn.apps import Pipeline
 from sgn.sinks import NullSink
 
 from sgnts.base import TSTransform
-from sgnts.sources import FakeSeriesSrc
+from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import Converter
 
 
@@ -91,7 +91,7 @@ def test_broken_converter_2():
     inrate = 256
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=inrate,
@@ -137,7 +137,7 @@ def test_broken_converter_1():
     inrate = 256
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=inrate,
@@ -178,7 +178,7 @@ def test_converter():
     inrate = 256
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=inrate,

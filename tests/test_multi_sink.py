@@ -3,7 +3,7 @@ import pytest
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import FakeSeriesSrc
+from sgnts.sources import FakeSeriesSource
 
 
 def test_multi_sink(capsys):
@@ -26,14 +26,14 @@ def test_multi_sink(capsys):
     end = 10
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=inrate,
             t0=t0,
             end=end,
         ),
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src2",
             source_pad_names=("L1",),
             rate=inrate,
@@ -43,7 +43,7 @@ def test_multi_sink(capsys):
             impulse_position=1,
             verbose=True,
         ),
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src3",
             source_pad_names=("V1",),
             rate=inrate,
@@ -73,7 +73,7 @@ def test_multi_sink(capsys):
 
 def test_invalid_fake_series():
     pipeline = Pipeline()
-    src = FakeSeriesSrc(
+    src = FakeSeriesSource(
         name="blah",
         source_pad_names=("V1",),
         rate=2048,

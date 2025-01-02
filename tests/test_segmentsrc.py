@@ -3,7 +3,7 @@
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import SegmentSrc
+from sgnts.sources import SegmentSource
 
 
 def test_align(capsys):
@@ -24,7 +24,7 @@ def test_align(capsys):
     end = 15.0
     segments = [(1e9, 2e9), (10e9, 11e9)]
     pipeline.insert(
-        SegmentSrc(
+        SegmentSource(
             name="src1",
             source_pad_names=("seg",),
             rate=inrate,

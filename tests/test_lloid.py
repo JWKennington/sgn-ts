@@ -4,7 +4,7 @@ import numpy as np
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import FakeSeriesSrc
+from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import Adder, Correlate, Matmul, Resampler
 
 
@@ -48,7 +48,7 @@ def test_lloid():
     max_age = 1000000000000
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=2048,

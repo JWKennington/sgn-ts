@@ -8,7 +8,7 @@ from sgnts.base import Offset, TSFrame, TSSource
 
 
 @dataclass
-class RealTimeWhiteNoiseSrc(TSSource):
+class RealTimeWhiteNoiseSource(TSSource):
     """A time-series source that generates fake data in fixed-size buffers in real-time
 
     Args:

@@ -3,7 +3,7 @@ import pytest
 from sgn.apps import Pipeline
 
 from sgnts.sinks import DumpSeriesSink
-from sgnts.sources import FakeSeriesSrc
+from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import Resampler, Converter
 from sgnts.base.array_ops import TorchBackend
 from sgnts.base import AdapterConfig, TSTransform
@@ -87,7 +87,7 @@ def test_torch_resampler():
             return self.preparedframes[self.sink_pads[0]]
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=inrate,
@@ -164,7 +164,7 @@ def test_resampler():
     outrate = 64
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=inrate,

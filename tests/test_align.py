@@ -3,7 +3,7 @@
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import FakeSeriesSrc
+from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import Align
 
 
@@ -34,7 +34,7 @@ def test_align(capsys):
     duration = 10
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=inrate,
@@ -52,7 +52,7 @@ def test_align(capsys):
             sink_pad_names=("H1",),
             verbose=True,
         ),
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src2",
             source_pad_names=("L1",),
             rate=inrate,
@@ -64,7 +64,7 @@ def test_align(capsys):
             sink_pad_names=("L1",),
             verbose=True,
         ),
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src3",
             source_pad_names=("V1",),
             rate=inrate,
