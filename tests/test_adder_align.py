@@ -8,7 +8,7 @@ from sgnts.sources import FakeSeriesSrc
 from sgnts.transforms import Adder, Resampler
 
 
-def test_adder(capsys):
+def test_adder():
 
     pipeline = Pipeline()
     max_age = 1000000000000
@@ -41,9 +41,10 @@ def test_adder(capsys):
         FakeSeriesSrc(
             name="src1",
             source_pad_names=("H1",),
-            end=2,
+            end=4,
             rate=2048,
             signal_type="sin",
+            sample_shape=(2,),
         ),
         Resampler(
             name="down",
@@ -65,6 +66,7 @@ def test_adder(capsys):
             sink_pad_names=("A", "B"),
             max_age=max_age,
             adapter_config=AdapterConfig(stride=Offset.fromsec(2)),
+            addslices_map={"A": (slice(0, 2),), "B": (slice(0, 2),)},
         ),
         FakeSeriesSink(name="snk1", sink_pad_names=("H1",), verbose=True),
         link_map={
@@ -80,4 +82,4 @@ def test_adder(capsys):
 
 
 if __name__ == "__main__":
-    test_adder(None)
+    test_adder()

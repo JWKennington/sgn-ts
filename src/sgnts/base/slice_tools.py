@@ -17,14 +17,15 @@ class TSSlice:
     stop: int
 
     def __post_init__(self):
-        if self.start is None:
-            assert self.stop is None
-        elif self.stop is None:
-            assert self.start is None
-        else:
-            assert isinstance(self.start, int)
-            assert isinstance(self.stop, int)
-            assert self.stop >= self.start
+        if (self.start is None and self.stop is not None) or (
+            self.stop is None and self.start is not None
+        ):
+            raise ValueError("if one of start or stop is None, both must be")
+        if self.start is not None:
+            if not isinstance(self.start, int) or not isinstance(self.stop, int):
+                raise ValueError("if not None, start and stop must be integers")
+            if not (self.stop >= self.start):
+                raise ValueError("stop must be greater than or equal to start")
 
     @property
     def slice(self):

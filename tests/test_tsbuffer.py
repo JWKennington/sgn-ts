@@ -3,11 +3,15 @@
 import numpy
 import pytest
 import torch
+
+# from unittest import mock
 from sgn.apps import Pipeline
 
-from sgnts.base import SeriesBuffer
+from sgnts.base import SeriesBuffer, EventBuffer, TSSlice, EventFrame, TSFrame
+from sgnts.base.array_ops import TorchBackend
 from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSrc
+from sgnts.base.time import Time
 
 
 def test_tsgraph(capsys):
@@ -348,3 +352,126 @@ def test_add_nonflat_torch(torch_c, torch_d):
     assert torch_c + torch_d == correct
     torch_c += torch_d
     assert torch_c == correct
+
+
+def test_badly_initialized_event_buffer():
+    with pytest.raises(ValueError):
+        EventBuffer("a", "b")
+
+
+def test_print_event_buffer():
+    ebuf = EventBuffer(1, 2)
+    repr(ebuf)
+
+
+def test_bool_event_buffer():
+    ebuf = EventBuffer(1, 2)
+    assert not ebuf
+
+
+def test_misc_event_buffer():
+    ebuf = EventBuffer(1, 2)
+    assert 1 in ebuf
+    assert "a" not in ebuf
+    assert 0 < ebuf
+    assert EventBuffer(0, 1) < ebuf
+    assert 1 <= ebuf
+    assert EventBuffer(0, 2) <= ebuf
+    assert 3 > ebuf
+    assert EventBuffer(2, 3) > ebuf
+    assert EventBuffer(1, 3) >= ebuf
+    assert 2 >= ebuf
+    assert ebuf.slice == TSSlice(1, 2)
+    assert ebuf.duration == 1
+    assert ebuf.is_gap
+    ebuf = EventBuffer(1, 2, data={"a": {}})
+    assert not ebuf.is_gap
+
+
+def test_event_frame():
+    eframe = EventFrame(events={"a": []})
+    assert eframe["a"] == []
+    for k in eframe:
+        assert k == "a"
+    repr(eframe)
+
+
+def test_valid_series_buffer():
+    with pytest.raises(ValueError):
+        SeriesBuffer(offset=0, sample_rate=1234)
+    with pytest.raises(ValueError):
+        SeriesBuffer(offset=0, sample_rate=128, data=0)
+    with pytest.raises(ValueError):
+        SeriesBuffer(offset=0, sample_rate=128, data=1)
+    with pytest.raises(ValueError):
+        SeriesBuffer(offset=0, sample_rate=128)
+    buf = SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=0)
+    assert TSFrame(buffers=[buf]).slice == TSSlice(0, 16384)
+    assert len(buf) == 128
+    with pytest.raises(ValueError):
+        SeriesBuffer(
+            offset=0, sample_rate=128, shape=(128,), data=numpy.array([1, 2, 3])
+        )
+    buf2 = buf.new(data=buf.data)
+    assert numpy.array_equal(
+        buf.tarr,
+        buf2.backend.arange(buf.samples) / buf.sample_rate + buf.t0 / Time.SECONDS,
+    )
+    assert buf2 == buf
+    with pytest.raises(ValueError):
+        buf2.set_data(data=numpy.array([1, 2, 3]))
+    assert not buf2 == "blah"
+    assert not buf2 == SeriesBuffer(offset=0, sample_rate=128, shape=(127,), data=0)
+
+    assert buf2.end == 1_000_000_000
+    assert buf2 < 16385
+    assert buf2 <= 16384
+    assert buf2 <= SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=0)
+    assert buf2 >= SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=0)
+    assert buf2 >= 0
+    assert buf2 > SeriesBuffer(offset=-16384, sample_rate=128, shape=(128,), data=0)
+    assert buf2 > -16384
+    assert 1000 in buf2
+    assert "blah" not in buf2
+
+    with pytest.raises(NotImplementedError):
+        buf2.split("blah")
+
+    tbuf = SeriesBuffer(
+        offset=-16384, sample_rate=128, shape=(128,), data=0, backend=TorchBackend
+    )
+    original_dtype = TorchBackend.DTYPE
+    TorchBackend.DTYPE = torch.float64
+    with pytest.raises(ValueError):
+        assert tbuf._backend_from_data.DTYPE == original_dtype
+    TorchBackend.DTYPE = original_dtype
+    tbuf.data = None
+    assert tbuf._backend_from_data is None
+
+    tbuf = SeriesBuffer(
+        offset=-16384,
+        sample_rate=128,
+        shape=(128,),
+        data=0,
+        backend=TorchBackend,
+    )
+    tbuf2 = SeriesBuffer(
+        offset=-16384, sample_rate=128, shape=(128,), data=None, backend=TorchBackend
+    )
+
+    assert (tbuf + tbuf2) == tbuf
+    assert (tbuf2 + tbuf) == tbuf
+    assert (tbuf2 + tbuf2) == tbuf2
+
+    # NOTE: These seem like impossible situations, but I am testing it here
+    # anyway since it is required for coverage
+    # FIXME: check conditionals of SeriesBuffer equality.  asserting types are
+    # the same seems useless, maybe it should be dtypes? Or is this meant to
+    # caputure torch arrays?
+    buf3 = SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=numpy.arange(128))
+    buf3.data = "blah"
+    assert not buf2 == buf3
+    buf4 = SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=numpy.arange(128))
+    buf4.data = "blah"
+    with pytest.raises(ValueError):
+        assert buf3 == buf4

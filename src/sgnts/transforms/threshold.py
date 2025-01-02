@@ -7,6 +7,7 @@ from sgn.base import SourcePad
 from sgnts.base import Offset, SeriesBuffer, TSFrame, TSSlice, TSSlices, TSTransform
 
 
+# FIXME: only supports numpy and not pytorch
 @dataclass
 class Threshold(TSTransform):
     """Only allow data above or below a threshold to pass. data will otherwise be marked
@@ -62,10 +63,14 @@ class Threshold(TSTransform):
             list[TSSlice], a list of TSSlices whose data value crossed a threshold,
             along with a window around the crossing
         """
-        signal = buffer.data
+        signal = numpy.array(buffer.data)
         sample_rate = buffer.sample_rate
         off0 = buffer.offset
-        mask = numpy.concatenate(([False], numpy.abs(signal) >= threshold, [False]))
+        # NOTE the tuple casting is here because of mypy. Numpy typing seems a
+        # bit broken in a few places.
+        mask: numpy.ndarray = numpy.concatenate(
+            ((False,), tuple(numpy.abs(signal) >= threshold), (False,))
+        )
         idx = numpy.flatnonzero(mask[1:] != mask[:-1])
         return [
             TSSlice(
@@ -75,8 +80,10 @@ class Threshold(TSTransform):
             for i in range(0, len(idx), 2)
         ]
 
+    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
+    # that a future version of mypy will be able to handle this
     @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
         frame = self.preparedframes[self.sinkpad]
         boundary_offsets = TSSlice(
             frame[0].offset,
@@ -127,8 +134,7 @@ class Threshold(TSTransform):
         # sanity check that buffers don't overlap
         o0 = out[0]
         for o in out[1:]:
-            if o.offset != o0.end_offset:
-                raise ValueError(f"overlapping offsets {o0.slice, o.slice}")
+            assert o.offset == o0.end_offset
             o0 = o
 
         return TSFrame(buffers=out, EOS=self.at_EOS, metadata=frame.metadata)

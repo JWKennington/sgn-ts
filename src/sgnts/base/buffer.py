@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy
 from sgn.base import Frame
@@ -32,13 +32,17 @@ class EventBuffer:
             Any, Data of the event
     """
 
-    ts: int = None
-    te: int = None
+    ts: Union[int, None] = None
+    te: Union[int, None] = None
     data: Any = None
 
     def __post_init__(self):
-        assert isinstance(self.ts, int) and isinstance(self.te, int)
-        assert self.ts <= self.te
+        if (
+            not isinstance(self.ts, int)
+            or not isinstance(self.te, int)
+            or not (self.ts <= self.te)
+        ):
+            raise ValueError("ts and te must be integers and ts must be <= te")
 
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
@@ -67,6 +71,7 @@ class EventBuffer:
             return False
 
     def __contains__(self, item):
+        # FIXME should this conditional actually be open from above?
         if isinstance(item, int):
             return self.ts <= item <= self.te
         else:
@@ -96,14 +101,6 @@ class EventBuffer:
         elif isinstance(item, EventBuffer):
             return self.te > item.te
 
-    def pad_buffer(self, ts, te, data=None):
-        assert ts < self.ts
-        return EventBuffer(
-            ts=ts,
-            te=self.ts,
-            data=data,
-        )
-
 
 @dataclass
 class EventFrame(Frame):
@@ -114,7 +111,7 @@ class EventFrame(Frame):
             dict, Dictionary of EventBuffers
     """
 
-    events: dict = None
+    events: Union[dict, None] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -124,10 +121,14 @@ class EventFrame(Frame):
         return self.events[item]
 
     def __iter__(self):
+        # FIXME this will just iterate over event keys. Is that what we want?
         return iter(self.events)
 
     def __repr__(self):
-        out = f"EventFrame(EOS={self.EOS}, is_gap={self.is_gap}, metadata={self.metadata}, events={{\n"
+        out = (
+            f"EventFrame(EOS={self.EOS}, is_gap={self.is_gap}, "
+            f"metadata={self.metadata}, events={{\n"
+        )
         for evt, v in self.events.items():
             out += f"    {evt}: {v},\n"
         out += "}})"
@@ -166,19 +167,24 @@ class SeriesBuffer:
                 "%s not in allowed rates %s" % (self.sample_rate, Offset.ALLOWED_RATES)
             )
         if self.data is None:
-            assert self.shape != (-1,)
+            if self.shape == (-1,):
+                raise ValueError("if data is None self.shape must be given")
         elif isinstance(self.data, int) and self.data == 1:
-            assert self.shape != (-1,)
+            if self.shape == (-1,):
+                raise ValueError("if data is 1 self.shape must be given")
             self.data = self.backend.ones(self.shape)
         elif isinstance(self.data, int) and self.data == 0:
-            assert self.shape != (-1,)
+            if self.shape == (-1,):
+                raise ValueError("if data is 0 self.shape must be given")
             self.data = self.backend.zeros(self.shape)
         elif self.shape == (-1,):
             self.shape = self.data.shape
         else:
-            assert self.shape == self.data.shape
-            for t in self.shape:
-                assert isinstance(t, int)
+            if self.shape != self.data.shape:
+                raise ValueError("self.shape and self.data.shape must agree")
+
+        for t in self.shape:
+            assert isinstance(t, int)
 
     @staticmethod
     def fromoffsetslice(
@@ -271,21 +277,28 @@ class SeriesBuffer:
             + self.t0 / Time.SECONDS
         )
 
-    def __eq__(self, value: object) -> bool:
+    def __eq__(self, value: Union[SeriesBuffer, Any]) -> bool:
+        # FIXME this is a bit convoluted.  In order for some of these tests to
+        # be triggered strange manipulation of objects would have to occur.
+        # Consider making the SeriesBuffer properties read only where possible.
         is_series_buffer = isinstance(value, SeriesBuffer)
         if not is_series_buffer:
             return False
         if not (value.shape == self.shape):
             return False
+        # FIXME is this the right check? Or do we want to check dtype? Under
+        # what circumstances will this check fail?
         if type(self.data) is not type(value.data):
             return False
         if isinstance(self.data, NumpyArray) and isinstance(value.data, NumpyArray):
             share_data = NumpyBackend.all(self.data == value.data)
         elif isinstance(self.data, TorchArray) and isinstance(value.data, TorchArray):
             share_data = TorchBackend.all(self.data == value.data)
+        elif self.data is None and value.data is None:
+            share_data = True
         else:
             # Will need to expand this conditional if/when other data types are added
-            return False
+            raise ValueError("invalid data object")
         share_offset = value.offset == self.offset
         share_sample_rate = value.sample_rate == self.sample_rate
         return share_data and share_offset and share_sample_rate
@@ -379,6 +392,7 @@ class SeriesBuffer:
             return zeros_func(self.shape)
 
     def __contains__(self, item):
+        # FIXME, is this what we want?
         if isinstance(item, int):
             return self.offset <= item < self.end_offset
         else:
@@ -408,7 +422,7 @@ class SeriesBuffer:
         elif isinstance(item, SeriesBuffer):
             return self.end_offset > item.end_offset
 
-    def _insert(self, data, offset) -> None:
+    def _insert(self, data: Array, offset) -> None:
         """TODO workshop the name
         Adds data from a whose slice is
         fully contained within self's into self.
@@ -416,26 +430,24 @@ class SeriesBuffer:
         insertion_index = Offset.tosamples(
             offset - self.offset, sample_rate=self.sample_rate
         )
-        self.data[..., insertion_index : insertion_index + data.shape[-1]] += data
+        # FIXME: this is a thorny issue because of how generous we are with the type
+        # of data and the type of Array.  Fixing this will involve being
+        # stricter about types and more careful throughout the array_ops
+        # module.
+        self.data[
+            ..., insertion_index : insertion_index + data.shape[-1]
+        ] += data  # type: ignore
 
     @property
     def _backend_from_data(self):
         if isinstance(self.data, NumpyArray):
             return NumpyBackend
         elif isinstance(self.data, TorchArray):
-            # FIXME: should this just throw an error?
-            if self.data.device != TorchBackend.DEVICE:
-                print(
-                    f"Changing TorchBackend device from {TorchBackend.DEVICE} to"
-                    f" {self.data.device}"
-                )
-                TorchBackend.set_device(self.data.device)
-            if self.data.dtype != TorchBackend.DTYPE:
-                print(
-                    f"Changing TorchBackend dtype from {TorchBackend.DTYPE} to"
-                    f" {self.data.dtype}"
-                )
-                TorchBackend.set_dtype(self.data.dtype)
+            if (
+                self.data.device != TorchBackend.DEVICE
+                or self.data.dtype != TorchBackend.DTYPE
+            ):
+                raise ValueError("TorchArray and data backends are incompatable")
             return TorchBackend
         else:
             return None
@@ -462,8 +474,10 @@ class SeriesBuffer:
         # - if one None fill the gap and add with other's backend
         # - if neither None but disagree raise an error
         backend = self._backend_from_data
-        if (backend != item._backend_from_data) and (
-            item._backend_from_data is not None
+        if (
+            (backend != item._backend_from_data)
+            and (item._backend_from_data is not None)
+            and (backend is not None)
         ):
             raise TypeError("Incompatible data types")
         if backend is None and item._backend_from_data is not None:
@@ -595,7 +609,10 @@ class TSFrame(Frame):
         return iter(self.buffers)
 
     def __repr__(self):
-        out = f"TSFrame(EOS={self.EOS}, is_gap={self.is_gap}, metadata={self.metadata}, buffers=[\n"
+        out = (
+            f"TSFrame(EOS={self.EOS}, is_gap={self.is_gap}, "
+            f"metadata={self.metadata}, buffers=[\n"
+        )
         for buf in self:
             out += f"    {buf},\n"
         out += "])"
@@ -685,12 +702,15 @@ class TSFrame(Frame):
 
     def __next__(self):
         """
-        return a new empty frame that is like the current one but advanced to the next offset, e.g.,
+        return a new empty frame that is like the current one but advanced to
+        the next offset, e.g.,
 
-        >>> frame = TSFrame.from_buffer_kwargs(offset=0, sample_rate=2048, shape=(2048,))
+        >>> frame = TSFrame.from_buffer_kwargs(offset=0,
+                        sample_rate=2048, shape=(2048,))
         >>> print (frame)
 
-                SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=None)
+                SeriesBuffer(offset=0, offset_end=16384, shape=(2048,),
+                             sample_rate=2048, duration=1000000000, data=None)
         >>> print (next(frame))
         """
         return self.from_buffer_kwargs(

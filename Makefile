@@ -5,6 +5,8 @@ else
 endif
 export PYTHONPATH
 
+.PHONY: all
+all : format lint type-check test
 
 .PHONY: help
 help :
@@ -33,7 +35,3 @@ format :
 .PHONY: type-check
 type-check :
 	mypy .
-
-.PHONY: docs
-docs :
-	python -m sphinx -b "html" "docs" "sphinx"

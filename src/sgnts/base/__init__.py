@@ -2,9 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isinf
-from typing import Optional, Union
 
-from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
+# from typing import Optional, Union, Callable, Protocol, Sequence
+from typing import Optional, Union, Callable, Sequence
+
+from sgn.base import (
+    SinkElement,
+    SinkPad,
+    SourceElement,
+    SourcePad,
+    TransformElement,
+)
 from sgn.sources import SignalEOS
 
 from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
@@ -69,8 +77,26 @@ class AdapterConfig:
             return buf.new(new_slice, data)
 
 
+#
+# NOTE FIXME. I have tried multiple times to get the _TSTransSink mixin class
+# to play well with mypy, but each time just dug a deeper hole. The issue is
+# that the mixin class refers to sink_pads which of course don't exist unless
+# it is mixed in.  Below you can see remnants of a couple of attemps including
+# using a Protocol class (mypy recommendation) and making it a subclass of
+# ElementLike. I couldn't get either to work but encourage others to try.
+#
+
+# class HasValueProtocol(Protocol):
+#    @property
+#    def sink_pads(self) -> Sequence: ...
+#
+#    @sink_pads.setter
+#    def sink_pads(self, value: Sequence) -> Sequence: ...
+
+
 @dataclass
-class _TSTransSink:
+class _TSTransSink:  # (HasValueProtocol):
+    # class _TSTransSink(ElementLike)
     """Base class for TSTransforms and TSSinks.
 
     This will produce aligned frames in preparedframes. If
@@ -283,7 +309,9 @@ class _TSTransSink:
 
         # put in heartbeat buffer if not aligned
         if not self._is_aligned:
-            for sink_pad in self.sink_pads:
+            # I tried to fix this properly see the notes above the definition
+            # of _TSTransSink
+            for sink_pad in self.sink_pads:  # type: ignore
                 self.preparedframes[sink_pad] = TSFrame(
                     EOS=self.at_EOS,
                     buffers=[
@@ -300,7 +328,9 @@ class _TSTransSink:
         else:
             min_latest = self.min_latest
             earliest = self.earliest
-            for sink_pad in self.sink_pads:
+            # I tried to fix this properly see the notes above the definition
+            # of _TSTransSink
+            for sink_pad in self.sink_pads:  # type: ignore
                 out = self.inbufs[sink_pad].get_sliced_buffers(
                     (earliest, min_latest), pad_start=True
                 )
@@ -393,7 +423,11 @@ class _TSTransSink:
 class TSTransform(TransformElement, _TSTransSink):
     """A time-series transform element."""
 
-    pull = _TSTransSink.pull
+    # FIXME mypy complains that this takes a TSFrame instead of a Frame.  Not
+    # sure what the right fix is.
+    # FIXME, I also cannot get type hints to work
+    # pull: Callable[[SourcePad, TSFrame], None] = _TSTransSink.pull  # type: ignore
+    pull = _TSTransSink.pull  # type: ignore
 
     def __post_init__(self):
         TransformElement.__post_init__(self)
@@ -423,7 +457,11 @@ class TSTransform(TransformElement, _TSTransSink):
 class TSSink(SinkElement, _TSTransSink):
     """A time-series sink element."""
 
-    pull = _TSTransSink.pull
+    # FIXME mypy complains that this takes a TSFrame instead of a Frame.  Not
+    # sure what the right fix is.
+    # FIXME, I also cannot get type hints to work
+    # pull: Callable[[SourcePad, TSFrame], None] = _TSTransSink.pull  # type: ignore
+    pull = _TSTransSink.pull  # type: ignore
 
     def __post_init__(self):
         SinkElement.__post_init__(self)

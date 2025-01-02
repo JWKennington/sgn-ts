@@ -20,6 +20,10 @@ def test_threshold(capsys):
     #       | threshold |
     #        -----------
     #             |
+    #        -----------
+    #       | threshold2 |
+    #        -----------
+    #             |
     #         --------
     #        | snk    |
     #         --------
@@ -40,20 +44,30 @@ def test_threshold(capsys):
         ),
         Threshold(
             name="threshold",
-            source_pad_names=("threshold",),
+            source_pad_names=("data",),
             sink_pad_names=("data",),
             threshold=threshold,
             startwn=startwn,
             stopwn=stopwn,
         ),
+        Threshold(
+            name="threshold2",
+            source_pad_names=("data",),
+            sink_pad_names=("data",),
+            threshold=threshold,
+            startwn=startwn,
+            stopwn=stopwn,
+            invert=True,
+        ),
         FakeSeriesSink(
             name="snk",
-            sink_pad_names=("threshold",),
+            sink_pad_names=("data",),
             verbose=True,
         ),
         link_map={
             "threshold:sink:data": "datasrc:src:data",
-            "snk:sink:threshold": "threshold:src:threshold",
+            "threshold2:sink:data": "threshold:src:data",
+            "snk:sink:data": "threshold2:src:data",
         },
     )
 

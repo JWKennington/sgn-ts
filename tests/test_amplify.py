@@ -35,6 +35,7 @@ def test_amplify():
             rate=inrate,
             signal_type="sin",
             fsin=3,
+            ngap=2,
             end=8,
         ),
         Amplify(

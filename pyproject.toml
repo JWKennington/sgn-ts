@@ -74,6 +74,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+exclude = ["multiplier.py"]
 
 [tool.setuptools.package-data]
 sgnl = [
@@ -90,10 +91,20 @@ source = [
 ]
 
 [tool.coverage.report]
-omit = ["_version.py", "tests/*", "examples/*", "setup.py", "*/__init__.py"]
+omit = ["_version.py", "tests/*", "examples/*", "setup.py", "*/__init__.py", "src/sgnts/transforms/multiplier.py"]
 
 [tool.isort]
 profile = "black"
+skip_glob = [
+    "docs/*",
+    "build/*",
+    "dist/*",
+    "examples/*",
+    "tests/*",
+    "*/__init__.py",
+    "src/sgn/bottle.py",
+]
+
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -116,9 +127,19 @@ per-file-ignores = [
     "_version.py:BLK100",
     "docs/conf.py:E501",
     "tests/*.py:E731",
+    "tests/test_mult.py:W605",
 ]
 exclude = [
     "build",
     "docs",
     "_version.py",
 ]
+
+[tool.docformatter]
+recursive = true
+in-place = true
+pre-summary-space = false
+wrap-summaries = 88
+wrap-descriptions = 88
+close-quotes-on-new-line = true
+force-wrap = false

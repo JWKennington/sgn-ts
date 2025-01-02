@@ -271,7 +271,11 @@ class Audioadapter:
                 nsamples = Offset.tosamples(
                     offset_segment[1] - offset_segment[0], self.sample_rate
                 )
-                out = self.pre_cat_data.data[..., ni : ni + nsamples]
+                # FIXME: this is a thorny issue because of how generous we are
+                # with the type of data and the type of Array.  Fixing this will
+                # involve being stricter about types and more careful throughout
+                # the array_ops module.
+                out = self.pre_cat_data.data[..., ni : ni + nsamples]  # type: ignore
 
         return out
 

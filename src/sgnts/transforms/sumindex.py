@@ -29,8 +29,10 @@ class SumIndex(TSTransform):
         for sl in self.sl:
             assert isinstance(sl, slice)
 
+    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
+    # that a future version of mypy will be able to handle this
     @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:
+    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
         frame = self.preparedframes[self.sink_pads[0]]
 
         outbufs = []
@@ -40,6 +42,9 @@ class SumIndex(TSTransform):
             else:
                 data = buf.data
                 data_all = []
+                # NOTE mypy complains about None not being iterable but None
+                # should actually be impossible at this point.
+                assert self.sl is not None
                 for sl in self.sl:
                     if sl.stop - sl.start == 1:
                         data_all.append((data[sl.start, :, :]))
@@ -48,6 +53,9 @@ class SumIndex(TSTransform):
 
                 out = self.backend.stack(data_all)
 
+            # NOTE mypy complains about None not being iterable but None should
+            # actually be impossible at this point.
+            assert self.sl is not None
             outbuf = SeriesBuffer(
                 offset=buf.offset,
                 sample_rate=buf.sample_rate,
