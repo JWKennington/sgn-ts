@@ -53,8 +53,7 @@ class Correlate(TSTransform):
         # FIXME: try with array ops
         os = []
         shape = self.shape
-        if self.filters is None:
-            raise ValueError("filters cannot be None")
+        assert self.filters is not None
         self.filters = self.filters.reshape(-1, shape[-1])
         for j in range(self.shape[0]):
             os.append(scipy.signal.correlate(data, self.filters[j], mode="valid"))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import pytest
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
@@ -39,6 +39,9 @@ def test_multi_sink(capsys):
             rate=inrate,
             t0=t0,
             end=end,
+            signal_type="impulse",
+            impulse_position=1,
+            verbose=True,
         ),
         FakeSeriesSrc(
             name="src3",
@@ -46,6 +49,8 @@ def test_multi_sink(capsys):
             rate=inrate,
             t0=t0,
             end=end,
+            signal_type="impulse",
+            impulse_position=-1,
         ),
         FakeSeriesSink(
             name="snk3",
@@ -64,6 +69,25 @@ def test_multi_sink(capsys):
     )
 
     pipeline.run()
+
+
+def test_invalid_fake_series():
+    pipeline = Pipeline()
+    src = FakeSeriesSrc(
+        name="blah",
+        source_pad_names=("V1",),
+        rate=2048,
+        t0=0,
+        end=1,
+        signal_type="blah",
+    )
+    sink = FakeSeriesSink(
+        name="blah2",
+        sink_pad_names=("V1",),
+    )
+    pipeline.insert(src, sink, link_map={sink.snks["V1"]: src.srcs["V1"]})
+    with pytest.raises(ValueError):
+        pipeline.run()
 
 
 if __name__ == "__main__":

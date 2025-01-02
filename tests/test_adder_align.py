@@ -44,6 +44,7 @@ def test_adder():
             end=4,
             rate=2048,
             signal_type="sin",
+            sample_shape=(2,),
         ),
         Resampler(
             name="down",
@@ -65,6 +66,7 @@ def test_adder():
             sink_pad_names=("A", "B"),
             max_age=max_age,
             adapter_config=AdapterConfig(stride=Offset.fromsec(2)),
+            addslices_map={"A": (slice(0, 2),), "B": (slice(0, 2),)},
         ),
         FakeSeriesSink(name="snk1", sink_pad_names=("H1",), verbose=True),
         link_map={
