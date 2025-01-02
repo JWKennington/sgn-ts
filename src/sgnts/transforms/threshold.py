@@ -134,8 +134,7 @@ class Threshold(TSTransform):
         # sanity check that buffers don't overlap
         o0 = out[0]
         for o in out[1:]:
-            if o.offset != o0.end_offset:
-                raise ValueError(f"overlapping offsets {o0.slice, o.slice}")
+            assert o.offset == o0.end_offset
             o0 = o
 
         return TSFrame(buffers=out, EOS=self.at_EOS, metadata=frame.metadata)

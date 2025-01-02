@@ -44,8 +44,7 @@ class SumIndex(TSTransform):
                 data_all = []
                 # NOTE mypy complains about None not being iterable but None
                 # should actually be impossible at this point.
-                if self.sl is None:
-                    raise ValueError("sl cannot be None")
+                assert self.sl is not None
                 for sl in self.sl:
                     if sl.stop - sl.start == 1:
                         data_all.append((data[sl.start, :, :]))
@@ -56,8 +55,7 @@ class SumIndex(TSTransform):
 
             # NOTE mypy complains about None not being iterable but None should
             # actually be impossible at this point.
-            if self.sl is None:
-                raise ValueError("sl cannot be None")
+            assert self.sl is not None
             outbuf = SeriesBuffer(
                 offset=buf.offset,
                 sample_rate=buf.sample_rate,
