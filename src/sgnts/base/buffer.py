@@ -101,16 +101,6 @@ class EventBuffer:
         elif isinstance(item, EventBuffer):
             return self.te > item.te
 
-    def pad_buffer(self, ts, te, data=None):
-        # FIXME this needs to be renamed to e.g., pad_buffer_start or similar.
-        # What is this actually used for???
-        assert ts < self.ts
-        return EventBuffer(
-            ts=ts,
-            te=self.ts,
-            data=data,
-        )
-
 
 @dataclass
 class EventFrame(Frame):
@@ -193,11 +183,8 @@ class SeriesBuffer:
             if self.shape != self.data.shape:
                 raise ValueError("self.shape and self.data.shape must agree")
 
-    # FIXME this seems like an impossible outcome at this point. The
-    # non integer shape will have been captured by now
-    # for t in self.shape:
-    #    if not isinstance(t, int):
-    #        raise ValueError("all components of shape must be integers")
+        for t in self.shape:
+            assert isinstance(t, int)
 
     @staticmethod
     def fromoffsetslice(

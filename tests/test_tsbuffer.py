@@ -386,9 +386,6 @@ def test_misc_event_buffer():
     assert ebuf.is_gap
     ebuf = EventBuffer(1, 2, data={"a": {}})
     assert not ebuf.is_gap
-    # FIXME this tests the functionality of pad_buffer as implemented, but it
-    # seems like a strange function.
-    assert ebuf.pad_buffer(0, 3).slice == TSSlice(0, 1)
 
 
 def test_event_frame():
