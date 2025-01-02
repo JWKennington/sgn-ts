@@ -175,21 +175,6 @@ def test_converter():
 
     pipeline = Pipeline()
 
-    #
-    #       ----------
-    #      | src1     |
-    #       ----------
-    #              \
-    #           H1  \ SR2
-    #           ------------
-    #          | Converter  |
-    #           ------------
-    #                 \
-    #             H1   \ SR2
-    #             ---------
-    #            | snk1    |
-    #             ---------
-
     inrate = 256
 
     pipeline.insert(
