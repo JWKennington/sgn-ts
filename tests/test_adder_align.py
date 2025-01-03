@@ -4,7 +4,7 @@ from sgn.apps import Pipeline
 
 from sgnts.base import AdapterConfig, Offset
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import FakeSeriesSrc
+from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import Adder, Resampler
 
 
@@ -38,7 +38,7 @@ def test_adder():
     #
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             end=4,

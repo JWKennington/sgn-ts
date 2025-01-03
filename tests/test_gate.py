@@ -3,7 +3,7 @@
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import FakeSeriesSrc, SegmentSrc
+from sgnts.sources import FakeSeriesSource, SegmentSource
 from sgnts.transforms import Gate
 
 
@@ -29,7 +29,7 @@ def test_gate():
     end = 15.0
     segments = [(1_000_000_000, 2_250_000_000), (10_000_000_000, 12_500_000_000)]
     pipeline.insert(
-        SegmentSrc(
+        SegmentSource(
             name="segsrc",
             source_pad_names=("seg",),
             rate=inrate,
@@ -37,7 +37,7 @@ def test_gate():
             end=end,
             segments=segments,
         ),
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="datasrc",
             source_pad_names=("data",),
             rate=inrate,

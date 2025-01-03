@@ -3,7 +3,7 @@
 from sgn.apps import Pipeline
 from sgn.sinks import NullSink
 
-from sgnts.sources import FakeSeriesSrc
+from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import Amplify
 
 
@@ -29,7 +29,7 @@ def test_amplify():
     inrate = 256
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=inrate,

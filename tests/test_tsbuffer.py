@@ -10,7 +10,7 @@ from sgn.apps import Pipeline
 from sgnts.base import SeriesBuffer, EventBuffer, TSSlice, EventFrame, TSFrame
 from sgnts.base.array_ops import TorchBackend
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import FakeSeriesSrc
+from sgnts.sources import FakeSeriesSource
 from sgnts.base.time import Time
 
 
@@ -29,7 +29,7 @@ def test_tsgraph(capsys):
     #           ------------
 
     pipeline.insert(
-        FakeSeriesSrc(
+        FakeSeriesSource(
             name="src1",
             source_pad_names=("H1",),
             rate=2048,

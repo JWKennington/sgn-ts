@@ -9,7 +9,7 @@ from sgnts.base import Offset, TSFrame, TSSlice, TSSlices, TSSource
 
 
 @dataclass
-class SegmentSrc(TSSource):
+class SegmentSource(TSSource):
     """Produce non-gap buffers for segments, and gap buffers otherwise.
 
     Args:
