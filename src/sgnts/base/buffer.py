@@ -394,33 +394,28 @@ class SeriesBuffer:
     def __contains__(self, item):
         # FIXME, is this what we want?
         if isinstance(item, int):
+            # The end offset is not actually in the buffer hence the second "<" vs "<="
             return self.offset <= item < self.end_offset
+        elif isinstance(item, SeriesBuffer):
+            return (self.offset <= item.offset) and (item.end_offset <= self.end_offset)
         else:
             return False
 
     def __lt__(self, item):
-        if isinstance(item, int):
-            return self.end_offset < item
-        elif isinstance(item, SeriesBuffer):
-            return self.end_offset < item.end_offset
+        assert isinstance(item, SeriesBuffer)
+        return self.end_offset < item.end_offset
 
     def __le__(self, item):
-        if isinstance(item, int):
-            return self.end_offset <= item
-        elif isinstance(item, SeriesBuffer):
-            return self.end_offset <= item.end_offset
+        assert isinstance(item, SeriesBuffer)
+        return self.end_offset <= item.end_offset
 
     def __ge__(self, item):
-        if isinstance(item, int):
-            return self.offset >= item
-        elif isinstance(item, SeriesBuffer):
-            return self.end_offset >= item.end_offset
+        assert isinstance(item, SeriesBuffer)
+        return self.end_offset >= item.end_offset
 
     def __gt__(self, item):
-        if isinstance(item, int):
-            return self.offset > item
-        elif isinstance(item, SeriesBuffer):
-            return self.end_offset > item.end_offset
+        assert isinstance(item, SeriesBuffer)
+        return self.end_offset > item.end_offset
 
     def _insert(self, data: Array, offset) -> None:
         """TODO workshop the name

@@ -1,6 +1,10 @@
 .md-header {
   background-color: white;
-  color: black
+  color: black;
+}
+
+.md-grid {
+  max-width: 90%;
 }
 
 .md-content {

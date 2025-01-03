@@ -4,7 +4,8 @@ nav:
   - Home: index.md
   - User Guide:
     - Introduction: user-guide/index.md
-    - Buffers and Frames: user-guide/buffers.md
+    - Buffers: user-guide/buffers.md
+    - Frames: user-guide/frames.md
   - Developer Guide:
     - Contributing: dev-guide/contributing.md
   - API Reference:
@@ -67,6 +68,7 @@ markdown_extensions:
   - admonition: {}
   - pymdownx.arithmatex:
       generic: true
+  - def_list:
 
 extra_javascript:
   - assets/js/katex.js

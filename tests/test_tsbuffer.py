@@ -424,13 +424,9 @@ def test_valid_series_buffer():
     assert not buf2 == SeriesBuffer(offset=0, sample_rate=128, shape=(127,), data=0)
 
     assert buf2.end == 1_000_000_000
-    assert buf2 < 16385
-    assert buf2 <= 16384
     assert buf2 <= SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=0)
     assert buf2 >= SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=0)
-    assert buf2 >= 0
     assert buf2 > SeriesBuffer(offset=-16384, sample_rate=128, shape=(128,), data=0)
-    assert buf2 > -16384
     assert 1000 in buf2
     assert "blah" not in buf2
 
