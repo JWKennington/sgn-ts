@@ -3,7 +3,7 @@
 from sgn.apps import Pipeline
 
 from sgnts.sinks import FakeSeriesSink
-from sgnts.sources import RealTimeWhiteNoiseSource
+from sgnts.sources import FakeSeriesSource
 
 
 def test_realtime(capsys):
@@ -13,11 +13,12 @@ def test_realtime(capsys):
     inrate = 256
     duration = 2
     pipeline.insert(
-        RealTimeWhiteNoiseSource(
+        FakeSeriesSource(
             name="src",
             source_pad_names=("H1",),
             rate=inrate,
             duration=duration,
+            real_time=True,
         ),
         FakeSeriesSink(
             name="snk",

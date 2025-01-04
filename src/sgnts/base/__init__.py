@@ -480,21 +480,31 @@ class TSSource(SourceElement, SignalEOS):
             float, start time of first buffer, in seconds
         end:
             float, end time of the last buffer, in seconds
+        duration:
+            float, alternative to end option, specify the duration of
+            time to be covered
 
     """
 
     t0: float | None = None
     end: float | None = None
+    duration: float | None = None
 
     def __post_init__(self):
         super().__post_init__()
-        t0 = self.t0 or 0
+        self.t0 = self.t0 or 0
         # FIXME should we be more careful about this?
         # FIXME should this not be different by pad?
         self.offset = {
-            p: Offset.fromsec(t0 - Offset.offset_ref_t0 / Time.SECONDS)
+            p: Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
             for p in self.source_pads
         }
+        if self.end and self.duration:
+            raise RuntimeError("may specify either end or duration, not both")
+        if self.end and self.end < self.t0:
+            raise RuntimeError("end is before t0")
+        if self.duration:
+            self.end = self.t0 + self.duration
         # FIXME should this be different by pad?
         if self.end is not None and not isinf(self.end):
             self.end_offset = Offset.fromsec(
