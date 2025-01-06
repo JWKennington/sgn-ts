@@ -66,8 +66,8 @@ class FakeSeriesSource(TSSource):
         real_time:
             bool, run the source in "real time", such that frames are
             produced at the rate corresponding to their relative
-            offsets.  In real time mode, if t0 is not specified it wil
-            lbe set to the current GPS time.
+            offsets.  In real-time mode, t0 will default to the
+            current GPS time if not otherwise specified.
 
     """
 
