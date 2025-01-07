@@ -65,9 +65,9 @@ def test_threshold(capsys):
             verbose=True,
         ),
         link_map={
-            "threshold:sink:data": "datasrc:src:data",
-            "threshold2:sink:data": "threshold:src:data",
-            "snk:sink:data": "threshold2:src:data",
+            "threshold:snk:data": "datasrc:src:data",
+            "threshold2:snk:data": "threshold:src:data",
+            "snk:snk:data": "threshold2:src:data",
         },
     )
 

@@ -29,8 +29,8 @@ def test_sumindex():
         ),
         FakeSeriesSink(name="snk1", sink_pad_names=("H1",), verbose=True),
         link_map={
-            "sumindex:sink:H1": "src1:src:H1",
-            "snk1:sink:H1": "sumindex:src:H1",
+            "sumindex:snk:H1": "src1:src:H1",
+            "snk1:snk:H1": "sumindex:src:H1",
         },
     )
 

@@ -24,9 +24,9 @@ class Gate(TSTransform):
         super().__post_init__()
         assert len(self.sink_pads) == 2
         assert len(self.source_pads) == 1
-        self.controlpad = self.sink_pad_dict["%s:sink:%s" % (self.name, self.control)]
+        self.controlpad = self.sink_pad_dict["%s:snk:%s" % (self.name, self.control)]
         self.sinkpad = self.sink_pad_dict[
-            "%s:sink:%s"
+            "%s:snk:%s"
             % (self.name, list(set(self.sink_pad_names) - set([self.control]))[0])
         ]
 

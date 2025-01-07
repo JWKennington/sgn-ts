@@ -130,11 +130,11 @@ def test_torch_resampler():
             verbose=True,
         ),
         link_map={
-            "gap:sink:H1": "src1:src:H1",
-            "conv:sink:H1": "gap:src:H1",
-            "trans1:sink:H1": "conv:src:H1",
-            "trans2:sink:H1": "trans1:src:H1",
-            "snk1:sink:H1": "trans2:src:H1",
+            "gap:snk:H1": "src1:src:H1",
+            "conv:snk:H1": "gap:src:H1",
+            "trans1:snk:H1": "conv:src:H1",
+            "trans2:snk:H1": "trans1:src:H1",
+            "snk1:snk:H1": "trans2:src:H1",
         },
     )
 
@@ -193,9 +193,9 @@ def test_resampler():
             verbose=True,
         ),
         link_map={
-            "trans1:sink:H1": "src1:src:H1",
-            "snk1:sink:H1": "trans1:src:H1",
-            "snk2:sink:H1": "src1:src:H1",
+            "trans1:snk:H1": "src1:src:H1",
+            "snk1:snk:H1": "trans1:src:H1",
+            "snk2:snk:H1": "src1:src:H1",
         },
     )
 

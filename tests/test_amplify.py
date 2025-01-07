@@ -49,8 +49,8 @@ def test_amplify():
             sink_pad_names=("H1",),
         ),
         link_map={
-            "trans1:sink:H1": "src1:src:H1",
-            "snk1:sink:H1": "trans1:src:H1",
+            "trans1:snk:H1": "src1:src:H1",
+            "snk1:snk:H1": "trans1:src:H1",
         },
     )
 
