@@ -84,8 +84,13 @@ class FakeSeriesSource(TSSource):
     verbose: bool = False
 
     def __post_init__(self):
+        # this variable is used for real time tracking when t0 is not
+        # the current time
+        self._start_offset_from_realtime = None
+
         if self.real_time and self.t0 is None:
             self.t0 = int(gpsnow())
+            self._start_offset_from_realtime = 0
 
         super().__post_init__()
 
@@ -109,9 +114,8 @@ class FakeSeriesSource(TSSource):
             if self.verbose:
                 print("Placing impulse at sample point", self.impulse_position)
 
-        # for real time tracking record to t0 time relative to current
-        # real time
-        self._start_offset_from_realtime = gpsnow() - self.t0
+        if self._start_offset_from_realtime is None:
+            self._start_offset_from_realtime = gpsnow() - self.t0
 
     def create_impulse_data(self, offset: int, num_samples: int, rate: int) -> Array:
         """Create the impulse data, where data is zero everywhere, and equals one at one
