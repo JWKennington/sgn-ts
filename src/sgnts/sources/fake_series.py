@@ -12,9 +12,11 @@ from sgnts.base import Array, Offset, SeriesBuffer, TSFrame, TSSource
 LOGGER = get_sgn_logger("sgn-ts")
 
 try:
-    from gwpy.time import tconvert
+    from datetime import datetime
 
-    gpsnow = lambda: float(tconvert("now"))
+    from gwpy.time import to_gps
+
+    gpsnow = lambda: float(to_gps(datetime.utcnow()))
 except ImportError:
     try:
         from gpstime import gpsnow  # type: ignore
