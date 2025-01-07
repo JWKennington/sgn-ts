@@ -38,7 +38,7 @@ def test_align(capsys):
             verbose=True,
         ),
         link_map={
-            "snk1:sink:seg": "src1:src:seg",
+            "snk1:snk:seg": "src1:src:seg",
         },
     )
 

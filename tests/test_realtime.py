@@ -39,8 +39,8 @@ def test_realtime(capsys):
             verbose=True,
         ),
         link_map={
-            "slow:sink:H1": "src:src:H1",
-            "snk:sink:H1": "slow:src:H1",
+            "slow:snk:H1": "src:src:H1",
+            "snk:snk:H1": "slow:src:H1",
         },
     )
 

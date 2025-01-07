@@ -42,7 +42,7 @@ def test_tsgraph(capsys):
             sink_pad_names=("H1",),
             verbose=True,
         ),
-        link_map={"snk1:sink:H1": "src1:src:H1"},
+        link_map={"snk1:snk:H1": "src1:src:H1"},
     )
 
     pipeline.run()

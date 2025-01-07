@@ -54,9 +54,9 @@ def test_tsgraph():
             verbose=True,
         ),
         link_map={  # joining together two dicts to allow for arbitrary num_pads
-            "mult:sink:pad" + str(n): "src1:src:pad" + str(n) for n in range(num_pads)
+            "mult:snk:pad" + str(n): "src1:src:pad" + str(n) for n in range(num_pads)
         }
-        | {"snk1:sink:L1": "mult:src:H1"},
+        | {"snk1:snk:L1": "mult:src:H1"},
     )
 
     pipeline.run()

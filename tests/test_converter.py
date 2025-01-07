@@ -115,9 +115,9 @@ def test_broken_converter_2():
             sink_pad_names=("H1",),
         ),
         link_map={
-            "trans1:sink:H1": "src1:src:H1",
-            "trans2:sink:H1": "trans1:src:H1",
-            "snk1:sink:H1": "trans2:src:H1",
+            "trans1:snk:H1": "src1:src:H1",
+            "trans2:snk:H1": "trans1:src:H1",
+            "snk1:snk:H1": "trans2:src:H1",
         },
     )
     with pytest.raises(ValueError):
@@ -162,9 +162,9 @@ def test_broken_converter_1():
             sink_pad_names=("H1",),
         ),
         link_map={
-            "trans1:sink:H1": "src1:src:H1",
-            "trans2:sink:H1": "trans1:src:H1",
-            "snk1:sink:H1": "trans2:src:H1",
+            "trans1:snk:H1": "src1:src:H1",
+            "trans2:snk:H1": "trans1:src:H1",
+            "snk1:snk:H1": "trans2:src:H1",
         },
     )
     with pytest.raises(ValueError):
@@ -214,11 +214,11 @@ def test_converter():
             sink_pad_names=("H1",),
         ),
         link_map={
-            "trans1:sink:H1": "src1:src:H1",
-            "trans2:sink:H1": "trans1:src:H1",
-            "trans3:sink:H1": "trans2:src:H1",
-            "trans4:sink:H1": "trans3:src:H1",
-            "snk1:sink:H1": "trans4:src:H1",
+            "trans1:snk:H1": "src1:src:H1",
+            "trans2:snk:H1": "trans1:src:H1",
+            "trans3:snk:H1": "trans2:src:H1",
+            "trans4:snk:H1": "trans3:src:H1",
+            "snk1:snk:H1": "trans4:src:H1",
         },
     )
 
