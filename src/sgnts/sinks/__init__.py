@@ -2,7 +2,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from sgnts.base import Time, TSSink
+from sgnts.base import Time, TSSink, Offset
+from sgnts.utils import gpsnow
 
 
 @dataclass
@@ -25,6 +26,10 @@ class FakeSeriesSink(TSSink):
                 self.mark_eos(sink_pad)
             if self.verbose is True:
                 print(frame)
+                latency = gpsnow() - Offset.tosec(
+                    frame.offset + Offset.SAMPLE_STRIDE_AT_MAX_RATE
+                )
+                print(f"latency: {latency} s")
 
 
 @dataclass
