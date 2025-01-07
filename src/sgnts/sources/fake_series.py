@@ -82,10 +82,8 @@ class FakeSeriesSource(TSSource):
     verbose: bool = False
 
     def __post_init__(self):
-        # set the start and end times if not specified
         if self.real_time and self.t0 is None:
-            # if t0 not specified set t0 to be the next GPS second
-            self.t0 = int(gpsnow()) + 1
+            self.t0 = int(gpsnow())
 
         super().__post_init__()
 
@@ -176,11 +174,22 @@ class FakeSeriesSource(TSSource):
 
     def internal(self):
         if self.real_time:
-            # get the next time from the new offset.  all pads
-            # *should* have the same offset, so just take the offset
-            # from the first pad.
-            next_time = Offset.tosec(list(self.offset.values())[0])
-            sleep = next_time - gpsnow() + self._start_offset_from_realtime
+            # in real-time mode we want to "release" the data after
+            # the time of the last sample in the output frame. this
+            # should correspond to the current offset value plus the
+            # offset stride (what will be the start time of the next
+            # frame)
+            #
+            # all pads should have the same offset so just take the
+            # offset from the first pad.  FIXME: is there a better
+            # way to get the current frame offset?
+            next_offset = (
+                list(self.offset.values())[0] + Offset.SAMPLE_STRIDE_AT_MAX_RATE
+            )
+            next_time = Offset.tosec(next_offset)
+            # we then need to shift the next time to account for t0 that
+            # are not "now"
+            sleep = next_time + self._start_offset_from_realtime - gpsnow()
             if sleep < 0:
                 LOGGER.warning("Warning: FakeSeriesSource falling behind real time")
             else:
