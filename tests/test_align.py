@@ -77,12 +77,12 @@ def test_align(capsys):
             verbose=True,
         ),
         link_map={
-            "trans1:sink:H1": "src1:src:H1",
-            "snk1:sink:H1": "trans1:src:H1",
-            "trans1:sink:L1": "src2:src:L1",
-            "snk2:sink:L1": "trans1:src:L1",
-            "trans1:sink:V1": "src3:src:V1",
-            "snk3:sink:V1": "trans1:src:V1",
+            "trans1:snk:H1": "src1:src:H1",
+            "snk1:snk:H1": "trans1:src:H1",
+            "trans1:snk:L1": "src2:src:L1",
+            "snk2:snk:L1": "trans1:src:L1",
+            "trans1:snk:V1": "src3:src:V1",
+            "snk3:snk:V1": "trans1:src:V1",
         },
     )
 

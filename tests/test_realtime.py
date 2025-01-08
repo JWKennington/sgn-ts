@@ -26,7 +26,7 @@ def test_realtime(capsys):
             verbose=True,
         ),
         link_map={
-            "snk:sink:H1": "src:src:H1",
+            "snk:snk:H1": "src:src:H1",
         },
     )
 

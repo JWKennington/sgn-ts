@@ -70,11 +70,11 @@ def test_adder():
         ),
         FakeSeriesSink(name="snk1", sink_pad_names=("H1",), verbose=True),
         link_map={
-            "down:sink:H1": "src1:src:H1",
-            "up:sink:H1": "down:src:H1",
-            "add:sink:A": "up:src:H1",
-            "add:sink:B": "src1:src:H1",
-            "snk1:sink:H1": "add:src:A",
+            "down:snk:H1": "src1:src:H1",
+            "up:snk:H1": "down:src:H1",
+            "add:snk:A": "up:src:H1",
+            "add:snk:B": "src1:src:H1",
+            "snk1:snk:H1": "add:src:A",
         },
     )
 

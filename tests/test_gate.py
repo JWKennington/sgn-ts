@@ -56,9 +56,9 @@ def test_gate():
             verbose=True,
         ),
         link_map={
-            "gate:sink:data": "datasrc:src:data",
-            "gate:sink:control": "segsrc:src:seg",
-            "snk:sink:gate": "gate:src:gate",
+            "gate:snk:data": "datasrc:src:data",
+            "gate:snk:control": "segsrc:src:seg",
+            "snk:snk:gate": "gate:src:gate",
         },
     )
 

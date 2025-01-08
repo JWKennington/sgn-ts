@@ -56,7 +56,7 @@ class Converter(TSTransform):
             raise ValueError("Supported backends: 'numpy' or 'torch'")
 
         self.pad_map = {
-            p: self.sink_pad_dict["%s:sink:%s" % (self.name, p.name.split(":")[-1])]
+            p: self.sink_pad_dict["%s:snk:%s" % (self.name, p.name.split(":")[-1])]
             for p in self.source_pads
         }
 
