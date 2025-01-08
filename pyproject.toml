@@ -44,6 +44,8 @@ test = [
     "pytest-cov",
     "sgn-ts[torch]",
     "pytest-markdown-docs",
+    "gwpy",
+    "gpstime",
 ]
 docs = [
     "mkdocs",
