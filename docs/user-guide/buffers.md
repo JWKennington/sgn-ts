@@ -442,3 +442,6 @@ It is possible to increase the maximum sample rate globally in an application (t
    )
    ```
 
+## More details
+
+Additional methods and properties are documented in the [API docs](/api/base/buffer/)

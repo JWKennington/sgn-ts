@@ -1,15 +1,13 @@
 # TSFrames
 
-The most important new class in `sgnts` is the [TSFrame][sgnts.base.buffer.TSFrame]
-which holds a list of [SeriesBuffers][sgnts.base.buffer.SeriesBuffer].
+The [TSFrame][sgnts.base.buffer.TSFrame]
+class holds a list of [SeriesBuffers][sgnts.base.buffer.SeriesBuffer].
 
 
-## TSFrames -- a container for SeriesBuffers
+## Introduction
 
-Buffers are passed between element in sgnts in `TSFrame` objects.  TSFrames hold lists of buffers
-
-Simple TSFrame with one non-gap buffer:
-
+Buffers are passed between element in sgnts in `TSFrame` objects.  TSFrames hold lists of buffers.  Below is a simple TSFrame with one non-gap buffer:
+  
    ```python
    import numpy
    
@@ -33,112 +31,154 @@ Simple TSFrame with one non-gap buffer:
    assert repr(frame) == repr_frame
    ```
 
+An example with two contiguous buffers:
 	
+   ```python
+   import numpy
+   numpy.random.seed(1)
+   
+   from sgnts.base.buffer import SeriesBuffer, TSFrame
+   
+   # An example of two contiguous buffers
+   buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
+   buf2 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
+   frame = TSFrame(buffers=[buf1, buf2])
+   
+   # The frame will contain both series buffers in this example
+   repr_frame="""TSFrame(EOS=False, is_gap=False, metadata={}, buffers=[
+       SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=[1.62434536 ... 1.20809946]),
+       SeriesBuffer(offset=16384, offset_end=32768, shape=(2048,), sample_rate=2048, duration=1000000000, data=[-1.82921963 ...  0.79494725]),
+   ])"""
+   
+   assert repr(frame) == repr_frame
+   ```
+
+If you try to create a TSFrame without contiguous buffers, you get an error
+
 ```python
 import numpy
-from sgnts.base.buffer import SeriesBuffer, TSFrame
 
-# An example of two contiguous buffers
-buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
-buf2 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
-frame = TSFrame(buffers=[buf1, buf2])
-print (frame)
-```
-```
-[Out] SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=[-1.56771352 ... -0.20928693])
-	  SeriesBuffer(offset=16384, offset_end=32768, shape=(2048,), sample_rate=2048, duration=1000000000, data=[-1.00442217 ... -0.75684022])
-```
-
-```{.python notest}
-import numpy
+numpy.random.seed(1)
 from sgnts.base.buffer import SeriesBuffer, TSFrame
 
 # An example of two non contiguous buffers. NOTE THIS SHOULDN'T WORK!!
 buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
 buf2 = SeriesBuffer(offset=12345, sample_rate=2048, data=numpy.random.randn(2048))
-frame = TSFrame(buffers=[buf1, buf2])
-```
-```
-[Out] Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-  File "<string>", line 8, in __init__
-  File "/Users/crh184/Library/Python/3.9/lib/python/site-packages/sgnts/base/buffer.py", line 455, in __post_init__
-    self.__sanity_check(self.buffers)
-  File "/Users/crh184/Library/Python/3.9/lib/python/site-packages/sgnts/base/buffer.py", line 485, in __sanity_check
-    assert off0 == sl.start
-AssertionError
+err = None
+
+try:
+    frame = TSFrame(buffers=[buf1, buf2])
+except AssertionError as e:
+    err = e
+
+assert err is not None
 ```
 
-Note in the above that TSFrames only support contiguous buffers
+## Properties
 
-TSFrames offer some additional methods to describe their contents, e.g.,
-
-```python
-import numpy
-from sgnts.base.buffer import SeriesBuffer, TSFrame
-
-buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
-buf2 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
-frame = TSFrame(buffers=[buf1, buf2])
-
-# Get the offset of the first buffer, the end offset of the last buffer, and the sample rate
-print(frame.offset, frame.end_offset, frame.sample_rate)
-```
-```
-[Out] 0 32768 2048
-```
-
-```python
-import numpy
-from sgnts.base.buffer import SeriesBuffer, TSFrame
-
-buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
-buf2 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
-frame = TSFrame(buffers=[buf1, buf2])
-
-# Iterate over the buffers
-for buf in frame:
-    print (buf)
-```
-```
-[Out] SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=[0.01658589 ... 0.76543937])
-      SeriesBuffer(offset=16384, offset_end=32768, shape=(2048,), sample_rate=2048, duration=1000000000, data=[0.76470737 ... 0.89438121])
-```
+TSFrames have additional properties that are all derived from their input buffers.
 
 TSFrames must be initialized with at least one buffer because metadata are
-derived from the buffer(s).  If you want to have an empty frame, you still have
-to set one buffer with the correct metadata, e.g., 
+derived from the buffer(s).  
+:  If you want to have an empty frame, you still have to provide a gap buffer, e.g.,
+   ```python
+   from sgnts.base.buffer import SeriesBuffer, TSFrame
+   
+   # empty buffer
+   buf = SeriesBuffer(offset=0, sample_rate=2048, shape=(2048,), data=None)
+   frame = TSFrame(buffers=[buf])
+   repr_frame = """TSFrame(EOS=False, is_gap=True, metadata={}, buffers=[
+       SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=None),
+   ])"""
+   assert repr_frame == repr(frame)
+   ```
 
-```python
-from sgnts.base.buffer import SeriesBuffer, TSFrame
 
-# empty buffer
-buf = SeriesBuffer(offset=0, sample_rate=2048, shape=(2048,), data=None)
-frame = TSFrame(buffers=[buf])
-```
+### Offset
+:  The offset of a TSFrame is the offset of its first buffer
+   ```python
+   import numpy
+   
+   numpy.random.seed(1)
+   
+   from sgnts.base.buffer import SeriesBuffer, TSFrame
+   
+   buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
+   buf2 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
+   frame = TSFrame(buffers=[buf1, buf2])
+   assert frame.offset == 0
+   ```
 
-## Advanced TSFrame techniques
+### Offset end
+:  The end offset of a TSFrame is the end offset of its last buffer
+   ```python
+   import numpy
+   
+   numpy.random.seed(1)
+   
+   from sgnts.base.buffer import SeriesBuffer, TSFrame
+   
+   buf1 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
+   buf2 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
+   frame = TSFrame(buffers=[buf1, buf2])
+   assert frame.end_offset == 32768
+   ```
 
-There are shortcuts for producing a new empty TSFrame that might be useful if your goal is to
-just spit out some similar empty frames to fill in, e.g.,
+## Buffer operations
 
-```python
-from sgnts.base.buffer import TSFrame
+### Iteration, indexing and length
+:  You can iterate over the buffers in a frame or index them. The length of a frame is the number of buffers.
+   ```python
+   import numpy
+   
+   numpy.random.seed(1)
+   from sgnts.base.buffer import SeriesBuffer, TSFrame
+   
+   buf0 = SeriesBuffer(offset=0, sample_rate=2048, data=numpy.random.randn(2048))
+   buf1 = SeriesBuffer(offset=16384, sample_rate=2048, data=numpy.random.randn(2048))
+   
+   frame = TSFrame(buffers=[buf0, buf1])
+   
+   # Iterate over the buffers
+   for buf in frame:
+       assert buf in (buf0, buf1)
+   
+   assert buf0 == frame[0]
+   assert buf1 == frame[1]
+   assert len(frame) == 2
+   ```
 
-frame = TSFrame.from_buffer_kwargs(offset=0, sample_rate=2048, shape=(2048,))
-print (frame)
-```
-```
-[Out] SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=None)
-```
+## Other TSFrame initialization techniques
 
-```python
-from sgnts.base.buffer import TSFrame
+### Initializing a TSFrame from buffer kwargs
+:  If your goal is to just produce a frame with a single buffer all in one step you can do
+   ```python
+   from sgnts.base.buffer import TSFrame
+   
+   frame = TSFrame.from_buffer_kwargs(offset=0, sample_rate=2048, shape=(2048,))
+   repr_frame = """TSFrame(EOS=False, is_gap=True, metadata={}, buffers=[
+       SeriesBuffer(offset=0, offset_end=16384, shape=(2048,), sample_rate=2048, duration=1000000000, data=None),
+   ])"""
+   
+   assert repr(frame) == repr_frame
+   ```
 
-frame = TSFrame.from_buffer_kwargs(offset=0, sample_rate=2048, shape=(2048,))
-print (next(frame))
-```
-```
-[Out] SeriesBuffer(offset=16384, offset_end=32768, shape=(2048,), sample_rate=2048, duration=1000000000, data=None)
-```
+### Getting the "next" frame
+:  It is common to want to produce a sequence of frames with the same
+   properties, e.g., a single buffer of the same shape incremented to the next
+  offset span
+  ```python
+  from sgnts.base.buffer import TSFrame
+  
+  frame = TSFrame.from_buffer_kwargs(offset=0, sample_rate=2048, shape=(2048,))
+  next_frame = next(frame)
+  repr_next_frame = """TSFrame(EOS=False, is_gap=True, metadata={}, buffers=[
+      SeriesBuffer(offset=16384, offset_end=32768, shape=(2048,), sample_rate=2048, duration=1000000000, data=None),
+  ])"""
+  
+  assert repr(next_frame) == repr_next_frame
+  ```
 
+## More details
+
+Additional methods and properties are documented in the [API docs](/api/base/buffer/)
