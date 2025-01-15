@@ -8,6 +8,7 @@ import numpy as np
 from sgn.base import SourcePad, get_sgn_logger
 
 from sgnts.base import Array, Offset, SeriesBuffer, TSFrame, TSSource
+from sgnts.base.time import Time
 from sgnts.utils import gpsnow
 
 LOGGER = get_sgn_logger("sgn-ts")
@@ -65,23 +66,22 @@ class FakeSeriesSource(TSSource):
     verbose: bool = False
 
     def __post_init__(self):
-        # this variable is used for real time tracking when t0 is not
-        # the current time
-        self._start_offset_from_realtime = None
-
-        if self.real_time and self.t0 is None:
-            self.t0 = int(gpsnow())
-            self._start_offset_from_realtime = 0
+        if self.t0 is None and not self.real_time:
+            self.t0 = 0
+        if self.t0 is None and self.real_time:
+            self.t0 = float(gpsnow())
 
         super().__post_init__()
 
         self.cnt = {p: 0 for p in self.source_pads}
 
-        # setup buffers
+        # setup buffers this gives us the first timestamp / offset too
         for pad in self.source_pads:
             self.set_pad_buffer_params(
                 pad=pad, sample_shape=self.sample_shape, rate=self.rate
             )
+        # This is gauranteed to be the t0 of the element at this point
+        self._start_time = self.current_t0
 
         if self.random_seed is not None and (
             self.signal_type == "white" or self.signal_type == "impulse"
@@ -94,9 +94,6 @@ class FakeSeriesSource(TSSource):
                 self.impulse_position = np.random.randint(0, int(self.end * self.rate))
             if self.verbose:
                 print("Placing impulse at sample point", self.impulse_position)
-
-        if self._start_offset_from_realtime is None:
-            self._start_offset_from_realtime = gpsnow() - self.t0
 
     def create_impulse_data(self, offset: int, num_samples: int, rate: int) -> Array:
         """Create the impulse data, where data is zero everywhere, and equals one at one
@@ -160,23 +157,12 @@ class FakeSeriesSource(TSSource):
             raise ValueError("Unknown signal type")
 
     def internal(self):
+        super().internal()
+
         if self.real_time:
             # in real-time mode we want to "release" the data after
-            # the time of the last sample in the output frame. this
-            # should correspond to the current offset value plus the
-            # offset stride (what will be the start time of the next
-            # frame)
-            #
-            # all pads should have the same offset so just take the
-            # offset from the first pad.  FIXME: is there a better
-            # way to get the current frame offset?
-            next_offset = (
-                list(self.offset.values())[0] + Offset.SAMPLE_STRIDE_AT_MAX_RATE
-            )
-            next_time = Offset.tosec(next_offset)
-            # we then need to shift the next time to account for t0 that
-            # are not "now"
-            sleep = next_time + self._start_offset_from_realtime - gpsnow()
+            # the time of the last sample in the output frame.
+            sleep = self.current_end / Time.SECONDS - gpsnow()
             if sleep < 0:
                 LOGGER.warning("Warning: FakeSeriesSource falling behind real time")
             else:
@@ -196,9 +182,9 @@ class FakeSeriesSource(TSSource):
         """
         self.cnt[pad] += 1
 
-        # setup metadata
-        metadata = {"cnt": self.cnt, "name": "'%s'" % pad.name}
-        if self.impulse_position is not None:
+        metadata = {"name": f"{self.rsrcs[pad]}", "cnt": self.cnt[pad]}
+
+        if self.signal_type == "impulse":
             metadata["impulse_offset"] = Offset.fromsamples(
                 self.impulse_position, self.rate
             )

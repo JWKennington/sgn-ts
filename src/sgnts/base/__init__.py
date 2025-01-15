@@ -482,7 +482,7 @@ class TSSource(SourceElement, SignalEOS):
             float, end time of the last buffer, in seconds
         duration:
             float, alternative to end option, specify the duration of
-            time to be covered
+            time to be covered in seconds
 
     """
 
@@ -492,27 +492,42 @@ class TSSource(SourceElement, SignalEOS):
 
     def __post_init__(self):
         super().__post_init__()
-        self.t0 = self.t0 or 0
-        # FIXME should we be more careful about this?
-        # FIXME should this not be different by pad?
-        self.offset = {
-            p: Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
-            for p in self.source_pads
-        }
-        if self.end and self.duration:
+        if self.t0 is None:
+            raise RuntimeError("You must specifiy a t0")
+        if self.end is not None and self.duration is not None:
             raise RuntimeError("may specify either end or duration, not both")
-        if self.end and self.end < self.t0:
-            raise RuntimeError("end is before t0")
-        if self.duration:
+        if self.duration is not None:
             self.end = self.t0 + self.duration
-        # FIXME should this be different by pad?
-        if self.end is not None and not isinf(self.end):
-            self.end_offset = Offset.fromsec(
+        if self.end is not None:
+            assert self.end > self.t0, "end is before t0"
+        if self.end is None or isinf(self.end):
+            self.__end_offset = float("+inf")
+        else:
+            self.__end_offset = Offset.fromsec(
                 self.end - Offset.offset_ref_t0 / Time.SECONDS
             )
-        else:
-            self.end_offset = float("+inf")
+        # Initialize the starting offset based on t0
+        self.__start_offset = Offset.fromsec(
+            self.t0 - Offset.offset_ref_t0 / Time.SECONDS
+        )
         self.__new_buffer_dict = {}
+        self.__next_frame_dict = {}
+
+    @property
+    def current_end(self) -> float:
+        """Return the largest end time of the current prepared frame, which
+        should be the same for all pads when called in the internal method but maybe
+        different otherwise"""
+        assert len(self.__next_frame_dict) > 0
+        return max(f.end for f in self.__next_frame_dict.values())
+
+    @property
+    def current_t0(self) -> float:
+        """Return the smallest t0 of the current prepared frame, which should
+        be the same for all pads when called in the internal method, but maybe
+        different otherwise"""
+        assert len(self.__next_frame_dict) > 0
+        return min(f.t0 for f in self.__next_frame_dict.values())
 
     def num_samples(self, rate: int) -> int:
         """The number of samples in the sample stride at the requested rate.
@@ -536,7 +551,7 @@ class TSSource(SourceElement, SignalEOS):
         """Set variables on the pad that are needed to construct SeriesBuffers.
 
         These should remain constant throughout the duration of the
-        pipeline.
+        pipeline so this method may only be called once.
 
         Args:
             pad:
@@ -550,10 +565,16 @@ class TSSource(SourceElement, SignalEOS):
                 int, the sample rate of the data the pad will produce
 
         """
+        # Make sure this has only been called once per pad
+        assert pad not in self.__new_buffer_dict
+
         self.__new_buffer_dict[pad] = {
             "sample_rate": rate,
             "shape": sample_shape + (self.num_samples(rate),),
         }
+        self.__next_frame_dict[pad] = TSFrame.from_buffer_kwargs(
+            offset=self.__start_offset, data=None, **self.__new_buffer_dict[pad]
+        )
 
     def prepare_frame(
         self,
@@ -581,25 +602,24 @@ class TSSource(SourceElement, SignalEOS):
             TSFrame, the TSFrame prepared on the source pad
 
         """
-        buf = SeriesBuffer(
-            offset=self.offset[pad], data=data, **self.__new_buffer_dict[pad]
-        )
-        if buf.end_offset > self.end_offset:
+
+        frame = self.__next_frame_dict[pad]
+        assert len(frame) == 1
+        frame[0].set_data(data)
+
+        if frame.end_offset > self.__end_offset:
             # slice the buffer if the last buffer is not a full stride
-            buf = buf.sub_buffer(TSSlice(buf.offset, self.end_offset))
+            frame.set_buffers(
+                [frame[0].sub_buffer(TSSlice(frame[0].offset, self.__end_offset))]
+            )
 
-        EOS = (
-            (buf.end_offset == self.end_offset or self.signaled_eos())
+        frame.EOS = (
+            (frame[0].end_offset == self.__end_offset or self.signaled_eos())
             if EOS is None
-            else (EOS or (buf.end_offset == self.end_offset) or self.signaled_eos())
+            else (
+                EOS or (frame[0].end_offset == self.__end_offset) or self.signaled_eos()
+            )
         )
-        if metadata is None:
-            metadata = {}
-
-        self.offset[pad] += Offset.fromsamples(buf.samples, buf.sample_rate)
-
-        return TSFrame(
-            buffers=[buf],
-            EOS=EOS,
-            metadata=metadata,
-        )
+        frame.metadata = {} if metadata is None else metadata
+        self.__next_frame_dict[pad] = next(frame)
+        return frame

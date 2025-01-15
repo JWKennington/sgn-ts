@@ -259,10 +259,15 @@ class SeriesBuffer:
             data:
                 Optiona[Array], the new data to set to
         """
-        if data is not None and self.shape != data.shape:
+        if isinstance(data, int) and data == 1:
+            self.data = self.backend.ones(self.shape)
+        elif isinstance(data, int) and data == 0:
+            self.data = self.backend.zeros(self.shape)
+        elif data is not None and self.shape != data.shape:
             raise ValueError("Data are incompatible shapes")
-        # it really isn't clear to me if this should be by reference or copy...
-        self.data = data
+        else:
+            # it really isn't clear to me if this should be by reference or copy...
+            self.data = data
 
     @property
     def tarr(self) -> Array:
@@ -658,6 +663,24 @@ class TSFrame(Frame):
             int, the end offset of the TSFrame
         """
         return self.buffers[-1].end_offset
+
+    @property
+    def t0(self) -> float:
+        """The t0 of the TSFrame, which is the t0 of the first buffer.
+
+        Returns:
+            float, the t0 of the TSFrame
+        """
+        return self.buffers[0].t0
+
+    @property
+    def end(self) -> float:
+        """The end of the TSFrame, which is the end time of the last buffer.
+
+        Returns:
+            float, the end time of the TSFrame
+        """
+        return self.buffers[-1].end
 
     @property
     def slice(self) -> TSSlice:
