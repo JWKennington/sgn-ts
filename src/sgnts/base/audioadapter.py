@@ -52,7 +52,7 @@ class Audioadapter:
         """
         if len(self) == 0:
             raise ValueError("Audioadapter not populated")
-        return self.offset + Offset.fromsamples(self.size, self.sample_rate)
+        return self.buffers[-1].end_offset
 
     @property
     def slice(self) -> tuple[int, int]:
@@ -314,11 +314,14 @@ class Audioadapter:
                     self.nongap_size -= b.samples
                 self.size -= b.samples
             elif b.end_offset == end_offset:
-                # if b.end_offset == end_offset, have a zero-length buffer in the
-                # adapter to record metadata
-                self.buffers[0] = b.sub_buffer(
-                    slc=TSSlice(end_offset, end_offset), gap=True
-                )
+                if len(self) > 1:
+                    self.buffers.popleft()
+                else:
+                    # if b.end_offset == end_offset, have a zero-length buffer in the
+                    # adapter to record metadata
+                    self.buffers[0] = b.sub_buffer(
+                        slc=TSSlice(end_offset, end_offset), gap=True
+                    )
                 if b.is_gap:
                     self.gap_size -= b.samples
                 else:
