@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isinf
+import threading
+from collections import deque
+import queue
 
 # from typing import Optional, Union, Callable, Protocol, Sequence
 from typing import Optional, Union, Callable, Sequence
@@ -472,6 +475,138 @@ class TSSink(SinkElement, _TSTransSink):
 
 
 @dataclass
+class TSResource:
+    """
+    A base class that should be used to get data from an external resource
+
+
+    - sample_shape(self, pad)
+    - rate(self, pad)
+    - set_data(self, frame, pad)
+    - latest_offset(self)
+    - t0()
+    - end()
+    """
+
+    def sample_shape(self, pad):
+        """The channels per sample that a buffer should produce as a tuple
+        (since it can be a tensor). For single channels just return ()"""
+        raise NotImplementedError
+
+    def rate(self, pad):
+        """The integer sample rate that a buffer should carry"""
+        raise NotImplementedError
+
+    def set_data(self, frame, pad):
+        """A method that will set data on a frame"""
+        raise NotImplementedError
+
+    def latest_offset(self):
+        """The latest offset that this resource can produce data for"""
+        raise NotImplementedError
+
+    def t0(self):
+        """The starting time of the resource"""
+        raise NotImplementedError
+
+    def end(self):
+        """The ending time of the resource"""
+        raise NotImplementedError
+
+
+@dataclass
+class TSThreadedResource(TSResource):
+    """A special case of TSResource where data is obtained from a thread.  Here
+    the developer must implement the following methods in addition to those in
+    TSResource
+
+    - thread_get_data()
+
+    The thread_get_data() method must fill an internal queue with
+    SeriesBuffers.  These will then be inserted into output
+    frames automatically.
+    """
+
+    def __post_init__(self):
+        """Initialize the RealTimeDataSource class."""
+        self.in_queue = {p: threading.Queue() for p in self.pads}
+        self.out_queue = {p: deque() for p in self.pads}
+        self.latest_buffer_metadata = {p: None for p in self.pads}
+        self.process = None
+        self.running = threading.Event()
+        self.start()
+
+    def thread_get_data(self):
+        """This will run in a separate thread. It must fill the self.in_queue
+        with SeriesBuffers.  The buffers should be contiguous or else errors will happen
+        later"""
+        raise NotImplementedError
+
+    def latest_offset(self):
+        """Since the thread is responsible for producing a queue of
+        buffers, the latest offest can be derived from those"""
+        if self.latest_buffer_metadata is not None:
+            return self.latest_buffer_metadata["end_offset"]
+        else:
+            return -9_223_372_036_854_775_808
+
+    def __exit__(self):
+        self.stop()
+
+    def start(self):
+        if self.process is None or not self.process.is_alive():
+            self.process = threading.Thread(target=self.thread_get_data)
+            self.process.start()
+
+    def stop(self):
+        if self.process and self.process.is_alive():
+            self.running.clear()
+            self.process.join()
+            self.process = None
+
+    def get_data(self, timeout=60):
+        """Retrieve data from the queue with a timeout."""
+        try:
+            self.out_queue.append(self.in_queue.get(timeout=timeout))
+            self.latest_buffer_metadata = self.out_queue[-1].metadata
+        except queue.Empty:
+            raise ValueError("could not read from resource after {timeout} seconds")
+
+    def set_data(self, out_frame):
+        """This method will set data on out_frame based on the contents of the
+        internal queue"""
+        # First pull all of the data out of the shared thread queue
+        self.get_data()
+        # Check if were are at EOS, if so, stop the thread
+        if out_frame.EOS:
+            self.stop()
+        # If we have been given a zero length frame, just return it. That means
+        # we didn't have data at the time the frame was prepared and we should
+        # just go with it.
+        if out_frame.offset == out_frame.end_offset:
+            return out_frame
+        # Otherwise create a TSFrame from all the buffers that we have queued up
+        in_frame = TSFrame(buffers=self.out_queue)
+        # make sure nothing is fishy
+        assert out_frame.end_offset <= in_frame.end_offset
+        # intersect the TSSource provided output frame with the in_frame
+        before, intersection, after = out_frame.intersect(in_frame)
+        # It is possible that the out_frame is before the data we have in the
+        # queue, if so the intersection will be None. Thats okay, we can just
+        # pass along that gap buffer.
+        if intersection is None:
+            return out_frame
+        # Clear the queue
+        self.out_queue.clear()
+        # and repopulate it with only stuff that is newer than what we just sent.
+        if after is not None:
+            self.out_queue.extend(after.buffers)
+        # make sure to update EOS
+        intersection.EOS = out_frame.EOS
+        return intersection
+
+
+@dataclass
 class _TSSource(SourceElement, SignalEOS):
     """A time-series source base class. This should not be used directly"""
 
@@ -479,22 +614,15 @@ class _TSSource(SourceElement, SignalEOS):
         super().__post_init__()
         self.__new_buffer_dict = {}
         self.__next_frame_dict = {}
-        self._is_ready = False
-
-    def setup(self):
-        assert not self._is_ready
-        self._is_ready = True
 
     @property
     def end_offset(self):
-        assert self._is_ready
         if self.end is None:
             return float("inf")
         return Offset.fromsec(self.end - Offset.offset_ref_t0 / Time.SECONDS)
 
     @property
     def start_offset(self):
-        assert self._is_ready
         return Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
 
     @property
@@ -526,53 +654,10 @@ class _TSSource(SourceElement, SignalEOS):
         """
         return Offset.sample_stride(rate)
 
-    # FIXME also get sample shape and rate from the resource?
-    def set_pad_buffer_params(
-        self,
-        pad: SourcePad,
-        sample_shape: tuple[int, ...],
-        rate: int,
-    ) -> None:
-        """Set variables on the pad that are needed to construct SeriesBuffers.
-
-        These should remain constant throughout the duration of the
-        pipeline so this method may only be called once.
-
-        When this method is called the first time, the setup method
-        will be called, which allows for data driven properties that
-        come after the element is initialized but presumably before the
-        pipeline starts to process data.
-
-        Args:
-            pad:
-                SourcePad, the pad to setup buffers on
-            sample_shape:
-                tuple[int, ...], the shape of a single sample of the
-                data, or put another way, the shape of the data except
-                for the last (time) dimension,
-                i.e. sample_shape=data.shape[:-1]
-            rate:
-                int, the sample rate of the data the pad will produce
-
-        """
-        # Make sure this has only been called once per pad
-        assert pad not in self.__new_buffer_dict
-
-        # Setup the resource if this is the first time this method is called
-        if len(self.__new_buffer_dict) == 0:
-            self.setup()
-
-        self.__new_buffer_dict[pad] = {
-            "sample_rate": rate,
-            "shape": sample_shape + (self.num_samples(rate),),
-        }
-        self.__next_frame_dict[pad] = TSFrame.from_buffer_kwargs(
-            offset=self.start_offset, data=None, **self.__new_buffer_dict[pad]
-        )
-
     def prepare_frame(
         self,
         pad: SourcePad,
+        latest_offset: Optional[int] = None,
         data: Optional[Union[int, Array]] = None,
         EOS: Optional[bool] = None,
         metadata: Optional[dict] = None,
@@ -585,6 +670,9 @@ class _TSSource(SourceElement, SignalEOS):
         Args:
             pad:
                 SourcePad, the source pad to produce the TSFrame
+            latest_offset:
+                int | None. If given, a buffer will be zero length unless
+                latest_offset is >= the expected end offset
             data:
                 Optional[int, Array], the data in the buffers
             EOS:
@@ -599,6 +687,23 @@ class _TSSource(SourceElement, SignalEOS):
 
         frame = self.__next_frame_dict[pad]
         assert len(frame) == 1
+
+        EOS = (
+            (frame[0].end_offset >= self.end_offset or self.signaled_eos())
+            if EOS is None
+            else (
+                EOS or (frame[0].end_offset >= self.end_offset) or self.signaled_eos()
+            )
+        )
+
+        # See if we need to pass a heartbeat frame
+        # If so, return the heartbeat and move on
+        if latest_offset is not None:
+            assert latest_offset >= frame.offset
+            if latest_offset < frame.end_offset:
+                return frame.heartbeat(EOS)
+
+        # Otherwise we can make progress with what we have
         frame[0].set_data(data)
 
         if frame.end_offset > self.end_offset:
@@ -607,13 +712,7 @@ class _TSSource(SourceElement, SignalEOS):
                 [frame[0].sub_buffer(TSSlice(frame[0].offset, self.end_offset))]
             )
 
-        frame.EOS = (
-            (frame[0].end_offset == self.end_offset or self.signaled_eos())
-            if EOS is None
-            else (
-                EOS or (frame[0].end_offset == self.end_offset) or self.signaled_eos()
-            )
-        )
+        frame.EOS = EOS
         frame.metadata = {} if metadata is None else metadata
         self.__next_frame_dict[pad] = next(frame)
         return frame
@@ -654,31 +753,79 @@ class TSSource(_TSSource):
         if self.end is not None:
             assert self.end > self.t0, "end is before t0"
 
+    def set_pad_buffer_params(
+        self,
+        pad: SourcePad,
+        sample_shape: tuple[int, ...],
+        rate: int,
+    ) -> None:
+        """Set variables on the pad that are needed to construct SeriesBuffers.
+
+        These should remain constant throughout the duration of the
+        pipeline so this method may only be called once.
+
+        Args:
+            pad:
+                SourcePad, the pad to setup buffers on
+            sample_shape:
+                tuple[int, ...], the shape of a single sample of the
+                data, or put another way, the shape of the data except
+                for the last (time) dimension,
+                i.e. sample_shape=data.shape[:-1]
+            rate:
+                int, the sample rate of the data the pad will produce
+
+        """
+        # Make sure this has only been called once per pad
+        assert pad not in self.__new_buffer_dict
+
+        self.__new_buffer_dict[pad] = {
+            "sample_rate": rate,
+            "shape": sample_shape + (self.num_samples(rate),),
+        }
+        self.__next_frame_dict[pad] = TSFrame.from_buffer_kwargs(
+            offset=self.start_offset, data=None, **self.__new_buffer_dict[pad]
+        )
+
 
 @dataclass
-class TSDataSource(_TSSource):
-    """A time-series base class for a source that generates data in fixed-size buffers
-    where the user must provide methods for t0, end, and duration. It is expected that
-    the user will also override setup(). Setup is called the first time
-    set_pad_buffer_params() is called, which allows for delayed attributes based on
-    a data driven source. The develper will probably tie the return value of e.g.,
-    t0 to whatever happens in setup().
-    """
+class TSResourceSource(_TSSource):
+
+    resource: Optional[TSResource] = None
 
     def __post_init__(self):
         super().__post_init__()
+        self.__is_setup = False
 
     @property
     def t0(self):
-        assert self._is_ready
-        raise NotImplementedError
+        return self.resource.t0
 
     @property
     def end(self):
-        assert self._is_ready
-        raise NotImplementedError
+        return self.resource.end
 
-    @property
-    def duration(self):
-        assert self._is_ready
-        raise NotImplementedError
+    def __set_pad_buffer_params(
+        self,
+        pad: SourcePad,
+    ) -> None:
+        # Make sure this has only been called once per pad
+        assert self.resource is not None
+        assert pad not in self.__new_buffer_dict
+
+        self.__new_buffer_dict[pad] = {
+            "sample_rate": self.resource.rate(pad),
+            "shape": self.resource.sample_shape(pad)
+            + (self.num_samples(self.resource.rate(pad)),),
+        }
+        self.__next_frame_dict[pad] = TSFrame.from_buffer_kwargs(
+            offset=self.start_offset, data=None, **self.__new_buffer_dict[pad]
+        )
+
+    def internal(self):
+        """By the time internal is called, the resource should be fully
+        initialized, otherwise this will all fail"""
+        if not self.__is_setup:
+            for pad in self.source_pads:
+                self.__set_pad_buffer_params(pad)
+            self.__is_setup = True
