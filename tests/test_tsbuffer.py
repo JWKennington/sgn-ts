@@ -433,6 +433,11 @@ def test_valid_series_buffer():
     with pytest.raises(NotImplementedError):
         buf2.split("blah")
 
+    bufset_test = SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=0)
+    bufset_test.set_data(1)
+    bufset_test.set_data(0)
+    assert bufset_test.sample_shape == ()
+
     tbuf = SeriesBuffer(
         offset=-16384, sample_rate=128, shape=(128,), data=0, backend=TorchBackend
     )

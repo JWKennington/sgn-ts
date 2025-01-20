@@ -373,6 +373,11 @@ class SeriesBuffer:
         return self.shape[-1]
 
     @property
+    def sample_shape(self) -> tuple:
+        """return the sample shape"""
+        return self.shape[:-1]
+
+    @property
     def is_gap(self) -> bool:
         """Whether the buffer is a gap. This is determined by whether the data is None.
 

@@ -472,46 +472,30 @@ class TSSink(SinkElement, _TSTransSink):
 
 
 @dataclass
-class TSSource(SourceElement, SignalEOS):
-    """A time-series source that generates data in fixed-size buffers.
-
-    Args:
-        t0:
-            float, start time of first buffer, in seconds
-        end:
-            float, end time of the last buffer, in seconds
-        duration:
-            float, alternative to end option, specify the duration of
-            time to be covered in seconds
-
-    """
-
-    t0: float | None = None
-    end: float | None = None
-    duration: float | None = None
+class _TSSource(SourceElement, SignalEOS):
+    """A time-series source base class. This should not be used directly"""
 
     def __post_init__(self):
         super().__post_init__()
-        if self.t0 is None:
-            raise RuntimeError("You must specifiy a t0")
-        if self.end is not None and self.duration is not None:
-            raise RuntimeError("may specify either end or duration, not both")
-        if self.duration is not None:
-            self.end = self.t0 + self.duration
-        if self.end is not None:
-            assert self.end > self.t0, "end is before t0"
-        if self.end is None or isinf(self.end):
-            self.__end_offset = float("+inf")
-        else:
-            self.__end_offset = Offset.fromsec(
-                self.end - Offset.offset_ref_t0 / Time.SECONDS
-            )
-        # Initialize the starting offset based on t0
-        self.__start_offset = Offset.fromsec(
-            self.t0 - Offset.offset_ref_t0 / Time.SECONDS
-        )
         self.__new_buffer_dict = {}
         self.__next_frame_dict = {}
+        self._is_ready = False
+
+    def setup(self):
+        assert not self._is_ready
+        self._is_ready = True
+
+    @property
+    def end_offset(self):
+        assert self._is_ready
+        if self.end is None:
+            return float("inf")
+        return Offset.fromsec(self.end - Offset.offset_ref_t0 / Time.SECONDS)
+
+    @property
+    def start_offset(self):
+        assert self._is_ready
+        return Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
 
     @property
     def current_end(self) -> float:
@@ -542,6 +526,7 @@ class TSSource(SourceElement, SignalEOS):
         """
         return Offset.sample_stride(rate)
 
+    # FIXME also get sample shape and rate from the resource?
     def set_pad_buffer_params(
         self,
         pad: SourcePad,
@@ -552,6 +537,11 @@ class TSSource(SourceElement, SignalEOS):
 
         These should remain constant throughout the duration of the
         pipeline so this method may only be called once.
+
+        When this method is called the first time, the setup method
+        will be called, which allows for data driven properties that
+        come after the element is initialized but presumably before the
+        pipeline starts to process data.
 
         Args:
             pad:
@@ -568,12 +558,16 @@ class TSSource(SourceElement, SignalEOS):
         # Make sure this has only been called once per pad
         assert pad not in self.__new_buffer_dict
 
+        # Setup the resource if this is the first time this method is called
+        if len(self.__new_buffer_dict) == 0:
+            self.setup()
+
         self.__new_buffer_dict[pad] = {
             "sample_rate": rate,
             "shape": sample_shape + (self.num_samples(rate),),
         }
         self.__next_frame_dict[pad] = TSFrame.from_buffer_kwargs(
-            offset=self.__start_offset, data=None, **self.__new_buffer_dict[pad]
+            offset=self.start_offset, data=None, **self.__new_buffer_dict[pad]
         )
 
     def prepare_frame(
@@ -607,19 +601,84 @@ class TSSource(SourceElement, SignalEOS):
         assert len(frame) == 1
         frame[0].set_data(data)
 
-        if frame.end_offset > self.__end_offset:
+        if frame.end_offset > self.end_offset:
             # slice the buffer if the last buffer is not a full stride
             frame.set_buffers(
-                [frame[0].sub_buffer(TSSlice(frame[0].offset, self.__end_offset))]
+                [frame[0].sub_buffer(TSSlice(frame[0].offset, self.end_offset))]
             )
 
         frame.EOS = (
-            (frame[0].end_offset == self.__end_offset or self.signaled_eos())
+            (frame[0].end_offset == self.end_offset or self.signaled_eos())
             if EOS is None
             else (
-                EOS or (frame[0].end_offset == self.__end_offset) or self.signaled_eos()
+                EOS or (frame[0].end_offset == self.end_offset) or self.signaled_eos()
             )
         )
         frame.metadata = {} if metadata is None else metadata
         self.__next_frame_dict[pad] = next(frame)
         return frame
+
+
+@dataclass
+class TSSource(_TSSource):
+    """A time-series source that generates data in fixed-size buffers where the
+       user can specify the start time and end time. If you want a data driven
+       resource consider using TSDataSource.
+
+    Args:
+        t0:
+            float, start time of first buffer, in seconds
+        end:
+            float, end time of the last buffer, in seconds
+        duration:
+            float, alternative to end option, specify the duration of
+            time to be covered in seconds. Cannot be given if end is given.
+    """
+
+    t0: float | None = None
+    end: float | None = None
+    duration: float | None = None
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        if self.t0 is None:
+            raise RuntimeError("You must specifiy a t0")
+
+        if self.end is not None and self.duration is not None:
+            raise RuntimeError("may specify either end or duration, not both")
+
+        if self.duration is not None:
+            self.end = self.t0 + self.duration
+
+        if self.end is not None:
+            assert self.end > self.t0, "end is before t0"
+
+
+@dataclass
+class TSDataSource(_TSSource):
+    """A time-series base class for a source that generates data in fixed-size buffers
+    where the user must provide methods for t0, end, and duration. It is expected that
+    the user will also override setup(). Setup is called the first time
+    set_pad_buffer_params() is called, which allows for delayed attributes based on
+    a data driven source. The develper will probably tie the return value of e.g.,
+    t0 to whatever happens in setup().
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+
+    @property
+    def t0(self):
+        assert self._is_ready
+        raise NotImplementedError
+
+    @property
+    def end(self):
+        assert self._is_ready
+        raise NotImplementedError
+
+    @property
+    def duration(self):
+        assert self._is_ready
+        raise NotImplementedError
