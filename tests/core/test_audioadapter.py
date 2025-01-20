@@ -697,6 +697,29 @@ class TestFlushSamplesByEndOffset:
         assert a.pre_cat_data is None
         assert len(a) == 1
 
+    def test_flush_samples_by_end_offset8(self):
+        """Test flush_samples_end_offset method"""
+        a = Audioadapter()
+        b1 = SeriesBuffer(
+            offset=Offset.fromsec(1), sample_rate=2048, data=None, shape=(2048,)
+        )
+        b2 = SeriesBuffer(
+            offset=b1.end_offset, sample_rate=2048, data=None, shape=(2048,)
+        )
+        a.push(b1)
+        a.push(b2)
+        a.flush_samples_by_end_offset(Offset.fromsec(2))
+        assert a.offset == Offset.fromsec(2)
+        assert a.end_offset == b2.end_offset
+        assert a.slice == (Offset.fromsec(2), b2.end_offset)
+        assert a.size == 2048
+        assert a.is_gap is True
+        assert a.gap_size == 2048
+        assert a.nongap_size == 0
+        assert a.sample_rate == b1.sample_rate
+        assert a.pre_cat_data is None
+        assert len(a) == 1
+
 
 class TestBuffersGapsInfo:
     """Test group for buffers_gaps_info method"""
