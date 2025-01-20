@@ -196,9 +196,9 @@ class FakeSeriesSource(TSSource):
         """
         self.cnt[pad] += 1
 
-        # setup metadata
-        metadata = {"cnt": self.cnt, "name": "'%s'" % pad.name}
-        if self.impulse_position is not None:
+        metadata = {"name": f"{self.rsrcs[pad]}", "cnt": self.cnt[pad]}
+
+        if self.signal_type == "impulse":
             metadata["impulse_offset"] = Offset.fromsamples(
                 self.impulse_position, self.rate
             )
