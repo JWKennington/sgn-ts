@@ -254,6 +254,7 @@ class SeriesBuffer:
             "t0": self.t0,
             "end": self.end,
             "shape": self.shape,
+            "sample_shape": self.sample_shape,
             "sample_rate": self.sample_rate,
         }
 
