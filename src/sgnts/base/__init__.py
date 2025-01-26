@@ -475,56 +475,7 @@ class TSSink(SinkElement, _TSTransSink):
 
 
 @dataclass
-class TSResource:
-    """
-    A base class that should be used to get data from an external resource
-
-    pad_dict: Optional[dict] = None
-        A dictionary of pads with values of string pad names, e.g.,
-        {<pad object>:"my favorite pad"}
-
-    - sample_shape(self, pad)
-    - rate(self, pad)
-    - set_data(self, frame, pad)
-    - latest_offset(self)
-    - t0()
-    - end()
-    """
-
-    pad_dict: Optional[dict] = None
-
-    def sample_shape(self, pad):
-        """The channels per sample that a buffer should produce as a tuple
-        (since it can be a tensor). For single channels just return ()"""
-        raise NotImplementedError
-
-    def rate(self, pad):
-        """The integer sample rate that a buffer should carry"""
-        raise NotImplementedError
-
-    @property
-    def latest_offset(self):
-        """The latest offset that this resource can produce data for"""
-        raise NotImplementedError
-
-    @property
-    def t0(self):
-        """The starting time of the resource in seconds"""
-        raise NotImplementedError
-
-    @property
-    def end(self):
-        """The ending time of the resource"""
-        raise NotImplementedError
-
-    def set_data(self, frame, pad):
-        """A method that will set data on a frame"""
-        raise NotImplementedError
-
-
-
-@dataclass
-class TSThreadedResource(TSResource):
+class TSThreadedResource:
     """A special case of TSResource where data is obtained from a thread.  Here
     the developer must implement the following methods in addition to those in
     TSResource
@@ -535,6 +486,10 @@ class TSThreadedResource(TSResource):
     SeriesBuffers.  These will then be inserted into output
     frames automatically.
     """
+
+    rsrcs: Optional[dict] = None
+    srcs: Optional[dict] = None
+    in_queue_length: int = 1
 
     def __post_init__(self):
         self.__is_setup = False
@@ -562,7 +517,7 @@ class TSThreadedResource(TSResource):
     @property
     def t0(self):
         """The starting time of the resource in seconds"""
-        return min(b["t0"]/Time.SECONDS for b in self.first_buffer_metadata.values())
+        return min(b["t0"] / Time.SECONDS for b in self.first_buffer_metadata.values())
 
     @property
     def end(self):
@@ -573,12 +528,20 @@ class TSThreadedResource(TSResource):
         """Initialize the RealTimeDataSource class."""
         self.stop_thread = queue.Queue()
         self.exception_queue = queue.Queue()
-        self.in_queue = {p: queue.Queue() for p in self.pad_dict}
-        self.out_queue = {p: deque() for p in self.pad_dict}
-        self.latest_buffer_metadata = {p: None for p in self.pad_dict}
-        self.first_buffer_metadata = {p: None for p in self.pad_dict}
+        self.in_queue = {p: queue.Queue(self.in_queue_length) for p in self.rsrcs}
+        self.out_queue = {p: deque() for p in self.rsrcs}
+        self.latest_buffer_metadata = {p: None for p in self.rsrcs}
+        self.first_buffer_metadata = {p: None for p in self.rsrcs}
         self.__is_setup = True
         self.start()
+
+    @property
+    def queued_duration(self):
+        durations = [d[-1].end - d[0].t0 for d in self.out_queue.values() if d]
+        if durations:
+            return max(durations)
+        else:
+            return 0.
 
     def thread_get_data(self):
         """This will run in a separate thread. It must fill the self.in_queue
@@ -686,6 +649,22 @@ class _TSSource(SourceElement, SignalEOS):
         """
         return Offset.sample_stride(rate)
 
+    @property
+    def current_t0(self) -> float:
+        """Return the smallest t0 of the current prepared frame, which should
+        be the same for all pads when called in the internal method, but maybe
+        different otherwise"""
+        assert len(self._next_frame_dict) > 0
+        return min(f.t0 for f in self._next_frame_dict.values())
+
+    @property
+    def current_end(self) -> float:
+        """Return the largest end time of the current prepared frame, which
+        should be the same for all pads when called in the internal method but maybe
+        different otherwise"""
+        assert len(self._next_frame_dict) > 0
+        return max(f.end for f in self._next_frame_dict.values())
+
     def prepare_frame(
         self,
         pad: SourcePad,
@@ -731,7 +710,7 @@ class _TSSource(SourceElement, SignalEOS):
         # See if we need to pass a heartbeat frame
         # If so, return the heartbeat and move on
         if latest_offset is not None:
-            print (latest_offset, frame.offset)
+            print(latest_offset, frame.offset)
             assert latest_offset >= frame.offset
             if latest_offset < frame.end_offset:
                 return frame.heartbeat(EOS)
@@ -824,11 +803,12 @@ class TSSource(_TSSource):
 @dataclass
 class TSResourceSource(_TSSource):
 
-    resource: Optional[TSResource] = None
+    resource: Optional[TSThreadedResource] = None
 
     def __post_init__(self):
         super().__post_init__()
-        self.resource.pad_dict = self.rsrcs
+        self.resource.rsrcs = self.rsrcs
+        self.resource.srcs = self.srcs
 
     @property
     def t0(self):
@@ -865,7 +845,7 @@ class TSResourceSource(_TSSource):
         self.resource.get_data()
 
         # setup pads if they are not setup. This must happen after the first get data
-        for pad in self.resource.pad_dict:
+        for pad in self.resource.rsrcs:
             if pad not in self._new_buffer_dict:
                 self.__set_pad_buffer_params(pad)
 

@@ -11,46 +11,60 @@ from sgnts.utils import gpsnow
 from typing import ClassVar
 import numpy
 import queue
+import sys
 
+@dataclass
+class DataServer:
+    realtime: bool=True
+
+    description =  {
+                   "H1:FOO": {"rate": 2048, "sample-shape": ()},
+                   "L1:FOO": {"rate": 2048, "sample-shape": ()},
+                   }
+
+    def stream(self, channels, start=None, end=None):
+        assert not (set(channels) - set(self.description))
+        if start is None:
+            t0 = int(gpsnow()) - 1.0
+        while True:
+            out = {}
+            for channel in channels:
+                sample_shape, rate = self.description[channel]["sample-shape"], self.description[channel]["rate"]
+                # Assume 1 second buffers, hence the rate in shape
+                shape = sample_shape + (rate,)
+                out[channel] = {"t0": t0, "data": numpy.random.randn(*shape), "rate": rate, "sample_shape": sample_shape}
+            t0 += 1
+            if self.realtime:
+                time.sleep(max(0, t0 - gpsnow()))
+            yield out
 
 @dataclass
 class LiveServer(TSThreadedResource):
     def __post_init__(self):
         super().__post_init__()
         self.__end = int(gpsnow() + 10)
+        self.server = DataServer()
+        self.wait = 1
 
     def thread_get_data(self):
         try:
-            # Hypothetical list of all channels and metadata that
-            # this "server" can support
-            # NOTE: this comes from some server query for real.
-            __full_description: ClassVar[dict] = {
-                "H1:FOO": {"rate": 2048, "sample-shape": ()}
-            }
-    
-            # Make sure the user asked for channels we have
-            assert not (set(self.pad_dict.values()) - set(__full_description))
-            self.description = {
-                pad: __full_description[name] for pad, name in self.pad_dict.items()
-            }
-    
-    
-            t0 = int(gpsnow()) - 1.0
-            # Simulate a process that is pulling buffers out of a server.
-            # NOTE: Replace this part with actual queries
-            while True:
-                for pad in self.description:
-                    # Assume 1 second buffers, hence the rate in shape
-                    shape = self.description[pad]["sample-shape"] + (self.description[pad]["rate"],)
+
+            for stream in self.server.stream(self.srcs):
+
+                # if the queue is full, sleep and try again after wait seconds
+                if any(q.full() for q in self.in_queue.values()):
+                    time.sleep(self.wait)
+                    continue
+
+                for channel,block in stream.items():
+                    pad = self.srcs[channel]
+
                     buf = SeriesBuffer(
-                        offset=Offset.fromsec(t0),
-                        shape=shape,
-                        sample_rate=self.description[pad]["rate"],
+                        offset=Offset.fromsec(block["t0"]),
+                        data=block["data"],
+                        sample_rate=block["rate"],
                     )
-                    buf.set_data(numpy.random.randn(*buf.shape))
                     self.in_queue[pad].put(buf)
-                t0 += 1
-                time.sleep(max(0, t0 - gpsnow()))
                 try:
                     self.stop_thread.get(0)
                     break
@@ -58,6 +72,7 @@ class LiveServer(TSThreadedResource):
                     pass
 
         except Exception as e:
+            print (e)
             self.exception_queue.put(e)
 
     @property
