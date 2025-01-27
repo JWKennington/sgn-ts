@@ -16,6 +16,7 @@ import sys
 @dataclass
 class DataServer:
     realtime: bool=True
+    block_duration: int=2
 
     description =  {
                    "H1:FOO": {"rate": 2048, "sample-shape": ()},
@@ -30,10 +31,9 @@ class DataServer:
             out = {}
             for channel in channels:
                 sample_shape, rate = self.description[channel]["sample-shape"], self.description[channel]["rate"]
-                # Assume 1 second buffers, hence the rate in shape
-                shape = sample_shape + (rate,)
+                shape = sample_shape + (self.block_duration * rate,)
                 out[channel] = {"t0": t0, "data": numpy.random.randn(*shape), "rate": rate, "sample_shape": sample_shape}
-            t0 += 1
+            t0 += self.block_duration
             if self.realtime:
                 time.sleep(max(0, t0 - gpsnow()))
             yield out
@@ -44,7 +44,7 @@ class LiveServer(TSThreadedResource):
         super().__post_init__()
         self.__end = int(gpsnow() + 10)
         self.server = DataServer()
-        self.wait = 1
+        self.wait = 0.1
 
     def thread_get_data(self):
         try:

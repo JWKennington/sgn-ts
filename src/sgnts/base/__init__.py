@@ -495,6 +495,10 @@ class TSThreadedResource:
         self.__is_setup = False
         self.thread = None
 
+    @property
+    def is_setup(self):
+        return self.__is_setup
+
     def sample_shape(self, pad):
         """The channels per sample that a buffer should produce as a tuple
         (since it can be a tensor). For single channels just return ()"""
@@ -526,14 +530,15 @@ class TSThreadedResource:
 
     def setup(self):
         """Initialize the RealTimeDataSource class."""
-        self.stop_thread = queue.Queue()
-        self.exception_queue = queue.Queue()
-        self.in_queue = {p: queue.Queue(self.in_queue_length) for p in self.rsrcs}
-        self.out_queue = {p: deque() for p in self.rsrcs}
-        self.latest_buffer_metadata = {p: None for p in self.rsrcs}
-        self.first_buffer_metadata = {p: None for p in self.rsrcs}
-        self.__is_setup = True
-        self.start()
+        if not self.__is_setup:
+            self.stop_thread = queue.Queue()
+            self.exception_queue = queue.Queue()
+            self.in_queue = {p: queue.Queue(self.in_queue_length) for p in self.rsrcs}
+            self.out_queue = {p: deque() for p in self.rsrcs}
+            self.latest_buffer_metadata = {p: None for p in self.rsrcs}
+            self.first_buffer_metadata = {p: None for p in self.rsrcs}
+            self.__is_setup = True
+            self.start()
 
     @property
     def queued_duration(self):
@@ -598,12 +603,8 @@ class TSThreadedResource:
 
         # intersect the TSSource provided output frame with the in_frame
         before, intersection, after = out_frame.intersect(in_frame)
-
-        # It is possible that the out_frame is before the data we have in the
-        # queue, if so the intersection will be None. Thats okay, we can just
-        # pass along that gap buffer.
-        if intersection is None:
-            return out_frame
+        #before, intersection, after = in_frame.intersect(out_frame)
+        #print (f"\n\ninframe:{in_frame}\nbefore:{before}\nintersection:{intersection}\nafter:{after}\nout_frame:{out_frame}\n\n")
 
         # Clear the queue
         self.out_queue[pad].clear()
@@ -611,6 +612,12 @@ class TSThreadedResource:
         # and repopulate it with only stuff that is newer than what we just sent.
         if after is not None:
             self.out_queue[pad].extend(after.buffers)
+
+        # It is possible that the out_frame is before the data we have in the
+        # queue, if so the intersection will be None. Thats okay, we can just
+        # pass along that gap buffer.
+        if intersection is None:
+            return out_frame
 
         # make sure to update EOS
         intersection.EOS = out_frame.EOS
@@ -665,6 +672,14 @@ class _TSSource(SourceElement, SignalEOS):
         assert len(self._next_frame_dict) > 0
         return max(f.end for f in self._next_frame_dict.values())
 
+    @property
+    def current_end_offset(self) -> float:
+        """Return the largest end offset of the current prepared frame, which
+        should be the same for all pads when called in the internal method but maybe
+        different otherwise"""
+        assert len(self._next_frame_dict) > 0
+        return max(f.end_offset for f in self._next_frame_dict.values())
+
     def prepare_frame(
         self,
         pad: SourcePad,
@@ -710,7 +725,6 @@ class _TSSource(SourceElement, SignalEOS):
         # See if we need to pass a heartbeat frame
         # If so, return the heartbeat and move on
         if latest_offset is not None:
-            print(latest_offset, frame.offset)
             assert latest_offset >= frame.offset
             if latest_offset < frame.end_offset:
                 return frame.heartbeat(EOS)
@@ -841,8 +855,13 @@ class TSResourceSource(_TSSource):
         resource get_data()"""
 
         # First pull all of the data out of the shared thread queue
-        self.resource.setup()
-        self.resource.get_data()
+        if not self.resource.is_setup:
+            self.resource.setup()
+            self.resource.get_data()
+        else:
+            # check if we need to get more data
+            if self.resource.latest_offset < self.current_end_offset:
+                self.resource.get_data()
 
         # setup pads if they are not setup. This must happen after the first get data
         for pad in self.resource.rsrcs:
@@ -859,6 +878,9 @@ class TSResourceSource(_TSSource):
         return self.resource.sample_rate(pad)
 
     def new(self, pad):
+        #print ("\n", len(self.resource.out_queue[pad]))
         frame = self.prepare_frame(pad, latest_offset=self.resource.latest_offset)
+        #print (len(self.resource.out_queue[pad]))
         frame = self.resource.set_data(frame, pad)
+        #print (len(self.resource.out_queue[pad]))
         return frame
