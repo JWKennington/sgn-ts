@@ -441,6 +441,7 @@ def test_valid_series_buffer():
     tbuf = SeriesBuffer(
         offset=-16384, sample_rate=128, shape=(128,), data=0, backend=TorchBackend
     )
+    assert tbuf.sample_shape == ()
     original_dtype = TorchBackend.DTYPE
     TorchBackend.DTYPE = torch.float64
     with pytest.raises(ValueError):

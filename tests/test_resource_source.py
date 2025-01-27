@@ -8,21 +8,21 @@ from sgnts.base import TSThreadedResource, TSResourceSource
 from sgnts.base.buffer import SeriesBuffer
 from sgnts.base.offset import Offset
 from sgnts.utils import gpsnow
-from typing import ClassVar
 import numpy
 import queue
-import sys
 from sgn.sources import SignalEOS
+
 
 @dataclass
 class DataServer:
-    realtime: bool=True
-    block_duration: int=2
+    realtime: bool = True
+    block_duration: int = 2
+    simulate_skip_data: bool = False
 
-    description =  {
-                   "H1:FOO": {"rate": 2048, "sample-shape": ()},
-                   "L1:FOO": {"rate": 2048, "sample-shape": ()},
-                   }
+    description = {
+        "H1:FOO": {"rate": 2048, "sample-shape": ()},
+        "L1:FOO": {"rate": 2048, "sample-shape": ()},
+    }
 
     def stream(self, channels, start=None, end=None):
         assert not (set(channels) - set(self.description))
@@ -31,31 +31,42 @@ class DataServer:
         while True:
             out = {}
             for channel in channels:
-                sample_shape, rate = self.description[channel]["sample-shape"], self.description[channel]["rate"]
+                sample_shape, rate = (
+                    self.description[channel]["sample-shape"],
+                    self.description[channel]["rate"],
+                )
                 shape = sample_shape + (self.block_duration * rate,)
-                out[channel] = {"t0": t0, "data": numpy.random.randn(*shape), "rate": rate, "sample_shape": sample_shape}
+                out[channel] = {
+                    "t0": t0,
+                    "data": numpy.random.randn(*shape),
+                    "rate": rate,
+                    "sample_shape": sample_shape,
+                }
             t0 += self.block_duration
+            if self.simulate_skip_data:
+                t0 += 2
             if self.realtime:
                 time.sleep(max(0, t0 - gpsnow()))
             yield out
 
+
 @dataclass
 class Resource(TSThreadedResource):
+    server: object = None
+
     def __post_init__(self):
         super().__post_init__()
-        self.server = DataServer()
 
     def thread_get_data(self):
         try:
 
             for stream in self.server.stream(self.srcs):
-
                 # if the queue is full, sleep and try again after wait seconds
                 if any(q.full() for q in self.in_queue.values()):
                     time.sleep(self.blocking_wait_time)
                     continue
 
-                for channel,block in stream.items():
+                for channel, block in stream.items():
                     pad = self.srcs[channel]
 
                     buf = SeriesBuffer(
@@ -71,7 +82,7 @@ class Resource(TSThreadedResource):
                     pass
 
         except Exception as e:
-            print (e)
+            print(e)
             self.exception_queue.put(e)
 
 
@@ -79,12 +90,18 @@ class Resource(TSThreadedResource):
 class FakeLiveSource(TSResourceSource):
     pass
 
-
 def test_resource_source():
 
     pipeline = Pipeline()
 
-    resource = Resource(duration=10)
+    block_duration = 4
+    # make the timeout bigger than the block duration :)
+    resource = Resource(
+        start_time=0,
+        duration=10,
+        server=DataServer(block_duration=block_duration, simulate_skip_data=True),
+        in_queue_timeout=block_duration + 2,
+    )
 
     src = FakeLiveSource(
         name="src",
@@ -102,7 +119,7 @@ def test_resource_source():
         link_map={snk.snks["H1"]: src.srcs["H1:FOO"]},
     )
 
-    with SignalEOS() as control:
+    with SignalEOS():
         pipeline.run()
 
 

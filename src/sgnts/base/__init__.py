@@ -477,7 +477,7 @@ class TSSink(SinkElement, _TSTransSink):
 @dataclass
 class TSThreadedResource:
     """A special case of TSResource where data is obtained from a thread.  Here
-    the developer must implement the following methods: 
+    the developer must implement the following methods:
 
     - thread_get_data()
 
@@ -493,14 +493,15 @@ class TSThreadedResource:
     blocking_wait_time: float = 0.1
     start_time: Optional[int] = None
     duration: Optional[int] = None
+    in_queue_timeout: int = 60
 
     def __post_init__(self):
         self.__is_setup = False
         self.thread = None
         self.__end = None
         if self.duration is None:
-            self.duration = 9223372036854775807 # FIXME 2**63-1
-            self.__end = 9223372036854775807 # FIXME 2**63-1
+            self.duration = 9223372036854775807  # FIXME 2**63-1
+            self.__end = 9223372036854775807  # FIXME 2**63-1
 
     @property
     def end(self):
@@ -554,7 +555,7 @@ class TSThreadedResource:
         if durations:
             return max(durations)
         else:
-            return 0.
+            return 0.0
 
     def thread_get_data(self):
         """This will run in a separate thread. It must fill the self.in_queue
@@ -578,11 +579,13 @@ class TSThreadedResource:
             self.thread = None
             self.__is_setup = False
 
-    def get_data(self, timeout=10):
+    def get_data(self):
         """Retrieve data from the queue with a timeout."""
         try:
             for pad in self.out_queue:
-                self.out_queue[pad].append(self.in_queue[pad].get(timeout=timeout))
+                self.out_queue[pad].append(
+                    self.in_queue[pad].get(timeout=self.in_queue_timeout)
+                )
                 self.latest_buffer_metadata[pad] = self.out_queue[pad][-1].metadata
                 if self.first_buffer_metadata[pad] is None:
                     self.first_buffer_metadata[pad] = self.out_queue[pad][0].metadata
@@ -590,7 +593,9 @@ class TSThreadedResource:
                 if self.__end is None and self.duration is not None:
                     self.__end = self.t0 + self.duration
         except queue.Empty:
-            raise ValueError("could not read from resource after {timeout} seconds")
+            raise ValueError(
+                "could not read from resource after {self.in_queue_timeout} seconds"
+            )
 
     def set_data(self, out_frame, pad):
         """This method will set data on out_frame based on the contents of the
@@ -614,8 +619,6 @@ class TSThreadedResource:
 
         # intersect the TSSource provided output frame with the in_frame
         before, intersection, after = out_frame.intersect(in_frame)
-        #before, intersection, after = in_frame.intersect(out_frame)
-        #print (f"\n\ninframe:{in_frame}\nbefore:{before}\nintersection:{intersection}\nafter:{after}\nout_frame:{out_frame}\n\n")
 
         # Clear the queue
         self.out_queue[pad].clear()
@@ -884,7 +887,8 @@ class TSResourceSource(_TSSource):
         if not self.resource.is_setup:
             self.resource.setup()
             self.resource.get_data()
-            # setup pads if they are not setup. This must happen after the first get data
+            # setup pads if they are not setup.
+            # This must happen after the first get data
             for pad in self.resource.rsrcs:
                 if pad not in self._new_buffer_dict:
                     self.__set_pad_buffer_params(pad)

@@ -234,10 +234,9 @@ class SeriesBuffer:
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
             return (
-                "SeriesBuffer(t0=%s, offset=%d, offset_end=%d, shape=%s, sample_rate=%d,"
+                "SeriesBuffer(offset=%d, offset_end=%d, shape=%s, sample_rate=%d,"
                 " duration=%d, data=%s)"
                 % (
-                    self.t0/1e9,
                     self.offset,
                     self.end_offset,
                     self.shape,
