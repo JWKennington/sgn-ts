@@ -12,6 +12,7 @@ from typing import ClassVar
 import numpy
 import queue
 import sys
+from sgn.sources import SignalEOS
 
 @dataclass
 class DataServer:
@@ -39,12 +40,10 @@ class DataServer:
             yield out
 
 @dataclass
-class LiveServer(TSThreadedResource):
+class Resource(TSThreadedResource):
     def __post_init__(self):
         super().__post_init__()
-        self.__end = int(gpsnow() + 10)
         self.server = DataServer()
-        self.wait = 0.1
 
     def thread_get_data(self):
         try:
@@ -53,7 +52,7 @@ class LiveServer(TSThreadedResource):
 
                 # if the queue is full, sleep and try again after wait seconds
                 if any(q.full() for q in self.in_queue.values()):
-                    time.sleep(self.wait)
+                    time.sleep(self.blocking_wait_time)
                     continue
 
                 for channel,block in stream.items():
@@ -75,11 +74,6 @@ class LiveServer(TSThreadedResource):
             print (e)
             self.exception_queue.put(e)
 
-    @property
-    def end(self):
-        """The ending time of the resource"""
-        return self.__end
-
 
 @dataclass
 class FakeLiveSource(TSResourceSource):
@@ -90,12 +84,12 @@ def test_resource_source():
 
     pipeline = Pipeline()
 
-    liveserver = LiveServer()
+    resource = Resource(duration=10)
 
     src = FakeLiveSource(
         name="src",
         source_pad_names=("H1:FOO",),
-        resource=liveserver,
+        resource=resource,
     )
     snk = FakeSeriesSink(
         name="snk",
@@ -108,7 +102,8 @@ def test_resource_source():
         link_map={snk.snks["H1"]: src.srcs["H1:FOO"]},
     )
 
-    pipeline.run()
+    with SignalEOS() as control:
+        pipeline.run()
 
 
 if __name__ == "__main__":

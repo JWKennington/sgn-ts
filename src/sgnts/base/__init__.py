@@ -477,23 +477,36 @@ class TSSink(SinkElement, _TSTransSink):
 @dataclass
 class TSThreadedResource:
     """A special case of TSResource where data is obtained from a thread.  Here
-    the developer must implement the following methods in addition to those in
-    TSResource
+    the developer must implement the following methods: 
 
     - thread_get_data()
 
     The thread_get_data() method must fill an internal queue with
     SeriesBuffers.  These will then be inserted into output
-    frames automatically.
+    frames automatically matching size.  The thread_get_data() must block until
+    the internal queue in_queue is not full.
     """
 
     rsrcs: Optional[dict] = None
     srcs: Optional[dict] = None
     in_queue_length: int = 1
+    blocking_wait_time: float = 0.1
+    start_time: Optional[int] = None
+    duration: Optional[int] = None
 
     def __post_init__(self):
         self.__is_setup = False
         self.thread = None
+        self.__end = None
+        if self.duration is None:
+            self.duration = 9223372036854775807 # FIXME 2**63-1
+            self.__end = 9223372036854775807 # FIXME 2**63-1
+
+    @property
+    def end(self):
+        """The ending time of the resource"""
+        assert self.__end is not None
+        return self.__end
 
     @property
     def is_setup(self):
@@ -522,11 +535,6 @@ class TSThreadedResource:
     def t0(self):
         """The starting time of the resource in seconds"""
         return min(b["t0"] / Time.SECONDS for b in self.first_buffer_metadata.values())
-
-    @property
-    def end(self):
-        """The ending time of the resource"""
-        return float("inf")
 
     def setup(self):
         """Initialize the RealTimeDataSource class."""
@@ -578,6 +586,9 @@ class TSThreadedResource:
                 self.latest_buffer_metadata[pad] = self.out_queue[pad][-1].metadata
                 if self.first_buffer_metadata[pad] is None:
                     self.first_buffer_metadata[pad] = self.out_queue[pad][0].metadata
+                # We should have a t0 now
+                if self.__end is None and self.duration is not None:
+                    self.__end = self.t0 + self.duration
         except queue.Empty:
             raise ValueError("could not read from resource after {timeout} seconds")
 
@@ -826,11 +837,24 @@ class TSResourceSource(_TSSource):
 
     @property
     def t0(self):
+        assert self.resource.is_setup
         return self.resource.t0
 
     @property
     def end(self):
+        assert self.resource.is_setup
         return self.resource.end
+
+    def sample_shape(self, pad):
+        """The channels per sample that a buffer should produce as a tuple
+        (since it can be a tensor). For single channels just return ()"""
+        assert self.resource.is_setup
+        return self.resource.sample_shape(pad)
+
+    def rate(self, pad):
+        """The integer sample rate that a buffer should carry"""
+        assert self.resource.is_setup
+        return self.resource.sample_rate(pad)
 
     def __set_pad_buffer_params(
         self,
@@ -850,37 +874,26 @@ class TSResourceSource(_TSSource):
         )
 
     def internal(self):
-        """By the time internal is called, the resource should be fully
-        initialized, otherwise this will all fail. Initialization happens in the
-        resource get_data()"""
+        """Since internal() is gauranteed to be called prior to producing any
+        data on a source pad, all setup is done here. First the resource itself is
+        setup and the first data is pulled from the resource.  Subsequent calls to
+        internal only gets data from the resource if there is not enough data queued up
+        to produce a result"""
 
-        # First pull all of the data out of the shared thread queue
+        # First setup the resource and pull the first data
         if not self.resource.is_setup:
             self.resource.setup()
             self.resource.get_data()
+            # setup pads if they are not setup. This must happen after the first get data
+            for pad in self.resource.rsrcs:
+                if pad not in self._new_buffer_dict:
+                    self.__set_pad_buffer_params(pad)
         else:
             # check if we need to get more data
             if self.resource.latest_offset < self.current_end_offset:
                 self.resource.get_data()
 
-        # setup pads if they are not setup. This must happen after the first get data
-        for pad in self.resource.rsrcs:
-            if pad not in self._new_buffer_dict:
-                self.__set_pad_buffer_params(pad)
-
-    def sample_shape(self, pad):
-        """The channels per sample that a buffer should produce as a tuple
-        (since it can be a tensor). For single channels just return ()"""
-        return self.resource.sample_shape(pad)
-
-    def rate(self, pad):
-        """The integer sample rate that a buffer should carry"""
-        return self.resource.sample_rate(pad)
-
     def new(self, pad):
-        #print ("\n", len(self.resource.out_queue[pad]))
         frame = self.prepare_frame(pad, latest_offset=self.resource.latest_offset)
-        #print (len(self.resource.out_queue[pad]))
         frame = self.resource.set_data(frame, pad)
-        #print (len(self.resource.out_queue[pad]))
         return frame
