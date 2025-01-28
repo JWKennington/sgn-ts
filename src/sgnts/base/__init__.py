@@ -560,7 +560,6 @@ class _TSSource(SourceElement, SignalEOS):
             TSFrame, the TSFrame prepared on the source pad
 
         """
-
         frame = self._next_frame_dict[pad]
         assert len(frame) == 1
 
@@ -736,7 +735,7 @@ class TSResourceSource(_TSSource):
 
     def __post_init__(self):
         super().__post_init__()
-        self.__in_queue_length = 1
+        self.__in_queue_length = 100
         self.__is_setup = False
         self.thread = None
         self.__end = None
@@ -775,9 +774,13 @@ class TSResourceSource(_TSSource):
         return latest
 
     @property
+    def start_offset(self):
+        return min(b["offset"] for b in self.first_buffer_metadata.values())
+
+    @property
     def t0(self):
         """The starting time of the resource in seconds"""
-        return min(b["t0"] / Time.SECONDS for b in self.first_buffer_metadata.values())
+        return Offset.tosec(self.start_offset)
 
     def setup(self):
         """Initialize the RealTimeDataSource class."""
@@ -825,9 +828,14 @@ class TSResourceSource(_TSSource):
         """Retrieve data from the queue with a timeout."""
         try:
             for pad in self.out_queue:
-                self.out_queue[pad].append(
-                    self.in_queue[pad].get(timeout=self.in_queue_timeout)
-                )
+                # get at least one
+                if self.in_queue[pad].empty():
+                    self.out_queue[pad].append(
+                        self.in_queue[pad].get(timeout=self.in_queue_timeout)
+                    )
+                # get the rest
+                while not self.in_queue[pad].empty():
+                    self.out_queue[pad].append(self.in_queue[pad].get(0))
                 self.latest_buffer_metadata[pad] = self.out_queue[pad][-1].metadata
                 if self.first_buffer_metadata[pad] is None:
                     self.first_buffer_metadata[pad] = self.out_queue[pad][0].metadata

@@ -422,7 +422,7 @@ def test_valid_series_buffer():
 
     assert frame.slice == TSSlice(0, 16384)
     assert frame.sample_shape == ()
-    assert frame.heartbeat().end_offset == 16384
+    assert frame.heartbeat().end_offset == 0
 
     assert len(buf) == 128
     with pytest.raises(ValueError):

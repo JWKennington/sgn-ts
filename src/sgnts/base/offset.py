@@ -109,7 +109,9 @@ class Offset:
         Returns:
             int, the time corresponding to the offset, in nanoseconds
         """
-        return round(offset / Offset.MAX_RATE * Time.SECONDS)
+        return offset * Time.SECONDS // Offset.MAX_RATE
+
+    #        return round(offset / Offset.MAX_RATE * Time.SECONDS)
 
     @staticmethod
     def fromsec(seconds: float) -> int:
@@ -135,7 +137,7 @@ class Offset:
         Returns:
             int, the offset corresponding to the time
         """
-        return round(nanoseconds / Time.SECONDS * Offset.MAX_RATE)
+        return round(int(nanoseconds) / int(Time.SECONDS) * Offset.MAX_RATE)
 
     @staticmethod
     def tosamples(offset: int, sample_rate: int) -> int:

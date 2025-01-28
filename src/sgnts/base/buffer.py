@@ -646,6 +646,7 @@ class TSFrame(Frame):
                 list[SeriesBuffer], the buffers to perform the sanity check on
         """
         # FIXME: is there a smart way using TSSlics?
+
         if len(bufs) > 1:
             slices = [buf.slice for buf in bufs]
             off0 = slices[0].stop
@@ -742,7 +743,7 @@ class TSFrame(Frame):
 
     def heartbeat(self, EOS=False):
         frame = TSFrame.from_buffer_kwargs(
-            offset=self.end_offset,
+            offset=self.offset,
             sample_rate=self.sample_rate,
             shape=self.sample_shape + (0,),
             data=None,
