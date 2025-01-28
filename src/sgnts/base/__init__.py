@@ -485,13 +485,13 @@ class _TSSource(SourceElement, SignalEOS):
 
     @property
     def end_offset(self):
-        if self.end is None:
-            return float("inf")
-        return Offset.fromsec(self.end - Offset.offset_ref_t0 / Time.SECONDS)
+        "This should be the precise last offset"
+        raise NotImplementedError
 
     @property
     def start_offset(self):
-        return Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
+        "This should be the precise start offset"
+        raise NotImplementedError
 
     def num_samples(self, rate: int) -> int:
         """The number of samples in the sample stride at the requested rate.
@@ -627,6 +627,16 @@ class TSSource(_TSSource):
 
         if self.end is not None:
             assert self.end > self.t0, "end is before t0"
+
+    @property
+    def end_offset(self):
+        if self.end is None:
+            return float("inf")
+        return Offset.fromsec(self.end - Offset.offset_ref_t0 / Time.SECONDS)
+
+    @property
+    def start_offset(self):
+        return Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
 
     def set_pad_buffer_params(
         self,
@@ -776,6 +786,12 @@ class TSResourceSource(_TSSource):
     @property
     def start_offset(self):
         return min(b["offset"] for b in self.first_buffer_metadata.values())
+
+    @property
+    def end_offset(self):
+        if self.end is None:
+            return float("inf")
+        return Offset.fromsec(self.end - Offset.offset_ref_t0 / Time.SECONDS)
 
     @property
     def t0(self):
