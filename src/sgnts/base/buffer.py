@@ -829,7 +829,9 @@ class TSFrame(Frame):
                 outside_slices = TSSlices(self.slice - buf.slice).search(buf.slice)
                 outside_bufs = buf.split(outside_slices)
                 for obuf in outside_bufs:
-                    assert (obuf.end_offset <= self.offset) or (obuf.offset >= self.end_offset)
+                    assert (obuf.end_offset <= self.offset) or (
+                        obuf.offset >= self.end_offset
+                    )
                     if obuf.end_offset <= self.offset:
                         bbuf.append(obuf)
                     else:

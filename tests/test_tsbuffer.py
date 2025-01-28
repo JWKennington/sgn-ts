@@ -411,13 +411,13 @@ def test_valid_series_buffer():
     frame = TSFrame(buffers=[buf])
     frame2 = TSFrame(buffers=[buf2])
     frame3 = TSFrame(buffers=[buf3])
-    b,i,a = frame2.intersect(frame)
+    b, i, a = frame2.intersect(frame)
     assert i is None and a is None and b is not None
-    b,i,a = frame.intersect(frame2)
+    b, i, a = frame.intersect(frame2)
     assert b is None and i is None and a is not None
-    b,i,a = frame3.intersect(frame2)
+    b, i, a = frame3.intersect(frame2)
     assert b is None and i is not None and a is None
-    b,i,a = frame2.intersect(frame3)
+    b, i, a = frame2.intersect(frame3)
     assert b is not None and i is not None and a is not None
 
     assert frame.slice == TSSlice(0, 16384)
