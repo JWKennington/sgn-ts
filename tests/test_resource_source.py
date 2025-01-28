@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from sgn.apps import Pipeline
 import time
 from sgnts.sinks import FakeSeriesSink
-from sgnts.base import  TSResourceSource
+from sgnts.base import TSResourceSource
 from sgnts.base.buffer import SeriesBuffer
 from sgnts.base.offset import Offset
 from sgnts.utils import gpsnow
@@ -13,6 +13,9 @@ import queue
 from sgn.sources import SignalEOS
 
 
+#
+# NOTE this mocks e.g., an arrakis server
+#
 @dataclass
 class DataServer:
     block_duration: int = 2
@@ -28,7 +31,7 @@ class DataServer:
         t0 = int(gpsnow()) - 1.0 if start is None else start
         while True:
             out = {}
-            if end is not None and t0>= end:
+            if end is not None and t0 >= end:
                 return
             for channel in channels:
                 sample_shape, rate = (
@@ -54,9 +57,14 @@ class DataServer:
 
 @dataclass
 class FakeLiveSource(TSResourceSource):
-    server: object = None
+    simulate_skip_data: bool = False
+    block_duration: int = 4
 
     def __post_init__(self):
+        self.server = DataServer(
+            block_duration=self.block_duration,
+            simulate_skip_data=self.simulate_skip_data,
+        )
         super().__post_init__()
 
     def thread_get_data(self):
@@ -84,7 +92,7 @@ class FakeLiveSource(TSResourceSource):
                     pass
 
         except Exception as e:
-            print(e)
+            raise (e)
             self.exception_queue.put(e)
 
 
@@ -92,15 +100,12 @@ def test_resource_source():
 
     pipeline = Pipeline()
 
-    block_duration = 4
-
     src = FakeLiveSource(
         name="src",
         source_pad_names=("H1:FOO",),
-        #start_time=0,
+        # start_time=0,
         duration=10,
-        server=DataServer(block_duration=block_duration, simulate_skip_data=True),
-        in_queue_timeout=block_duration + 2,
+        block_duration=4,
     )
     snk = FakeSeriesSink(
         name="snk",

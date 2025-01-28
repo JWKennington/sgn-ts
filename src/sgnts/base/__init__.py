@@ -474,7 +474,6 @@ class TSSink(SinkElement, _TSTransSink):
         _TSTransSink.internal(self)
 
 
-
 @dataclass
 class _TSSource(SourceElement, SignalEOS):
     """A time-series source base class. This should not be used directly"""
@@ -667,8 +666,69 @@ class TSSource(_TSSource):
 
 @dataclass
 class TSResourceSource(_TSSource):
+    """Source class that is entirely data driven by an external resource.
+    The resource will gather data in a separate thread.  The user
+    must implement the thread_get_data() method and probably doesn't
+    need to implement any other methods.  The thread_get_data()
+    method must fill a queue with a single buffer of the next data block.
+    It must block until the queue is not full.
 
-    in_queue_length: int = 1
+    Assume we have a service with a client called "server" that has a
+    "stream" method that takes a list of channels and a start and stop time.
+    Assume it returns dictionaries keyed by channel names
+    containing dictionaries of metadata "t0", "rate", "sample_shape" and "data".
+    An implementation of thread_get_data() might look like this:
+
+
+    def thread_get_data(self):
+        try:
+
+            for stream in self.server.stream(self.srcs, start_time, end_time):
+                # if the queue is full, sleep and try again after wait seconds
+                if any(q.full() for q in self.in_queue.values()):
+                    time.sleep(self.blocking_wait_time)
+                    continue
+
+                for channel, block in stream.items():
+                    pad = self.srcs[channel]
+
+                    buf = SeriesBuffer(
+                        offset=Offset.fromsec(block["t0"]),
+                        data=block["data"],
+                        sample_rate=block["rate"],
+                    )
+                    self.in_queue[pad].put(buf)
+                try:
+                    self.stop_thread.get(0)
+                    break
+                except queue.Empty:
+                    pass
+
+        except Exception as e:
+            print(e)
+            self.exception_queue.put(e)
+
+    There are also two additional queues. One "stop_thread" should be checked
+    to see if the thread should end.  The other "exception_queue" should
+    be populated with exceptions from this thread.
+
+    blocking_wait_time: float = 0.1
+        - How long to wait until trying to put a new buffer into the queue.
+          This should be shorter than the typical stride of the pipeline but
+          not too short to cause performance bottlenecks
+
+    start_time: Optional[int] = None
+        - If None, implies should start at now and is a real-time server
+
+    duration: Optional[int] = None
+        - If None, go on forever
+
+    in_queue_timeout: int = 60
+        - How long to wait for a buffer from the resource before timing out with
+          a fatal error. This needs to be longer than the duration of buffers
+          coming from a real-time server or it will hang.
+    """
+
     blocking_wait_time: float = 0.1
     start_time: Optional[int] = None
     duration: Optional[int] = None
@@ -676,6 +736,7 @@ class TSResourceSource(_TSSource):
 
     def __post_init__(self):
         super().__post_init__()
+        self.__in_queue_length = 1
         self.__is_setup = False
         self.thread = None
         self.__end = None
@@ -723,7 +784,7 @@ class TSResourceSource(_TSSource):
         if not self.__is_setup:
             self.stop_thread = queue.Queue()
             self.exception_queue = queue.Queue()
-            self.in_queue = {p: queue.Queue(self.in_queue_length) for p in self.rsrcs}
+            self.in_queue = {p: queue.Queue(self.__in_queue_length) for p in self.rsrcs}
             self.out_queue = {p: deque() for p in self.rsrcs}
             self.latest_buffer_metadata = {p: None for p in self.rsrcs}
             self.first_buffer_metadata = {p: None for p in self.rsrcs}
@@ -823,13 +884,12 @@ class TSResourceSource(_TSSource):
         pad: SourcePad,
     ) -> None:
         # Make sure this has only been called once per pad
-        #assert self.resource is not None
+        # assert self.resource is not None
         assert pad not in self._new_buffer_dict
 
         self._new_buffer_dict[pad] = {
             "sample_rate": self.rate(pad),
-            "shape": self.sample_shape(pad)
-            + (self.num_samples(self.rate(pad)),),
+            "shape": self.sample_shape(pad) + (self.num_samples(self.rate(pad)),),
         }
         self._next_frame_dict[pad] = TSFrame.from_buffer_kwargs(
             offset=self.start_offset, data=None, **self._new_buffer_dict[pad]
