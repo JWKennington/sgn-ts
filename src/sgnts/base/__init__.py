@@ -474,169 +474,6 @@ class TSSink(SinkElement, _TSTransSink):
         _TSTransSink.internal(self)
 
 
-@dataclass
-class TSThreadedResource:
-    """A special case of TSResource where data is obtained from a thread.  Here
-    the developer must implement the following methods:
-
-    - thread_get_data()
-
-    The thread_get_data() method must fill an internal queue with
-    SeriesBuffers.  These will then be inserted into output
-    frames automatically matching size.  The thread_get_data() must block until
-    the internal queue in_queue is not full.
-    """
-
-    rsrcs: Optional[dict] = None
-    srcs: Optional[dict] = None
-    in_queue_length: int = 1
-    blocking_wait_time: float = 0.1
-    start_time: Optional[int] = None
-    duration: Optional[int] = None
-    in_queue_timeout: int = 60
-
-    def __post_init__(self):
-        self.__is_setup = False
-        self.thread = None
-        self.__end = None
-        if self.duration is None:
-            self.duration = 9223372036854775807  # FIXME 2**63-1
-            self.__end = 9223372036854775807  # FIXME 2**63-1
-
-    @property
-    def end(self):
-        """The ending time of the resource"""
-        assert self.__end is not None
-        return self.__end
-
-    @property
-    def is_setup(self):
-        return self.__is_setup
-
-    def sample_shape(self, pad):
-        """The channels per sample that a buffer should produce as a tuple
-        (since it can be a tensor). For single channels just return ()"""
-        return self.first_buffer_metadata[pad]["sample_shape"]
-
-    def rate(self, pad):
-        """The integer sample rate that a buffer should carry"""
-        return self.first_buffer_metadata[pad]["sample_rate"]
-
-    @property
-    def latest_offset(self):
-        """Since the thread is responsible for producing a queue of
-        buffers, the latest offest can be derived from those"""
-        latest = -9_223_372_036_854_775_808
-        for metadata in self.latest_buffer_metadata.values():
-            if metadata is not None:
-                latest = max(latest, metadata["end_offset"])
-        return latest
-
-    @property
-    def t0(self):
-        """The starting time of the resource in seconds"""
-        return min(b["t0"] / Time.SECONDS for b in self.first_buffer_metadata.values())
-
-    def setup(self):
-        """Initialize the RealTimeDataSource class."""
-        if not self.__is_setup:
-            self.stop_thread = queue.Queue()
-            self.exception_queue = queue.Queue()
-            self.in_queue = {p: queue.Queue(self.in_queue_length) for p in self.rsrcs}
-            self.out_queue = {p: deque() for p in self.rsrcs}
-            self.latest_buffer_metadata = {p: None for p in self.rsrcs}
-            self.first_buffer_metadata = {p: None for p in self.rsrcs}
-            self.__is_setup = True
-            self.start()
-
-    @property
-    def queued_duration(self):
-        durations = [d[-1].end - d[0].t0 for d in self.out_queue.values() if d]
-        if durations:
-            return max(durations)
-        else:
-            return 0.0
-
-    def thread_get_data(self):
-        """This will run in a separate thread. It must fill the self.in_queue
-        with SeriesBuffers.  The buffers should be contiguous or else errors will happen
-        later"""
-        raise NotImplementedError
-
-    def __exit__(self):
-        self.stop()
-
-    def start(self):
-        assert self.__is_setup
-        if self.thread is None or not self.thread.is_alive():
-            self.thread = threading.Thread(target=self.thread_get_data)
-            self.thread.start()
-
-    def stop(self):
-        self.stop_thread.put(True)
-        if self.thread and self.thread.is_alive():
-            self.thread.join()
-            self.thread = None
-            self.__is_setup = False
-
-    def get_data(self):
-        """Retrieve data from the queue with a timeout."""
-        try:
-            for pad in self.out_queue:
-                self.out_queue[pad].append(
-                    self.in_queue[pad].get(timeout=self.in_queue_timeout)
-                )
-                self.latest_buffer_metadata[pad] = self.out_queue[pad][-1].metadata
-                if self.first_buffer_metadata[pad] is None:
-                    self.first_buffer_metadata[pad] = self.out_queue[pad][0].metadata
-                # We should have a t0 now
-                if self.__end is None and self.duration is not None:
-                    self.__end = self.t0 + self.duration
-        except queue.Empty:
-            raise ValueError(
-                "could not read from resource after {self.in_queue_timeout} seconds"
-            )
-
-    def set_data(self, out_frame, pad):
-        """This method will set data on out_frame based on the contents of the
-        internal queue"""
-
-        # Check if were are at EOS, if so, stop the thread
-        if out_frame.EOS:
-            self.stop()
-
-        # If we have been given a zero length frame, just return it. That means
-        # we didn't have data at the time the frame was prepared and we should
-        # just go with it.
-        if out_frame.offset == out_frame.end_offset:
-            return out_frame
-
-        # Otherwise create a TSFrame from all the buffers that we have queued up
-        in_frame = TSFrame(buffers=self.out_queue[pad])
-
-        # make sure nothing is fishy
-        assert out_frame.end_offset <= in_frame.end_offset
-
-        # intersect the TSSource provided output frame with the in_frame
-        before, intersection, after = out_frame.intersect(in_frame)
-
-        # Clear the queue
-        self.out_queue[pad].clear()
-
-        # and repopulate it with only stuff that is newer than what we just sent.
-        if after is not None:
-            self.out_queue[pad].extend(after.buffers)
-
-        # It is possible that the out_frame is before the data we have in the
-        # queue, if so the intersection will be None. Thats okay, we can just
-        # pass along that gap buffer.
-        if intersection is None:
-            return out_frame
-
-        # make sure to update EOS
-        intersection.EOS = out_frame.EOS
-        return intersection
-
 
 @dataclass
 class _TSSource(SourceElement, SignalEOS):
@@ -831,46 +668,168 @@ class TSSource(_TSSource):
 @dataclass
 class TSResourceSource(_TSSource):
 
-    resource: Optional[TSThreadedResource] = None
+    in_queue_length: int = 1
+    blocking_wait_time: float = 0.1
+    start_time: Optional[int] = None
+    duration: Optional[int] = None
+    in_queue_timeout: int = 60
 
     def __post_init__(self):
         super().__post_init__()
-        self.resource.rsrcs = self.rsrcs
-        self.resource.srcs = self.srcs
-
-    @property
-    def t0(self):
-        assert self.resource.is_setup
-        return self.resource.t0
+        self.__is_setup = False
+        self.thread = None
+        self.__end = None
+        if self.duration is None:
+            self.duration = 9223372036854775807  # FIXME 2**63-1
+            self.__end = 9223372036854775807  # FIXME 2**63-1
+        if self.start_time is not None and self.duration is not None:
+            self.__end = self.duration + self.start_time
 
     @property
     def end(self):
-        assert self.resource.is_setup
-        return self.resource.end
+        """The ending time of the resource"""
+        return self.__end
+
+    @property
+    def is_setup(self):
+        return self.__is_setup
 
     def sample_shape(self, pad):
         """The channels per sample that a buffer should produce as a tuple
         (since it can be a tensor). For single channels just return ()"""
-        assert self.resource.is_setup
-        return self.resource.sample_shape(pad)
+        return self.first_buffer_metadata[pad]["sample_shape"]
 
     def rate(self, pad):
         """The integer sample rate that a buffer should carry"""
-        assert self.resource.is_setup
-        return self.resource.sample_rate(pad)
+        return self.first_buffer_metadata[pad]["sample_rate"]
+
+    @property
+    def latest_offset(self):
+        """Since the thread is responsible for producing a queue of
+        buffers, the latest offest can be derived from those"""
+        latest = -9_223_372_036_854_775_808
+        for metadata in self.latest_buffer_metadata.values():
+            if metadata is not None:
+                latest = max(latest, metadata["end_offset"])
+        return latest
+
+    @property
+    def t0(self):
+        """The starting time of the resource in seconds"""
+        return min(b["t0"] / Time.SECONDS for b in self.first_buffer_metadata.values())
+
+    def setup(self):
+        """Initialize the RealTimeDataSource class."""
+        if not self.__is_setup:
+            self.stop_thread = queue.Queue()
+            self.exception_queue = queue.Queue()
+            self.in_queue = {p: queue.Queue(self.in_queue_length) for p in self.rsrcs}
+            self.out_queue = {p: deque() for p in self.rsrcs}
+            self.latest_buffer_metadata = {p: None for p in self.rsrcs}
+            self.first_buffer_metadata = {p: None for p in self.rsrcs}
+            self.__is_setup = True
+            self.start()
+
+    @property
+    def queued_duration(self):
+        durations = [d[-1].end - d[0].t0 for d in self.out_queue.values() if d]
+        if durations:
+            return max(durations)
+        else:
+            return 0.0
+
+    def thread_get_data(self):
+        """This will run in a separate thread. It must fill the self.in_queue
+        with SeriesBuffers.  The buffers should be contiguous or else errors will happen
+        later"""
+        raise NotImplementedError
+
+    def __exit__(self):
+        self.stop()
+
+    def start(self):
+        assert self.__is_setup
+        if self.thread is None or not self.thread.is_alive():
+            self.thread = threading.Thread(target=self.thread_get_data)
+            self.thread.start()
+
+    def stop(self):
+        self.stop_thread.put(True)
+        if self.thread and self.thread.is_alive():
+            self.thread.join()
+            self.thread = None
+            self.__is_setup = False
+
+    def get_data(self):
+        """Retrieve data from the queue with a timeout."""
+        try:
+            for pad in self.out_queue:
+                self.out_queue[pad].append(
+                    self.in_queue[pad].get(timeout=self.in_queue_timeout)
+                )
+                self.latest_buffer_metadata[pad] = self.out_queue[pad][-1].metadata
+                if self.first_buffer_metadata[pad] is None:
+                    self.first_buffer_metadata[pad] = self.out_queue[pad][0].metadata
+                # We should have a t0 now
+                if self.__end is None and self.duration is not None:
+                    self.__end = self.t0 + self.duration
+        except queue.Empty:
+            raise ValueError(
+                "could not read from resource after {self.in_queue_timeout} seconds"
+            )
+
+    def set_data(self, out_frame, pad):
+        """This method will set data on out_frame based on the contents of the
+        internal queue"""
+
+        # Check if were are at EOS, if so, stop the thread
+        if out_frame.EOS:
+            self.stop()
+
+        # If we have been given a zero length frame, just return it. That means
+        # we didn't have data at the time the frame was prepared and we should
+        # just go with it.
+        if out_frame.offset == out_frame.end_offset:
+            return out_frame
+
+        # Otherwise create a TSFrame from all the buffers that we have queued up
+        in_frame = TSFrame(buffers=self.out_queue[pad])
+
+        # make sure nothing is fishy
+        assert out_frame.end_offset <= in_frame.end_offset
+
+        # intersect the TSSource provided output frame with the in_frame
+        before, intersection, after = out_frame.intersect(in_frame)
+
+        # Clear the queue
+        self.out_queue[pad].clear()
+
+        # and repopulate it with only stuff that is newer than what we just sent.
+        if after is not None:
+            self.out_queue[pad].extend(after.buffers)
+
+        # It is possible that the out_frame is before the data we have in the
+        # queue, if so the intersection will be None. Thats okay, we can just
+        # pass along that gap buffer.
+        if intersection is None:
+            return out_frame
+
+        # make sure to update EOS
+        intersection.EOS = out_frame.EOS
+        return intersection
 
     def __set_pad_buffer_params(
         self,
         pad: SourcePad,
     ) -> None:
         # Make sure this has only been called once per pad
-        assert self.resource is not None
+        #assert self.resource is not None
         assert pad not in self._new_buffer_dict
 
         self._new_buffer_dict[pad] = {
-            "sample_rate": self.resource.rate(pad),
-            "shape": self.resource.sample_shape(pad)
-            + (self.num_samples(self.resource.rate(pad)),),
+            "sample_rate": self.rate(pad),
+            "shape": self.sample_shape(pad)
+            + (self.num_samples(self.rate(pad)),),
         }
         self._next_frame_dict[pad] = TSFrame.from_buffer_kwargs(
             offset=self.start_offset, data=None, **self._new_buffer_dict[pad]
@@ -884,20 +843,20 @@ class TSResourceSource(_TSSource):
         to produce a result"""
 
         # First setup the resource and pull the first data
-        if not self.resource.is_setup:
-            self.resource.setup()
-            self.resource.get_data()
+        if not self.is_setup:
+            self.setup()
+            self.get_data()
             # setup pads if they are not setup.
             # This must happen after the first get data
-            for pad in self.resource.rsrcs:
+            for pad in self.rsrcs:
                 if pad not in self._new_buffer_dict:
                     self.__set_pad_buffer_params(pad)
         else:
             # check if we need to get more data
-            if self.resource.latest_offset < self.current_end_offset:
-                self.resource.get_data()
+            if self.latest_offset < self.current_end_offset:
+                self.get_data()
 
     def new(self, pad):
-        frame = self.prepare_frame(pad, latest_offset=self.resource.latest_offset)
-        frame = self.resource.set_data(frame, pad)
+        frame = self.prepare_frame(pad, latest_offset=self.latest_offset)
+        frame = self.set_data(frame, pad)
         return frame

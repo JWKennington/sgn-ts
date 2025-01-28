@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from sgn.apps import Pipeline
 import time
 from sgnts.sinks import FakeSeriesSink
-from sgnts.base import TSThreadedResource, TSResourceSource
+from sgnts.base import  TSResourceSource
 from sgnts.base.buffer import SeriesBuffer
 from sgnts.base.offset import Offset
 from sgnts.utils import gpsnow
@@ -15,7 +15,6 @@ from sgn.sources import SignalEOS
 
 @dataclass
 class DataServer:
-    realtime: bool = True
     block_duration: int = 2
     simulate_skip_data: bool = False
 
@@ -26,10 +25,11 @@ class DataServer:
 
     def stream(self, channels, start=None, end=None):
         assert not (set(channels) - set(self.description))
-        if start is None:
-            t0 = int(gpsnow()) - 1.0
+        t0 = int(gpsnow()) - 1.0 if start is None else start
         while True:
             out = {}
+            if end is not None and t0>= end:
+                return
             for channel in channels:
                 sample_shape, rate = (
                     self.description[channel]["sample-shape"],
@@ -43,15 +43,17 @@ class DataServer:
                     "sample_shape": sample_shape,
                 }
             t0 += self.block_duration
+            # Simulate a data skip if requested
             if self.simulate_skip_data:
                 t0 += 2
-            if self.realtime:
+            # simulate real-time if start is None
+            if start is None:
                 time.sleep(max(0, t0 - gpsnow()))
             yield out
 
 
 @dataclass
-class Resource(TSThreadedResource):
+class FakeLiveSource(TSResourceSource):
     server: object = None
 
     def __post_init__(self):
@@ -60,7 +62,7 @@ class Resource(TSThreadedResource):
     def thread_get_data(self):
         try:
 
-            for stream in self.server.stream(self.srcs):
+            for stream in self.server.stream(self.srcs, self.start_time, self.end):
                 # if the queue is full, sleep and try again after wait seconds
                 if any(q.full() for q in self.in_queue.values()):
                     time.sleep(self.blocking_wait_time)
@@ -86,27 +88,19 @@ class Resource(TSThreadedResource):
             self.exception_queue.put(e)
 
 
-@dataclass
-class FakeLiveSource(TSResourceSource):
-    pass
-
 def test_resource_source():
 
     pipeline = Pipeline()
 
     block_duration = 4
-    # make the timeout bigger than the block duration :)
-    resource = Resource(
-        start_time=0,
-        duration=10,
-        server=DataServer(block_duration=block_duration, simulate_skip_data=True),
-        in_queue_timeout=block_duration + 2,
-    )
 
     src = FakeLiveSource(
         name="src",
         source_pad_names=("H1:FOO",),
-        resource=resource,
+        #start_time=0,
+        duration=10,
+        server=DataServer(block_duration=block_duration, simulate_skip_data=True),
+        in_queue_timeout=block_duration + 2,
     )
     snk = FakeSeriesSink(
         name="snk",
