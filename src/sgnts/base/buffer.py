@@ -742,8 +742,8 @@ class TSFrame(Frame):
 
     def heartbeat(self, EOS=False):
         frame = TSFrame.from_buffer_kwargs(
-            offset=self.offset,
-            end_offset=self.end_offset,
+            offset=self.end_offset,
+            sample_rate=self.sample_rate,
             shape=self.sample_shape + (0,),
             data=None,
         )
@@ -829,12 +829,11 @@ class TSFrame(Frame):
                 outside_slices = TSSlices(self.slice - buf.slice).search(buf.slice)
                 outside_bufs = buf.split(outside_slices)
                 for obuf in outside_bufs:
+                    assert (obuf.end_offset <= self.offset) or (obuf.offset >= self.end_offset)
                     if obuf.end_offset <= self.offset:
                         bbuf.append(obuf)
-                    elif obuf.offset >= self.end_offset:
-                        abuf.append(obuf)
                     else:
-                        raise ValueError("impossible buffer")
+                        abuf.append(obuf)
                 inbuf.extend(buf.split(TSSlices([self.slice & buf.slice])))
         return (
             None if not bbuf else TSFrame(buffers=bbuf),
