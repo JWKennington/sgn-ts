@@ -678,45 +678,33 @@ class TSSource(_TSSource):
 class TSResourceSource(_TSSource):
     """Source class that is entirely data driven by an external resource.
     The resource will gather data in a separate thread.  The user
-    must implement the thread_get_data() method and probably doesn't
-    need to implement any other methods.  The thread_get_data()
+    must implement the get_data() method and probably doesn't
+    need to implement any other methods.  The get_data()
     method must fill a queue with a single buffer of the next data block.
     It must block until the queue is not full.
 
     Assume we have a service with a client called "server" that has a
-    "stream" method that takes a list of channels and a start and stop time.
-    Assume it returns dictionaries keyed by channel names
-    containing dictionaries of metadata "t0", "rate", "sample_shape" and "data".
-    An implementation of thread_get_data() might look like this:
+    "stream" method that takes a list of channels
+    Assume it returns objects called blocks
+    with additional metadata e.g.,  "time_ns", "sample_rate", and "data".
+    An implementation of get_data() might look like this:
 
 
-    def thread_get_data(self):
-        try:
-
-            for stream in self.server.stream(self.srcs, start_time, end_time):
-                # if the queue is full, sleep and try again after wait seconds
-                if any(q.full() for q in self.in_queue.values()):
-                    time.sleep(self.blocking_wait_time)
-                    continue
-
-                for channel, block in stream.items():
-                    pad = self.srcs[channel]
-
-                    buf = SeriesBuffer(
-                        offset=Offset.fromsec(block["t0"]),
-                        data=block["data"],
-                        sample_rate=block["rate"],
-                    )
-                    self.in_queue[pad].put(buf)
-                try:
-                    self.stop_thread.get(0)
-                    break
-                except queue.Empty:
-                    pass
-
-        except Exception as e:
-            print(e)
-            self.exception_queue.put(e)
+    def get_data(self):
+        for stream in arrakis.stream(tuple(self.srcs)):
+            for channel, block in stream.items():
+                pad = self.srcs[channel]
+                buf = SeriesBuffer(
+                    offset=Offset.fromns(block.time_ns),
+                    data=block.data,
+                    sample_rate=block.channel.sample_rate,
+                )
+                self.in_queue[pad].put(buf)
+            try:
+                self.stop_thread.get(0)
+                break
+            except queue.Empty:
+                pass
 
     There are also two additional queues. One "stop_thread" should be checked
     to see if the thread should end.  The other "exception_queue" should
