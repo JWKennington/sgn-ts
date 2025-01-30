@@ -5,6 +5,7 @@ from math import isinf
 import threading
 from collections import deque
 import queue
+import numpy
 
 # from typing import Optional, Union, Callable, Protocol, Sequence
 from typing import Optional, Union, Callable, Sequence
@@ -750,8 +751,8 @@ class TSResourceSource(_TSSource):
         self.thread = None
         self.__end = None
         if self.duration is None:
-            self.duration = 9223372036854775807  # FIXME 2**63-1
-            self.__end = 9223372036854775807  # FIXME 2**63-1
+            self.duration = numpy.iinfo(numpy.int64).max
+            self.__end = numpy.iinfo(numpy.int64).max
         if self.start_time is not None and self.duration is not None:
             self.__end = self.duration + self.start_time
 
@@ -777,7 +778,7 @@ class TSResourceSource(_TSSource):
     def latest_offset(self):
         """Since the thread is responsible for producing a queue of
         buffers, the latest offest can be derived from those"""
-        latest = -9_223_372_036_854_775_808
+        latest = numpy.iinfo(numpy.int64).min
         for metadata in self.latest_buffer_metadata.values():
             if metadata is not None:
                 latest = max(latest, metadata["end_offset"])
@@ -818,11 +819,25 @@ class TSResourceSource(_TSSource):
         else:
             return 0.0
 
+    def get_data(self):
+        """User implemented function that pairs with thread_get_data()"""
+        raise NotImplementedError
+
     def thread_get_data(self):
         """This will run in a separate thread. It must fill the self.in_queue
         with SeriesBuffers.  The buffers should be contiguous or else errors will happen
         later"""
-        raise NotImplementedError
+        try:
+            for pad, buf in self.get_data():
+                self.in_queue[pad].put(buf)
+                try:
+                    self.stop_thread.get(0)
+                    break
+                except queue.Empty:
+                    pass
+        except Exception as e:
+            print(e)
+            self.exception_queue.put(e)
 
     def __exit__(self):
         self.stop()
@@ -840,7 +855,7 @@ class TSResourceSource(_TSSource):
             self.thread = None
             self.__is_setup = False
 
-    def get_data(self):
+    def get_data_from_queue(self):
         """Retrieve data from the queue with a timeout."""
         try:
             for pad in self.out_queue:
@@ -929,7 +944,7 @@ class TSResourceSource(_TSSource):
         # First setup the resource and pull the first data
         if not self.is_setup:
             self.setup()
-            self.get_data()
+            self.get_data_from_queue()
             # setup pads if they are not setup.
             # This must happen after the first get data
             for pad in self.rsrcs:
@@ -938,7 +953,7 @@ class TSResourceSource(_TSSource):
         else:
             # check if we need to get more data
             if self.latest_offset < self.current_end_offset:
-                self.get_data()
+                self.get_data_from_queue()
 
     def new(self, pad):
         frame = self.prepare_frame(pad, latest_offset=self.latest_offset)

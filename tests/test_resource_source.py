@@ -67,33 +67,22 @@ class FakeLiveSource(TSResourceSource):
         )
         super().__post_init__()
 
-    def thread_get_data(self):
-        try:
+    def get_data(self):
+        for stream in self.server.stream(self.srcs, self.start_time, self.end):
+            for channel, block in stream.items():
+                pad = self.srcs[channel]
 
-            for stream in self.server.stream(self.srcs, self.start_time, self.end):
-                # if the queue is full, sleep and try again after wait seconds
-                if any(q.full() for q in self.in_queue.values()):
-                    time.sleep(self.blocking_wait_time)
-                    continue
-
-                for channel, block in stream.items():
-                    pad = self.srcs[channel]
-
-                    buf = SeriesBuffer(
-                        offset=Offset.fromsec(block["t0"]),
-                        data=block["data"],
-                        sample_rate=block["rate"],
-                    )
-                    self.in_queue[pad].put(buf)
-                try:
-                    self.stop_thread.get(0)
-                    break
-                except queue.Empty:
-                    pass
-
-        except Exception as e:
-            raise (e)
-            self.exception_queue.put(e)
+                buf = SeriesBuffer(
+                    offset=Offset.fromsec(block["t0"]),
+                    data=block["data"],
+                    sample_rate=block["rate"],
+                )
+                self.in_queue[pad].put(buf)
+            try:
+                self.stop_thread.get(0)
+                break
+            except queue.Empty:
+                pass
 
 
 def test_resource_source():
@@ -103,7 +92,6 @@ def test_resource_source():
     src = FakeLiveSource(
         name="src",
         source_pad_names=("H1:FOO",),
-        # start_time=0,
         duration=10,
         block_duration=4,
     )
