@@ -66,10 +66,11 @@ class FakeSeriesSource(TSSource):
     verbose: bool = False
 
     def __post_init__(self):
-        if self.t0 is None and not self.real_time:
-            self.t0 = 0
-        if self.t0 is None and self.real_time:
-            self.t0 = float(gpsnow())
+        if self.t0 is None:
+            if self.real_time:
+                self.t0 = float(gpsnow())
+            else:
+                self.t0 = 0
 
         super().__post_init__()
 

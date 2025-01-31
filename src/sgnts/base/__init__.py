@@ -598,7 +598,7 @@ class _TSSource(SourceElement, SignalEOS):
 class TSSource(_TSSource):
     """A time-series source that generates data in fixed-size buffers where the
        user can specify the start time and end time. If you want a data driven
-       resource consider using TSDataSource.
+       source consider using TSResourceSource.
 
     Args:
         t0:
@@ -756,25 +756,25 @@ class TSResourceSource(_TSSource):
     def sample_shape(self, pad):
         """The channels per sample that a buffer should produce as a tuple
         (since it can be a tensor). For single channels just return ()"""
-        return self.first_buffer_metadata[pad]["sample_shape"]
+        return self.first_buffer_properties[pad]["sample_shape"]
 
-    def rate(self, pad):
+    def sample_rate(self, pad):
         """The integer sample rate that a buffer should carry"""
-        return self.first_buffer_metadata[pad]["sample_rate"]
+        return self.first_buffer_properties[pad]["sample_rate"]
 
     @property
     def latest_offset(self):
         """Since the thread is responsible for producing a queue of
         buffers, the latest offest can be derived from those"""
         latest = numpy.iinfo(numpy.int64).min
-        for metadata in self.latest_buffer_metadata.values():
-            if metadata is not None:
-                latest = max(latest, metadata["end_offset"])
+        for properties in self.latest_buffer_properties.values():
+            if properties is not None:
+                latest = max(latest, properties["end_offset"])
         return latest
 
     @property
     def start_offset(self):
-        return min(b["offset"] for b in self.first_buffer_metadata.values())
+        return min(b["offset"] for b in self.first_buffer_properties.values())
 
     @property
     def end_offset(self):
@@ -794,8 +794,8 @@ class TSResourceSource(_TSSource):
             self.exception_queue = queue.Queue()
             self.in_queue = {p: queue.Queue(self.__in_queue_length) for p in self.rsrcs}
             self.out_queue = {p: deque() for p in self.rsrcs}
-            self.latest_buffer_metadata = {p: None for p in self.rsrcs}
-            self.first_buffer_metadata = {p: None for p in self.rsrcs}
+            self.latest_buffer_properties = {p: None for p in self.rsrcs}
+            self.first_buffer_properties = {p: None for p in self.rsrcs}
             self.__is_setup = True
             self.start()
 
@@ -855,9 +855,11 @@ class TSResourceSource(_TSSource):
                 # get the rest
                 while not self.in_queue[pad].empty():
                     self.out_queue[pad].append(self.in_queue[pad].get(0))
-                self.latest_buffer_metadata[pad] = self.out_queue[pad][-1].metadata
-                if self.first_buffer_metadata[pad] is None:
-                    self.first_buffer_metadata[pad] = self.out_queue[pad][0].metadata
+                self.latest_buffer_properties[pad] = self.out_queue[pad][-1].properties
+                if self.first_buffer_properties[pad] is None:
+                    self.first_buffer_properties[pad] = self.out_queue[pad][
+                        0
+                    ].properties
                 # We should have a t0 now
                 if self.__end is None and self.duration is not None:
                     self.__end = self.t0 + self.duration
@@ -915,8 +917,9 @@ class TSResourceSource(_TSSource):
         assert pad not in self._new_buffer_dict
 
         self._new_buffer_dict[pad] = {
-            "sample_rate": self.rate(pad),
-            "shape": self.sample_shape(pad) + (self.num_samples(self.rate(pad)),),
+            "sample_rate": self.sample_rate(pad),
+            "shape": self.sample_shape(pad)
+            + (self.num_samples(self.sample_rate(pad)),),
         }
         self._next_frame_dict[pad] = TSFrame.from_buffer_kwargs(
             offset=self.start_offset, data=None, **self._new_buffer_dict[pad]

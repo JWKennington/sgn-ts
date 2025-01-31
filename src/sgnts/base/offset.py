@@ -108,10 +108,18 @@ class Offset:
 
         Returns:
             int, the time corresponding to the offset, in nanoseconds
-        """
-        return offset * Time.SECONDS // Offset.MAX_RATE
 
-    #        return round(offset / Offset.MAX_RATE * Time.SECONDS)
+        NOTE - for very large offsets, this switches to integer arithmetic to
+        preserve precision. A downside is that the result will be truncated
+        rather than rounded, leading to a slight bias at the 1 ns scale in
+        some case. This is unlikely to cause any actual problems.  As a
+        reminder, all serious bookkeeping should be done with offsets not
+        timestamps.
+        """
+        if offset * Offset.MAX_RATE > 1e17:
+            return offset * Time.SECONDS // Offset.MAX_RATE
+        else:
+            return round(offset / Offset.MAX_RATE * Time.SECONDS)
 
     @staticmethod
     def fromsec(seconds: float) -> int:

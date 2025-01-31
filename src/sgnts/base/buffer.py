@@ -247,7 +247,7 @@ class SeriesBuffer:
             )
 
     @property
-    def metadata(self):
+    def properties(self):
         return {
             "offset": self.offset,
             "end_offset": self.end_offset,
