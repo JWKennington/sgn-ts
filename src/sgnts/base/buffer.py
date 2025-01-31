@@ -246,6 +246,18 @@ class SeriesBuffer:
                 )
             )
 
+    @property
+    def properties(self):
+        return {
+            "offset": self.offset,
+            "end_offset": self.end_offset,
+            "t0": self.t0,
+            "end": self.end,
+            "shape": self.shape,
+            "sample_shape": self.sample_shape,
+            "sample_rate": self.sample_rate,
+        }
+
     def __bool__(self):
         return self.data is not None
 
@@ -259,10 +271,15 @@ class SeriesBuffer:
             data:
                 Optiona[Array], the new data to set to
         """
-        if data is not None and self.shape != data.shape:
+        if isinstance(data, int) and data == 1:
+            self.data = self.backend.ones(self.shape)
+        elif isinstance(data, int) and data == 0:
+            self.data = self.backend.zeros(self.shape)
+        elif data is not None and self.shape != data.shape:
             raise ValueError("Data are incompatible shapes")
-        # it really isn't clear to me if this should be by reference or copy...
-        self.data = data
+        else:
+            # it really isn't clear to me if this should be by reference or copy...
+            self.data = data
 
     @property
     def tarr(self) -> Array:
@@ -366,6 +383,11 @@ class SeriesBuffer:
             int, the number of samples
         """
         return self.shape[-1]
+
+    @property
+    def sample_shape(self) -> tuple:
+        """return the sample shape"""
+        return self.shape[:-1]
 
     @property
     def is_gap(self) -> bool:
@@ -624,6 +646,7 @@ class TSFrame(Frame):
                 list[SeriesBuffer], the buffers to perform the sanity check on
         """
         # FIXME: is there a smart way using TSSlics?
+
         if len(bufs) > 1:
             slices = [buf.slice for buf in bufs]
             off0 = slices[0].stop
@@ -660,6 +683,24 @@ class TSFrame(Frame):
         return self.buffers[-1].end_offset
 
     @property
+    def t0(self) -> float:
+        """The t0 of the TSFrame, which is the t0 of the first buffer.
+
+        Returns:
+            float, the t0 of the TSFrame
+        """
+        return self.buffers[0].t0
+
+    @property
+    def end(self) -> float:
+        """The end of the TSFrame, which is the end time of the last buffer.
+
+        Returns:
+            float, the end time of the TSFrame
+        """
+        return self.buffers[-1].end
+
+    @property
     def slice(self) -> TSSlice:
         """The offset slice of the TSFrame.
 
@@ -676,6 +717,11 @@ class TSFrame(Frame):
             tuple[int, ...], the shape of the TSFrame
         """
         return self.buffers[0].shape[:-1] + (sum(b.samples for b in self.buffers),)
+
+    @property
+    def sample_shape(self) -> tuple:
+        """return the sample shape"""
+        return self.buffers[0].sample_shape
 
     @property
     def sample_rate(self) -> int:
@@ -695,6 +741,16 @@ class TSFrame(Frame):
         """
         return cls(buffers=[SeriesBuffer(**kwargs)])
 
+    def heartbeat(self, EOS=False):
+        frame = TSFrame.from_buffer_kwargs(
+            offset=self.offset,
+            sample_rate=self.sample_rate,
+            shape=self.sample_shape + (0,),
+            data=None,
+        )
+        frame.EOS = EOS
+        return frame
+
     def __next__(self):
         """
         return a new empty frame that is like the current one but advanced to
@@ -710,4 +766,80 @@ class TSFrame(Frame):
         """
         return self.from_buffer_kwargs(
             offset=self.end_offset, sample_rate=self.sample_rate, shape=self.shape
+        )
+
+    def __contains__(self, other):
+        return other.slice in self.slice
+
+    def intersect(self, other):
+        """
+        Intersect self with another frame and return up to three
+        frames, the frame before, the intersecting frame and the frame after.  For
+        example, given two frames A and B:
+
+        A:
+                SeriesBuffer(offset=0, offset_end=4096, shape=(32,),
+                             sample_rate=128, duration=250000000, data=None)
+                SeriesBuffer(offset=4096, offset_end=20480, shape=(128,),
+                             sample_rate=128, duration=1000000000, data=None)
+        B:
+                SeriesBuffer(offset=2048, offset_end=10240, shape=(64,),
+                             sample_rate=128, duration=500000000, data=None)
+                SeriesBuffer(offset=10240, offset_end=174080, shape=(1280,),
+                             sample_rate=128, duration=10000000000, data=None)
+
+        B.intersect(A):
+
+                before Frame:
+                SeriesBuffer(offset=0, offset_end=2048, shape=(16,),
+                             sample_rate=128, duration=125000000, data=None)
+
+                intersecting Frame:
+                SeriesBuffer(offset=2048, offset_end=4096, shape=(16,),
+                             sample_rate=128, duration=125000000, data=None)
+                SeriesBuffer(offset=4096, offset_end=20480, shape=(128,),
+                             sample_rate=128, duration=1000000000, data=None)
+
+                after Frame: None
+
+        A.intersect(B):
+
+                before Frame: None
+
+                intersecting Frame:
+                SeriesBuffer(offset=2048, offset_end=10240, shape=(64,),
+                             sample_rate=128, duration=500000000, data=None)
+                SeriesBuffer(offset=10240, offset_end=20480, shape=(80,),
+                             sample_rate=128, duration=625000000, data=None)
+
+                after Frame:
+                SeriesBuffer(offset=20480, offset_end=174080, shape=(1200,),
+                             sample_rate=128, duration=9375000000, data=None)
+        """
+        bbuf = []
+        inbuf = []
+        abuf = []
+        for buf in other.buffers:
+            if buf.end_offset <= self.offset:
+                bbuf.append(buf)
+            elif buf.offset >= self.end_offset:
+                abuf.append(buf)
+            elif buf in self:
+                inbuf.append(buf)
+            else:
+                outside_slices = TSSlices(self.slice - buf.slice).search(buf.slice)
+                outside_bufs = buf.split(outside_slices)
+                for obuf in outside_bufs:
+                    assert (obuf.end_offset <= self.offset) or (
+                        obuf.offset >= self.end_offset
+                    )
+                    if obuf.end_offset <= self.offset:
+                        bbuf.append(obuf)
+                    else:
+                        abuf.append(obuf)
+                inbuf.extend(buf.split(TSSlices([self.slice & buf.slice])))
+        return (
+            None if not bbuf else TSFrame(buffers=bbuf),
+            None if not inbuf else TSFrame(buffers=inbuf),
+            None if not abuf else TSFrame(buffers=abuf),
         )

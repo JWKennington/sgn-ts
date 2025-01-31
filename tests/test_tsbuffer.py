@@ -406,7 +406,24 @@ def test_valid_series_buffer():
     with pytest.raises(ValueError):
         SeriesBuffer(offset=0, sample_rate=128)
     buf = SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=0)
-    assert TSFrame(buffers=[buf]).slice == TSSlice(0, 16384)
+    buf2 = SeriesBuffer(offset=16384, sample_rate=128, shape=(128,), data=0)
+    buf3 = SeriesBuffer(offset=0, sample_rate=128, shape=(512,), data=0)
+    frame = TSFrame(buffers=[buf])
+    frame2 = TSFrame(buffers=[buf2])
+    frame3 = TSFrame(buffers=[buf3])
+    b, i, a = frame2.intersect(frame)
+    assert i is None and a is None and b is not None
+    b, i, a = frame.intersect(frame2)
+    assert b is None and i is None and a is not None
+    b, i, a = frame3.intersect(frame2)
+    assert b is None and i is not None and a is None
+    b, i, a = frame2.intersect(frame3)
+    assert b is not None and i is not None and a is not None
+
+    assert frame.slice == TSSlice(0, 16384)
+    assert frame.sample_shape == ()
+    assert frame.heartbeat().end_offset == 0
+
     assert len(buf) == 128
     with pytest.raises(ValueError):
         SeriesBuffer(
@@ -433,9 +450,14 @@ def test_valid_series_buffer():
     with pytest.raises(NotImplementedError):
         buf2.split("blah")
 
+    bufset_test = SeriesBuffer(offset=0, sample_rate=128, shape=(128,), data=0)
+    bufset_test.set_data(1)
+    bufset_test.set_data(0)
+
     tbuf = SeriesBuffer(
         offset=-16384, sample_rate=128, shape=(128,), data=0, backend=TorchBackend
     )
+    assert tbuf.sample_shape == ()
     original_dtype = TorchBackend.DTYPE
     TorchBackend.DTYPE = torch.float64
     with pytest.raises(ValueError):
