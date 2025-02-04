@@ -9,3 +9,4 @@ from sgnts.transforms.multiplier import Multiplier
 from sgnts.transforms.resampler import Resampler
 from sgnts.transforms.sumindex import SumIndex
 from sgnts.transforms.threshold import Threshold
+from sgnts.transforms.median import Median
