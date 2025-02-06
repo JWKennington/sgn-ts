@@ -143,12 +143,10 @@ class FakeSeriesSource(TSSource):
         elif self.signal_type == "white":
             return np.random.randn(*buf.shape)
         elif self.signal_type == "sin" or self.signal_type == "sine":
-            t0 = Offset.tosec(offset)
-            duration = buf.duration
             return np.sin(
-                self.fsin
+                2 * np.pi * self.fsin
                 * np.tile(
-                    np.linspace(t0, t0 + duration, buf.samples, endpoint=False),
+                    buf.tarr,
                     self.sample_shape + (1,),
                 )
             )
