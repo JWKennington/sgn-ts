@@ -619,16 +619,24 @@ class TSFrame(Frame):
             list[SeriesBuffer], An iterable of SeriesBuffers
     """
 
+    is_gap: InitVar[bool] = False
     buffers: InitVar[list[SeriesBuffer]] = field(default_factory=list)
 
-    def __post_init__(self, buffers: list[SeriesBuffer]):
+    def __post_init__(self, is_gap: bool, buffers: list[SeriesBuffer]):
         # Assign "buffers" to "self.data" after sanity check and make "buffers" a prop
         if buffers is not None:
             self.data = buffers
         super().__post_init__()
-        assert len(self.buffers) > 0
+        assert len(self.data) > 0
         self.__sanity_check(self.buffers)
-        self.is_gap = all([b.is_gap for b in self.buffers])
+
+    @property
+    def is_gap(self):
+        """Dynamic property that checks if all buffers are gaps.
+        This is necessary since buffers are mutable and can be changed after
+        initialization.
+        """
+        return all([b.is_gap for b in self.buffers])
 
     @property
     def buffers(self):
