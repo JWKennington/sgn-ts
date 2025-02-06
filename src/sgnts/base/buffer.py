@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from typing import Any, Optional, Union
 
 import numpy
@@ -111,11 +111,19 @@ class EventFrame(Frame):
             dict, Dictionary of EventBuffers
     """
 
-    events: Union[dict, None] = None
+    events: InitVar[Union[dict, None]] = None
 
-    def __post_init__(self):
+    def __post_init__(self, events: Union[dict, None]):
+        # Assign "events" to "self.data" and make "events" a prop
+        if events is not None:
+            self.data = events
         super().__post_init__()
         assert len(self.events) > 0
+
+    @property
+    def events(self):
+        """Return the events dictionary"""
+        return self.data
 
     def __getitem__(self, item):
         return self.events[item]
@@ -611,13 +619,20 @@ class TSFrame(Frame):
             list[SeriesBuffer], An iterable of SeriesBuffers
     """
 
-    buffers: list[SeriesBuffer] = field(default_factory=list)
+    buffers: InitVar[list[SeriesBuffer]] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self, buffers: list[SeriesBuffer]):
+        # Assign "buffers" to "self.data" after sanity check and make "buffers" a prop
+        if buffers is not None:
+            self.data = buffers
         super().__post_init__()
         assert len(self.buffers) > 0
         self.__sanity_check(self.buffers)
         self.is_gap = all([b.is_gap for b in self.buffers])
+
+    @property
+    def buffers(self):
+        return self.data
 
     def __getitem__(self, item):
         return self.buffers[item]
@@ -662,7 +677,7 @@ class TSFrame(Frame):
                 list[SeriesBuffers], the list of buffers to set to
         """
         self.__sanity_check(bufs)
-        self.buffers = bufs
+        self.data = bufs
 
     @property
     def offset(self) -> int:
