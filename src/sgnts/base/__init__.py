@@ -117,16 +117,30 @@ class _TSTransSink:  # (HasValueProtocol):
 
     max_age: int = 100 * Time.SECONDS
     adapter_config: Optional[AdapterConfig] = None
+    unaligned: Optional[Sequence[str]] = None
 
     def __post_init__(self):
+        """Initialize the _TSTransSink class."""
+        # First, determine which input pads actually require alignment
+        if self.unaligned is None:
+            self.unaligned_sink_pads = []
+        else:
+            self.unaligned_sink_pads = [self.snks[name] for name in self.unaligned]
+        self.aligned_sink_pads = [
+            p for p in self.sink_pads if p not in self.unaligned_sink_pads
+        ]
 
+        # Initialize metadata for exempt sink pads
+        self.unaligned_data = {p: None for p in self.unaligned_sink_pads}
+
+        # Initialize the alignment metadata for all sink pads that need to be aligned
         self._is_aligned = False
-        self.inbufs = {p: Audioadapter() for p in self.sink_pads}
-        self.preparedframes = {p: None for p in self.sink_pads}
+        self.inbufs = {p: Audioadapter() for p in self.aligned_sink_pads}
+        self.preparedframes = {p: None for p in self.aligned_sink_pads}
         self.at_EOS = False
-        self._last_ts = {p: None for p in self.sink_pads}
-        self._last_offset = {p: None for p in self.sink_pads}
-        self.metadata = {p: None for p in self.sink_pads}
+        self._last_ts = {p: None for p in self.aligned_sink_pads}
+        self._last_offset = {p: None for p in self.aligned_sink_pads}
+        self.metadata = {p: None for p in self.aligned_sink_pads}
         self.audioadapters = None
         if self.adapter_config is not None:
             self.overlap = self.adapter_config.overlap
@@ -137,14 +151,14 @@ class _TSTransSink:  # (HasValueProtocol):
             # we need audioadapters
             self.audioadapters = {
                 p: Audioadapter(backend=self.adapter_config.backend)
-                for p in self.sink_pads
+                for p in self.aligned_sink_pads
             }
             self.pad_zeros_offset = 0
             if self.pad_zeros_startup is True:
                 # at startup, pad zeros in front of the first buffer to
                 # serve as history
                 self.pad_zeros_offset = self.overlap[0]
-            self.preparedoutoffsets = {p: None for p in self.sink_pads}
+            self.preparedoutoffsets = {p: None for p in self.aligned_sink_pads}
 
     def pull(self, pad: SinkPad, frame: TSFrame) -> None:
         """Pull data from the input pads (source pads of upstream elements) and queue
@@ -159,6 +173,14 @@ class _TSTransSink:  # (HasValueProtocol):
 
         self.at_EOS |= frame.EOS
 
+        # Handle case of a pad that is exempt from alignment
+        if pad in self.unaligned_sink_pads:
+            # Store most recent data for exempt pads
+            self.unaligned_data[pad] = frame
+            # TODO maybe add bespoke timeout handling here
+            return
+
+        # Handle case of a pad that requires alignment
         # extend and check the buffers
         for buf in frame:
             self.inbufs[pad].push(buf)
@@ -315,7 +337,7 @@ class _TSTransSink:  # (HasValueProtocol):
         if not self._is_aligned:
             # I tried to fix this properly see the notes above the definition
             # of _TSTransSink
-            for sink_pad in self.sink_pads:  # type: ignore
+            for sink_pad in self.aligned_sink_pads:  # type: ignore
                 self.preparedframes[sink_pad] = TSFrame(
                     EOS=self.at_EOS,
                     buffers=[
@@ -334,7 +356,7 @@ class _TSTransSink:  # (HasValueProtocol):
             earliest = self.earliest
             # I tried to fix this properly see the notes above the definition
             # of _TSTransSink
-            for sink_pad in self.sink_pads:  # type: ignore
+            for sink_pad in self.aligned_sink_pads:  # type: ignore
                 out = self.inbufs[sink_pad].get_sliced_buffers(
                     (earliest, min_latest), pad_start=True
                 )
