@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import InitVar, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any, Optional, Union
 
 import numpy
@@ -111,19 +111,11 @@ class EventFrame(Frame):
             dict, Dictionary of EventBuffers
     """
 
-    events: InitVar[Union[dict, None]] = None
+    events: Union[dict, None] = None
 
-    def __post_init__(self, events: Union[dict, None]):
-        # Assign "events" to "self.data" and make "events" a prop
-        if events is not None:
-            self.data = events
+    def __post_init__(self):
         super().__post_init__()
-        assert len(self.events) > 0
-
-    @property
-    def events(self):
-        """Return the events dictionary"""
-        return self.data
+        assert self.events is not None and len(self.events) > 0
 
     def __getitem__(self, item):
         return self.events[item]
@@ -619,28 +611,12 @@ class TSFrame(Frame):
             list[SeriesBuffer], An iterable of SeriesBuffers
     """
 
-    is_gap: InitVar[bool] = False
-    buffers: InitVar[list[SeriesBuffer]] = field(default_factory=list)
+    buffers: list[SeriesBuffer] = field(default_factory=list)
 
-    def __post_init__(self, is_gap: bool, buffers: list[SeriesBuffer]):
-        # Assign "buffers" to "self.data" after sanity check and make "buffers" a prop
-        if buffers is not None:
-            self.data = buffers
+    def __post_init__(self):
         super().__post_init__()
-        assert len(self.data) > 0
+        assert len(self.buffers) > 0
         self.__sanity_check(self.buffers)
-
-    @property
-    def is_gap(self):
-        """Dynamic property that checks if all buffers are gaps.
-        This is necessary since buffers are mutable and can be changed after
-        initialization.
-        """
-        return all([b.is_gap for b in self.buffers])
-
-    @property
-    def buffers(self):
-        return self.data
 
     def __getitem__(self, item):
         return self.buffers[item]
@@ -676,6 +652,7 @@ class TSFrame(Frame):
             for sl in slices[1:]:
                 assert off0 == sl.start
                 off0 = sl.stop
+        self.is_gap = all([b.is_gap for b in self.buffers])
 
     def set_buffers(self, bufs: list[SeriesBuffer]) -> None:
         """Set the buffers attribute to the bufs provided.
@@ -685,7 +662,6 @@ class TSFrame(Frame):
                 list[SeriesBuffers], the list of buffers to set to
         """
         self.__sanity_check(bufs)
-        self.data = bufs
 
     @property
     def offset(self) -> int:
