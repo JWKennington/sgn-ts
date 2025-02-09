@@ -13,7 +13,8 @@ class Median(TSTransform):
     overlap_offsets: tuple[int, int] = (1024, 1024)
 
     def __post_init__(self):
-        # FIXME: When this option is available, fill the gap buffers with nan's (instead of 0's)
+        # FIXME: When this option is available, fill the gap buffers with nan's
+        # (instead of 0's)
         self.adapter_config = AdapterConfig(
             overlap=self.overlap_offsets,
             pad_zeros_startup=False,
