@@ -144,7 +144,9 @@ class FakeSeriesSource(TSSource):
             return np.random.randn(*buf.shape)
         elif self.signal_type == "sin" or self.signal_type == "sine":
             return np.sin(
-                2 * np.pi * self.fsin
+                2
+                * np.pi
+                * self.fsin
                 * np.tile(
                     buf.tarr,
                     self.sample_shape + (1,),

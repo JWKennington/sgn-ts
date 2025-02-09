@@ -4,7 +4,7 @@ from sgn.apps import Pipeline
 from sgn.sinks import NullSink
 
 from sgnts.sources import FakeSeriesSource
-from sgnts.transforms import Median 
+from sgnts.transforms import Median
 
 
 def test_median():
@@ -40,7 +40,7 @@ def test_median():
             name="trans1",
             source_pad_names=("H1",),
             sink_pad_names=("H1",),
-            overlap_offsets=(512,0),
+            overlap_offsets=(512, 0),
         ),
         NullSink(
             name="snk1",

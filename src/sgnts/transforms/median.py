@@ -1,6 +1,9 @@
 from dataclasses import dataclass
-from sgnts.base import TSTransform, TSFrame, AdapterConfig, Offset
+
 import numpy
+
+from sgnts.base import AdapterConfig, Offset, TSFrame, TSTransform
+
 
 @dataclass
 class Median(TSTransform):
@@ -12,7 +15,9 @@ class Median(TSTransform):
     def __post_init__(self):
         # FIXME: When this option is available, fill the gap buffers with nan's (instead of 0's)
         self.adapter_config = AdapterConfig(
-            overlap=self.overlap_offsets, pad_zeros_startup=False, stride=Offset.SAMPLE_STRIDE_AT_MAX_RATE
+            overlap=self.overlap_offsets,
+            pad_zeros_startup=False,
+            stride=Offset.SAMPLE_STRIDE_AT_MAX_RATE,
         )
         super().__post_init__()
         # This element is written to assume one channel, one source pad and one sink pad
