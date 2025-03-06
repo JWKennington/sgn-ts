@@ -3,8 +3,8 @@
 import numpy as np
 from sgn.apps import Pipeline
 
-from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSource
+from sgnts.sinks import NullSeriesSink
 from sgnts.transforms import Adder, Correlate, Matmul, Resampler
 
 
@@ -101,7 +101,7 @@ def test_lloid():
             sink_pad_names=("frombuf", "tobuf"),
             max_age=max_age,
         ),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
             verbose=True,

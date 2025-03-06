@@ -9,9 +9,9 @@ from sgn.apps import Pipeline
 
 from sgnts.base import SeriesBuffer, EventBuffer, TSSlice, EventFrame, TSFrame
 from sgnts.base.array_ops import TorchBackend
-from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSource
 from sgnts.base.time import Time
+from sgnts.sinks import NullSeriesSink
 
 
 def test_tsgraph(capsys):
@@ -37,7 +37,7 @@ def test_tsgraph(capsys):
             random_seed=1234,
             end=2,
         ),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
             verbose=True,

@@ -2,8 +2,8 @@
 
 from sgn.apps import Pipeline
 
-from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSource
+from sgnts.sinks import NullSeriesSink
 from sgnts.transforms import SumIndex
 
 
@@ -27,7 +27,7 @@ def test_sumindex():
             sink_pad_names=("H1",),
             sl=[slice(0, 1), slice(0, 2)],
         ),
-        FakeSeriesSink(name="snk1", sink_pad_names=("H1",), verbose=True),
+        NullSeriesSink(name="snk1", sink_pad_names=("H1",), verbose=True),
         link_map={
             "sumindex:snk:H1": "src1:src:H1",
             "snk1:snk:H1": "sumindex:src:H1",

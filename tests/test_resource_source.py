@@ -3,10 +3,10 @@
 from dataclasses import dataclass
 from sgn.apps import Pipeline
 import time
-from sgnts.sinks import FakeSeriesSink
 from sgnts.base import TSResourceSource
 from sgnts.base.buffer import SeriesBuffer
 from sgnts.base.offset import Offset
+from sgnts.sinks import NullSeriesSink
 from sgnts.utils import gpsnow
 import numpy
 import queue
@@ -95,7 +95,7 @@ def test_resource_source():
         duration=10,
         block_duration=4,
     )
-    snk = FakeSeriesSink(
+    snk = NullSeriesSink(
         name="snk",
         sink_pad_names=("H1",),
         verbose=True,

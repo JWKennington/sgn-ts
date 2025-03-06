@@ -2,8 +2,8 @@
 import pytest
 from sgn.apps import Pipeline
 
-from sgnts.sinks import FakeSeriesSink
 from sgnts.sources import FakeSeriesSource
+from sgnts.sinks import NullSeriesSink
 
 
 def test_multi_sink(capsys):
@@ -52,7 +52,7 @@ def test_multi_sink(capsys):
             signal_type="impulse",
             impulse_position=-1,
         ),
-        FakeSeriesSink(
+        NullSeriesSink(
             name="snk3",
             sink_pad_names=(
                 "H1",
@@ -81,7 +81,7 @@ def test_invalid_fake_series():
         end=1,
         signal_type="blah",
     )
-    sink = FakeSeriesSink(
+    sink = NullSeriesSink(
         name="blah2",
         sink_pad_names=("V1",),
     )

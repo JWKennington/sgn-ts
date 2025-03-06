@@ -7,12 +7,13 @@ from sgnts.utils import gpsnow
 
 
 @dataclass
-class FakeSeriesSink(TSSink):
-    """A fake series sink element.
+class NullSeriesSink(TSSink):
+    """A series sink that does precisely nothing.
 
     Args:
         verbose:
-            bool, be verbose
+            bool, print frames as they pass through the internal pad
+
     """
 
     verbose: bool = False
