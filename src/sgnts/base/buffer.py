@@ -661,8 +661,8 @@ class TSFrame(Frame):
             bufs:
                 list[SeriesBuffers], the list of buffers to set to
         """
-        self.__sanity_check(bufs)
         self.buffers = bufs
+        self.__sanity_check(bufs)
 
     @property
     def offset(self) -> int:
