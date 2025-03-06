@@ -19,11 +19,11 @@ from sgn.base import (
 )
 from sgn.sources import SignalEOS
 
+from sgnts.base.offset import Offset
+from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
 from sgnts.base.audioadapter import Audioadapter
 from sgnts.base.buffer import EventBuffer, EventFrame, SeriesBuffer, TSFrame
-from sgnts.base.offset import Offset
-from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.base.time import Time
 
 

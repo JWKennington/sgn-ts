@@ -1,5 +1,16 @@
+"""Utilities for working with intervals of time
+"""
+
+from __future__ import annotations
+
 import bisect
 from dataclasses import dataclass
+
+import numpy
+
+# Define beginning / end of time as min / max int 64
+TIME_MIN = int(numpy.int64(numpy.iinfo(numpy.int64).min))
+TIME_MAX = int(numpy.int64(numpy.iinfo(numpy.int64).max))
 
 
 @dataclass
@@ -13,8 +24,8 @@ class TSSlice:
             int, The stop of the TSSlice
     """
 
-    start: int
-    stop: int
+    start: int = TIME_MIN
+    stop: int = TIME_MAX
 
     def __post_init__(self):
         if (self.start is None and self.stop is not None) or (
@@ -22,10 +33,17 @@ class TSSlice:
         ):
             raise ValueError("if one of start or stop is None, both must be")
         if self.start is not None:
-            if not isinstance(self.start, int) or not isinstance(self.stop, int):
+            if not isinstance(self.start, (int, numpy.int64)) or not isinstance(
+                self.stop, (int, numpy.int64)
+            ):
                 raise ValueError("if not None, start and stop must be integers")
             if not (self.stop >= self.start):
                 raise ValueError("stop must be greater than or equal to start")
+
+            if self.start < TIME_MIN:
+                raise ValueError(f"start must be greater than {TIME_MIN}")
+            if self.stop > TIME_MAX:
+                raise ValueError(f"stop must be less than {TIME_MAX}")
 
     @property
     def slice(self):

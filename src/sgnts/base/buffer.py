@@ -42,7 +42,10 @@ class EventBuffer:
             or not isinstance(self.te, int)
             or not (self.ts <= self.te)
         ):
-            raise ValueError("ts and te must be integers and ts must be <= te")
+            raise ValueError(
+                "ts and te must be integers and ts must be <= te,"
+                f"got {self.ts} and {self.te}"
+            )
 
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
@@ -181,7 +184,15 @@ class SeriesBuffer:
             self.shape = self.data.shape
         else:
             if self.shape != self.data.shape:
-                raise ValueError("self.shape and self.data.shape must agree")
+                raise ValueError(
+                    "Array size mismatch: self.shape and self.data.shape "
+                    "must agree,"
+                    f"got {self.shape} and {self.data.shape} "
+                    f"with data {self.data}"
+                )
+
+        assert isinstance(self.shape, tuple)
+        assert len(self.shape) > 0
 
         for t in self.shape:
             assert isinstance(t, int)
@@ -382,6 +393,7 @@ class SeriesBuffer:
         Return:
             int, the number of samples
         """
+        assert len(self.shape) > 0
         return self.shape[-1]
 
     @property
@@ -398,7 +410,7 @@ class SeriesBuffer:
         """
         return self.data is None
 
-    def filleddata(self, zeros_func) -> Array:
+    def filleddata(self, zeros_func=None) -> Array:
         """Fill the data with zeros if buffer is a gap, otherwise return the data.
 
         Args:
@@ -408,6 +420,9 @@ class SeriesBuffer:
         Returns:
             Array, the filled data
         """
+        if zeros_func is None:
+            zeros_func = self.backend.zeros
+
         if self.data is not None:
             return self.data
         else:
@@ -654,6 +669,14 @@ class TSFrame(Frame):
                 off0 = sl.stop
         self.is_gap = all([b.is_gap for b in self.buffers])
 
+        # Check all backends are the same
+        backends = {buf.backend for buf in bufs}
+        assert (
+            len(backends) == 1
+        ), f"All buffers must have the same backend, got {backends}"
+
+        # TODO check that all sample rates are the same
+
     def set_buffers(self, bufs: list[SeriesBuffer]) -> None:
         """Set the buffers attribute to the bufs provided.
 
@@ -739,6 +762,15 @@ class TSFrame(Frame):
         >>> frame = TSFrame(buffers=[buf])
         """
         return cls(buffers=[SeriesBuffer(**kwargs)])
+
+    @property
+    def backend(self) -> type[ArrayBackend]:
+        """The backend of the buffers.
+
+        Returns:
+            type[ArrayBackend], the backend of the buffers
+        """
+        return self.buffers[0].backend
 
     def heartbeat(self, EOS=False):
         frame = TSFrame.from_buffer_kwargs(
@@ -841,4 +873,20 @@ class TSFrame(Frame):
             None if not bbuf else TSFrame(buffers=bbuf),
             None if not inbuf else TSFrame(buffers=inbuf),
             None if not abuf else TSFrame(buffers=abuf),
+        )
+
+    def filleddata(self) -> "TSFrame":
+        """Combine the buffers of the frame into a single buffer,
+        analogous to itertools.chain.
+
+        Returns:
+            TSFrame, the frame with a single buffer
+        """
+        arrays = [buf.filleddata() for buf in self.buffers]
+        data = self.backend.cat(arrays, axis=-1)
+        return TSFrame.from_buffer_kwargs(
+            offset=self.offset,
+            sample_rate=self.sample_rate,
+            shape=self.shape,
+            data=data,
         )
