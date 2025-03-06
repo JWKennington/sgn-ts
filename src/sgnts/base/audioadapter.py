@@ -234,7 +234,10 @@ class Audioadapter:
         if self.pre_cat_data is None:
             avail_seg = self.slice
         else:
-            avail_seg = (self.pre_cat_data.offset, self.pre_cat_data.end_offset)
+            avail_seg = (
+                self.pre_cat_data.offset,
+                self.pre_cat_data.end_offset,
+            )
 
         assert offset_segment[1] <= avail_seg[1], (
             f"rate: {self.sample_rate} requested end segment outside of"
