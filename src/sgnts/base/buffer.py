@@ -684,6 +684,7 @@ class TSFrame(Frame):
             bufs:
                 list[SeriesBuffers], the list of buffers to set to
         """
+        self.buffers = bufs
         self.__sanity_check(bufs)
 
     @property
