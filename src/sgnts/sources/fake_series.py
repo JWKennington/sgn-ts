@@ -35,9 +35,10 @@ class FakeSeriesSource(TSSource):
         signal_type:
             str, currently supported types: (1) 'white': white noise data. (2) 'sin' or
             'sine': sine wave data. (3) 'impulse': creates an impulse data, where the
-            value is one at one sample point, and everywhere else is zero. (4) 'const_int'
-            or 'constant_int': constant int values as specified by user. (5) 'const_float'
-            or 'constant_float': constant float values as specified by user
+            value is one at one sample point, and everywhere else is zero.
+            (4) 'const_int' or 'constant_int': constant int values as specified
+            by user. (5) 'const_float' or 'constant_float': constant float values as
+            specified by user
         fsin:
             float, the frequency of the sine wave if signal_type = 'sin'
         const_int:
