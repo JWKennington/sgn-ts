@@ -93,7 +93,7 @@ source = [
 ]
 
 [tool.coverage.report]
-omit = ["_version.py", "tests/*", "examples/*", "setup.py", "*/__init__.py", "src/sgnts/transforms/multiplier.py"]
+omit = ["_version.py", "tests/*", "examples/*", "setup.py"]
 
 [tool.isort]
 profile = "black"

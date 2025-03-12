@@ -97,16 +97,20 @@ class TestLowPassFilter:
     def test_low_pass_filter_size_gt_fixsize(self):
         """Test err low pass filter args"""
         res = filtertools.low_pass_filter(
-            64, 1024,
-            size=100, fix_size=50,
+            64,
+            1024,
+            size=100,
+            fix_size=50,
         )
         assert len(res) == 50
 
     def test_low_pass_filter_size_lt_fixsize(self):
         """Test err low pass filter args"""
         res = filtertools.low_pass_filter(
-            64, 1024,
-            size=50, fix_size=100,
+            64,
+            1024,
+            size=50,
+            fix_size=100,
         )
         assert len(res) == 100
 
@@ -114,5 +118,8 @@ class TestLowPassFilter:
         """Test err low pass filter args"""
         with pytest.raises(ValueError):
             filtertools.low_pass_filter(
-                64, 1024, size=None, n_zeros=None,
+                64,
+                1024,
+                size=None,
+                n_zeros=None,
             )
