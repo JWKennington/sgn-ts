@@ -726,11 +726,6 @@ class TSResourceSource(_TSSource):
     to see if the thread should end.  The other "exception_queue" should
     be populated with exceptions from this thread.
 
-    blocking_wait_time: float = 0.1
-        - How long to wait until trying to put a new buffer into the queue.
-          This should be shorter than the typical stride of the pipeline but
-          not too short to cause performance bottlenecks
-
     start_time: Optional[int] = None
         - If None, implies should start at now and is a real-time server
 
@@ -743,7 +738,6 @@ class TSResourceSource(_TSSource):
           coming from a real-time server or it will hang.
     """
 
-    blocking_wait_time: float = 0.1
     start_time: Optional[int] = None
     duration: Optional[int] = None
     in_queue_timeout: int = 60
