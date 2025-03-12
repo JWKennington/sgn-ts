@@ -46,4 +46,6 @@ check_makefile:
       |
       pip install -r build_requirements.txt
     - pip3 install ".[dev]"
-    - make all
+    - make lint
+    - make type-check
+    - make test
