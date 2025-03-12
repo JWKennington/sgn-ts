@@ -3,6 +3,7 @@ import pytest
 from sgn.apps import Pipeline
 
 from sgnts.sources import FakeSeriesSource
+from sgnts.sinks import DumpSeriesSink
 from sgnts.sinks import NullSeriesSink
 
 
@@ -88,6 +89,13 @@ def test_invalid_fake_series():
     pipeline.insert(src, sink, link_map={sink.snks["V1"]: src.srcs["V1"]})
     with pytest.raises(ValueError):
         pipeline.run()
+
+
+def test_invalid_dump_series_pads():
+    with pytest.raises(ValueError):
+        DumpSeriesSink(
+            sink_pad_names=("H1", "L1"),
+        )
 
 
 if __name__ == "__main__":
