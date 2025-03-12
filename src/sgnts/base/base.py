@@ -760,7 +760,7 @@ class TSResourceSource(_TSSource):
             self.__end = self.duration + self.start_time
 
     @property
-    def end(self):
+    def end_time(self):
         """The ending time of the resource"""
         return self.__end
 
@@ -793,9 +793,9 @@ class TSResourceSource(_TSSource):
 
     @property
     def end_offset(self):
-        if self.end is None:
+        if self.end_time is None:
             return float("inf")
-        return Offset.fromsec(self.end - Offset.offset_ref_t0 / Time.SECONDS)
+        return Offset.fromsec(self.end_time - Offset.offset_ref_t0 / Time.SECONDS)
 
     @property
     def t0(self):

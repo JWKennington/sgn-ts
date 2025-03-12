@@ -68,7 +68,7 @@ class FakeLiveSource(TSResourceSource):
         super().__post_init__()
 
     def get_data(self):
-        for stream in self.server.stream(self.srcs, self.start_time, self.end):
+        for stream in self.server.stream(self.srcs, self.start_time, self.end_time):
             for channel, block in stream.items():
                 pad = self.srcs[channel]
 
