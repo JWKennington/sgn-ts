@@ -39,7 +39,6 @@ class TestSlice:
         with pytest.raises(ValueError):
             TSSlice(1, 0)
 
-
     def test_slice(self):
         """Test coercion to builtin slice"""
         assert TSSlice(1, 2).slice == slice(1, 2, 1)

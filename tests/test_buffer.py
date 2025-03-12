@@ -106,5 +106,3 @@ class TestTSFrame:
         assert isinstance(frame2, TSFrame)
         assert len(frame2.buffers) == 1
         assert frame2.buffers[0].shape == (20,)
-
-
