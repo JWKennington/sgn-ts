@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time as stime
 from collections import deque
 from dataclasses import dataclass
 
@@ -725,11 +726,6 @@ class TSResourceSource(_TSSource):
     to see if the thread should end.  The other "exception_queue" should
     be populated with exceptions from this thread.
 
-    blocking_wait_time: float = 0.1
-        - How long to wait until trying to put a new buffer into the queue.
-          This should be shorter than the typical stride of the pipeline but
-          not too short to cause performance bottlenecks
-
     start_time: Optional[int] = None
         - If None, implies should start at now and is a real-time server
 
@@ -742,7 +738,6 @@ class TSResourceSource(_TSSource):
           coming from a real-time server or it will hang.
     """
 
-    blocking_wait_time: float = 0.1
     start_time: Optional[int] = None
     duration: Optional[int] = None
     in_queue_timeout: int = 60
@@ -760,7 +755,7 @@ class TSResourceSource(_TSSource):
             self.__end = self.duration + self.start_time
 
     @property
-    def end(self):
+    def end_time(self):
         """The ending time of the resource"""
         return self.__end
 
@@ -793,9 +788,9 @@ class TSResourceSource(_TSSource):
 
     @property
     def end_offset(self):
-        if self.end is None:
+        if self.end_time is None:
             return float("inf")
-        return Offset.fromsec(self.end - Offset.offset_ref_t0 / Time.SECONDS)
+        return Offset.fromsec(self.end_time - Offset.offset_ref_t0 / Time.SECONDS)
 
     @property
     def t0(self):
@@ -806,7 +801,7 @@ class TSResourceSource(_TSSource):
         """Initialize the RealTimeDataSource class."""
         if not self.__is_setup:
             self.stop_thread = queue.Queue()
-            self.exception_queue = queue.Queue()
+            self.exception_event = threading.Event()
             self.in_queue = {p: queue.Queue(self.__in_queue_length) for p in self.rsrcs}
             self.out_queue = {p: deque() for p in self.rsrcs}
             self.latest_buffer_properties = {p: None for p in self.rsrcs}
@@ -838,9 +833,9 @@ class TSResourceSource(_TSSource):
                     break
                 except queue.Empty:
                     pass
-        except Exception as e:
-            print(e)
-            self.exception_queue.put(e)
+        except Exception:
+            self.exception_event.set()
+            raise
 
     def __exit__(self):
         self.stop()
@@ -858,30 +853,47 @@ class TSResourceSource(_TSSource):
             self.thread = None
             self.__is_setup = False
 
+    def _flush_queue(self, q, timeout=0):
+        assert timeout >= 1, "timeouts can not be less than one second."
+        # how long do we block before checking for resource exceptions
+        # FIXME: is should we wait for more or less time?
+        sleep = 0.01  # seconds
+        # track start time so we know when timeout is reached
+        start_time = stime.time()
+        # now wait for the elements in the queue, checking for
+        # execeptions from the resource while we wait
+        while stime.time() - start_time < timeout:
+            # check to see if any exceptions have been raise by the
+            # resource, and stop the thread and exit is so.
+            if self.exception_event.is_set():
+                self.stop()
+                raise RuntimeError("exception raised in resource thread, aborting.")
+            if q.empty():
+                stime.sleep(sleep)
+            else:
+                break
+        else:
+            self.stop()
+            raise ValueError(f"could not read from resource after {timeout} seconds")
+        # drain the queue
+        out = []
+        while not q.empty():
+            out.append(q.get(block=False))
+        return out
+
     def get_data_from_queue(self):
         """Retrieve data from the queue with a timeout."""
-        try:
-            for pad in self.out_queue:
-                # get at least one
-                if self.in_queue[pad].empty():
-                    self.out_queue[pad].append(
-                        self.in_queue[pad].get(timeout=self.in_queue_timeout)
-                    )
-                # get the rest
-                while not self.in_queue[pad].empty():
-                    self.out_queue[pad].append(self.in_queue[pad].get(0))
-                self.latest_buffer_properties[pad] = self.out_queue[pad][-1].properties
-                if self.first_buffer_properties[pad] is None:
-                    self.first_buffer_properties[pad] = self.out_queue[pad][
-                        0
-                    ].properties
-                # We should have a t0 now
-                if self.__end is None and self.duration is not None:
-                    self.__end = self.t0 + self.duration
-        except queue.Empty:
-            raise ValueError(
-                "could not read from resource after {self.in_queue_timeout} seconds"
+        for pad in self.out_queue:
+            self.out_queue[pad] += self._flush_queue(
+                self.in_queue[pad],
+                timeout=self.in_queue_timeout,
             )
+            self.latest_buffer_properties[pad] = self.out_queue[pad][-1].properties
+            if self.first_buffer_properties[pad] is None:
+                self.first_buffer_properties[pad] = self.out_queue[pad][0].properties
+            # We should have a t0 now
+            if self.__end is None and self.duration is not None:
+                self.__end = self.t0 + self.duration
 
     def set_data(self, out_frame, pad):
         """This method will set data on out_frame based on the contents of the
