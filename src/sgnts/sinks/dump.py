@@ -51,7 +51,7 @@ class DumpSeriesSink(TSSink):
             endpoint=False,
         )
         out = np.vstack([ts, data]).T
-        with open(self.fname, "a") as f:
+        with open(self.fname, "ab") as f:
             np.savetxt(f, out)
 
     def internal(self) -> None:
