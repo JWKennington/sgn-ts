@@ -162,10 +162,8 @@ class FakeSeriesSource(TSSource):
             )
         elif self.signal_type == "impulse":
             return self.create_impulse_data(offset, buf.samples, buf.sample_rate)
-        elif self.signal_type == "const_int" or self.signal_type == "constant_int":
-            return np.full(buf.shape, int(self.const_int))
-        elif self.signal_type == "const_float" or self.signal_type == "constant_float":
-            return np.full(buf.shape, float(self.const_float))
+        elif self.signal_type == "const":
+            return np.full(buf.shape, self.const_int)
         else:
             raise ValueError("Unknown signal type")
 
