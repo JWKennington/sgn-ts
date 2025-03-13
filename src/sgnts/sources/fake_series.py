@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 from sgn.base import SourcePad, get_sgn_logger
@@ -62,7 +62,7 @@ class FakeSeriesSource(TSSource):
     sample_shape: tuple[int, ...] = ()
     signal_type: str = "white"
     fsin: float = 5
-    const: [int | float] = 1
+    const: Union[int, float] = 1
     ngap: int = 0
     random_seed: Optional[int] = None
     impulse_position: int = -1
