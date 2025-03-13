@@ -1,5 +1,4 @@
-"""Tests for the fake_series module.
-"""
+"""Tests for the fake_series module."""
 
 import numpy
 
@@ -113,3 +112,73 @@ class TestFakeSeriesSource:
             ]
         )
         numpy.testing.assert_almost_equal(res.buffers[0].data, expected, decimal=5)
+
+    def test_const_int(self):
+        """Test the constant int generation"""
+        src = FakeSeriesSource(
+            name="test",
+            rate=16,
+            signal_type="const",
+            const=2,
+            t0=0,
+            duration=1,
+            source_pad_names=["S1"],
+        )
+        res = src.new(pad=src.srcs["S1"])
+        assert isinstance(res, TSFrame)
+        expected = numpy.array(
+            [
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+            ]
+        )
+        numpy.testing.assert_equal(res.buffers[0].data, expected)
+
+    def test_const_float(self):
+        """Test the constant float generation"""
+        src = FakeSeriesSource(
+            name="test",
+            rate=16,
+            signal_type="const",
+            const=3.4,
+            t0=0,
+            duration=1,
+            source_pad_names=["S1"],
+        )
+        res = src.new(pad=src.srcs["S1"])
+        assert isinstance(res, TSFrame)
+        expected = numpy.array(
+            [
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+                3.4,
+            ]
+        )
+        numpy.testing.assert_equal(res.buffers[0].data, expected)

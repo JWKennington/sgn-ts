@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 from sgn.base import SourcePad, get_sgn_logger
@@ -35,9 +35,12 @@ class FakeSeriesSource(TSSource):
         signal_type:
             str, currently supported types: (1) 'white': white noise data. (2) 'sin' or
             'sine': sine wave data. (3) 'impulse': creates an impulse data, where the
-            value is one at one sample point, and everywhere else is zero
+            value is one at one sample point, and everywhere else is zero.
+            (4) 'const': constant values as specified by user.
         fsin:
             float, the frequency of the sine wave if signal_type = 'sin'
+        const:
+            int | float, the constant int or float for output
         ngap:
             int, the frequency to generate gap buffers, will generate a gap buffer every
             ngap buffers. ngap=0: do not generate gap buffers. ngap=-1: generates gap
@@ -59,6 +62,7 @@ class FakeSeriesSource(TSSource):
     sample_shape: tuple[int, ...] = ()
     signal_type: str = "white"
     fsin: float = 5
+    const: Union[int, float] = 1
     ngap: int = 0
     random_seed: Optional[int] = None
     impulse_position: int = -1
@@ -154,6 +158,8 @@ class FakeSeriesSource(TSSource):
             )
         elif self.signal_type == "impulse":
             return self.create_impulse_data(offset, buf.samples, buf.sample_rate)
+        elif self.signal_type == "const":
+            return np.full(buf.shape, self.const)
         else:
             raise ValueError("Unknown signal type")
 
