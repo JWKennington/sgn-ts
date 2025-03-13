@@ -1,5 +1,4 @@
-"""Tests for the fake_series module.
-"""
+"""Tests for the fake_series module."""
 
 import numpy
 

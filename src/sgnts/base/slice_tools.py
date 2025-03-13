@@ -1,5 +1,4 @@
-"""Utilities for working with intervals of time
-"""
+"""Utilities for working with intervals of time"""
 
 from __future__ import annotations
 

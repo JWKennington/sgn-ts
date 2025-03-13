@@ -9,13 +9,7 @@ from dataclasses import dataclass
 from typing import Optional, Sequence, Union
 
 import numpy
-from sgn.base import (
-    SinkElement,
-    SinkPad,
-    SourceElement,
-    SourcePad,
-    TransformElement,
-)
+from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
 from sgn.sources import SignalEOS
 
 from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend

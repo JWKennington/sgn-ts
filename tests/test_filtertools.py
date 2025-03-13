@@ -1,5 +1,4 @@
-"""Tests for the filtertools module.
-"""
+"""Tests for the filtertools module."""
 
 import numpy.testing
 import pytest
