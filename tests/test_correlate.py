@@ -5,6 +5,7 @@ import pytest
 import scipy.signal.windows
 
 from sgn import CollectSink, IterSource, Pipeline
+from sgn import Frame
 from sgnts import filtertools
 from sgnts.base import (
     AdapterConfig,
@@ -36,6 +37,8 @@ class IsGapCollectSink(CollectSink):
 
         Returns:
         """
+        self.inputs: dict[str, Frame]
+
         for pad_name, frame in self.inputs.items():
 
             if not frame.is_gap:
