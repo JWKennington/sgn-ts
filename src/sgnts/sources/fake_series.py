@@ -66,8 +66,7 @@ class FakeSeriesSource(TSSource):
     sample_shape: tuple[int, ...] = ()
     signal_type: str = "white"
     fsin: float = 5
-    const_int: int = 1
-    const_float: float = 1.0
+    constt: [int | float] = 1
     ngap: int = 0
     random_seed: Optional[int] = None
     impulse_position: int = -1
