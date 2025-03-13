@@ -10,7 +10,7 @@ from sgnts.sinks import NullSeriesSink
 def test_tsgraph():
     from sgnts.transforms import Multiplier
 
-    """Test the tsgraph function
+    r"""Test the tsgraph function
 
      ----------   ----------     ----------
     |src1      | |src2      |...|srcN      |
