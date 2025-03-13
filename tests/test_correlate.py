@@ -1,5 +1,4 @@
-"""Unit test for correlate transforms
-"""
+"""Unit test for correlate transforms"""
 
 import numpy
 import pytest

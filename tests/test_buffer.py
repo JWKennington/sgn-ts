@@ -1,5 +1,4 @@
-"""Unit tests for the buffer module
-"""
+"""Unit tests for the buffer module"""
 
 from sgnts.base import NumpyBackend, Offset, SeriesBuffer, TSFrame
 
