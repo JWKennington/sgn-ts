@@ -118,8 +118,8 @@ class TestFakeSeriesSource:
         src = FakeSeriesSource(
             name="test",
             rate=16,
-            signal_type="const_int",
-            const_int=2,
+            signal_type="const",
+            const=2,
             t0=0,
             duration=1,
             source_pad_names=["S1"],
@@ -153,8 +153,8 @@ class TestFakeSeriesSource:
         src = FakeSeriesSource(
             name="test",
             rate=16,
-            signal_type="const_float",
-            const_float=3.4,
+            signal_type="const",
+            const=3.4,
             t0=0,
             duration=1,
             source_pad_names=["S1"],

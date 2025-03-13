@@ -36,15 +36,11 @@ class FakeSeriesSource(TSSource):
             str, currently supported types: (1) 'white': white noise data. (2) 'sin' or
             'sine': sine wave data. (3) 'impulse': creates an impulse data, where the
             value is one at one sample point, and everywhere else is zero.
-            (4) 'const_int' or 'constant_int': constant int values as specified
-            by user. (5) 'const_float' or 'constant_float': constant float values as
-            specified by user
+            (4) 'const': constant values as specified by user.
         fsin:
             float, the frequency of the sine wave if signal_type = 'sin'
-        const_int:
-            int, the constant int for output
-        cont_float:
-            float, the constant float for output
+        const:
+            int | float, the constant int or float for output
         ngap:
             int, the frequency to generate gap buffers, will generate a gap buffer every
             ngap buffers. ngap=0: do not generate gap buffers. ngap=-1: generates gap
@@ -66,7 +62,7 @@ class FakeSeriesSource(TSSource):
     sample_shape: tuple[int, ...] = ()
     signal_type: str = "white"
     fsin: float = 5
-    constt: [int | float] = 1
+    const: [int | float] = 1
     ngap: int = 0
     random_seed: Optional[int] = None
     impulse_position: int = -1
@@ -163,7 +159,7 @@ class FakeSeriesSource(TSSource):
         elif self.signal_type == "impulse":
             return self.create_impulse_data(offset, buf.samples, buf.sample_rate)
         elif self.signal_type == "const":
-            return np.full(buf.shape, self.const_int)
+            return np.full(buf.shape, self.const)
         else:
             raise ValueError("Unknown signal type")
 
