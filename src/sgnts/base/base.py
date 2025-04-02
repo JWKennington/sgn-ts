@@ -800,7 +800,7 @@ class TSResourceSource(_TSSource):
     def setup(self):
         """Initialize the RealTimeDataSource class."""
         if not self.__is_setup:
-            self.stop_thread = queue.Queue()
+            self.stop_event = threading.Event()
             self.exception_event = threading.Event()
             self.in_queue = {p: queue.Queue(self.__in_queue_length) for p in self.rsrcs}
             self.out_queue = {p: deque() for p in self.rsrcs}
@@ -828,11 +828,8 @@ class TSResourceSource(_TSSource):
         try:
             for pad, buf in self.get_data():
                 self.in_queue[pad].put(buf)
-                try:
-                    self.stop_thread.get(0)
+                if self.stop_event.is_set():
                     break
-                except queue.Empty:
-                    pass
         except Exception:
             self.exception_event.set()
             raise
@@ -847,7 +844,7 @@ class TSResourceSource(_TSSource):
             self.thread.start()
 
     def stop(self):
-        self.stop_thread.put(True)
+        self.stop_event.set()
         if self.thread and self.thread.is_alive():
             self.thread.join()
             self.thread = None
