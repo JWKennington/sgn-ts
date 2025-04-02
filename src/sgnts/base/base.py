@@ -693,6 +693,7 @@ class TSSource(_TSSource):
 @dataclass
 class TSResourceSource(_TSSource):
     """Source class that is entirely data driven by an external resource.
+
     The resource will gather data in a separate thread.  The user
     must implement the get_data() method and probably doesn't
     need to implement any other methods.  The get_data()
@@ -705,9 +706,8 @@ class TSResourceSource(_TSSource):
     with additional metadata e.g.,  "time_ns", "sample_rate", and "data".
     An implementation of get_data() might look like this:
 
-
     def get_data(self):
-        for stream in arrakis.stream(tuple(self.srcs)):
+        for stream in server.stream(tuple(self.srcs)):
             for channel, block in stream.items():
                 pad = self.srcs[channel]
                 buf = SeriesBuffer(
@@ -715,27 +715,20 @@ class TSResourceSource(_TSSource):
                     data=block.data,
                     sample_rate=block.channel.sample_rate,
                 )
-                self.in_queue[pad].put(buf)
-            try:
-                self.stop_thread.get(0)
-                break
-            except queue.Empty:
-                pass
+                yield pad, buf
 
-    There are also two additional queues. One "stop_thread" should be checked
-    to see if the thread should end.  The other "exception_queue" should
-    be populated with exceptions from this thread.
+    Args:
+        start_time: Optional[int] = None
+            - If None, implies should start at now and is a real-time
+              server
+        duration: Optional[int] = None
+            - If None, go on forever
+        in_queue_timeout: int = 60
+            - How long to wait for a buffer from the resource before
+              timing out with a fatal error. This needs to be longer
+              than the duration of buffers coming from a real-time
+              server or it will hang.
 
-    start_time: Optional[int] = None
-        - If None, implies should start at now and is a real-time server
-
-    duration: Optional[int] = None
-        - If None, go on forever
-
-    in_queue_timeout: int = 60
-        - How long to wait for a buffer from the resource before timing out with
-          a fatal error. This needs to be longer than the duration of buffers
-          coming from a real-time server or it will hang.
     """
 
     start_time: Optional[int] = None
