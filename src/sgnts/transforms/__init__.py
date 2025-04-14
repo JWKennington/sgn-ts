@@ -5,7 +5,6 @@ from sgnts.transforms.converter import Converter
 from sgnts.transforms.correlate import Correlate
 from sgnts.transforms.gate import Gate
 from sgnts.transforms.matmul import Matmul
-from sgnts.transforms.multiplier import Multiplier
 from sgnts.transforms.resampler import Resampler
 from sgnts.transforms.sumindex import SumIndex
 from sgnts.transforms.threshold import Threshold

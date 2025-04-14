@@ -634,10 +634,10 @@ class TSSource(_TSSource):
         super().__post_init__()
 
         if self.t0 is None:
-            raise RuntimeError("You must specifiy a t0")
+            raise ValueError("You must specifiy a t0")
 
         if self.end is not None and self.duration is not None:
-            raise RuntimeError("may specify either end or duration, not both")
+            raise ValueError("may specify either end or duration, not both")
 
         if self.duration is not None:
             self.end = self.t0 + self.duration
