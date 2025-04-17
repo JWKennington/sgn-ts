@@ -72,8 +72,8 @@ class FakeSeriesSource(TSSource):
     def __post_init__(self):
         if self.t0 is None:
             if self.real_time:
-		# FIXME make this aligned to a general buffer (which depends on
-		# rate) integers will always be aligned.
+                # FIXME make this aligned to a general buffer (which depends on
+                # rate) integers will always be aligned.
                 self.t0 = int(gpsnow())
             else:
                 self.t0 = 0
@@ -174,7 +174,10 @@ class FakeSeriesSource(TSSource):
             sleep = self.current_end / Time.SECONDS - gpsnow()
             if sleep < 0:
                 if sleep < -1:
-                    LOGGER.warning("Warning: FakeSeriesSource falling behind real time (%.2f s)" % sleep)
+                    LOGGER.warning(
+                        "Warning: FakeSeriesSource falling behind real time (%.2f s)",
+                        sleep,
+                    )
             else:
                 time.sleep(sleep)
 
