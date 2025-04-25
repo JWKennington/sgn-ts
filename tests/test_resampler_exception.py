@@ -1,5 +1,4 @@
 import pytest
-import sys
 from unittest.mock import patch, MagicMock
 
 # This test file is specifically designed to test the three lines in resampler.py
