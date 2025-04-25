@@ -2,9 +2,16 @@ from dataclasses import dataclass
 from functools import wraps
 
 import numpy as np
-import torch
 
 from sgnts.base import SeriesBuffer, TSFrame, TSTransform
+
+# Try to import torch, but don't fail if it's not available
+try:
+    import torch
+
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
 
 
 @dataclass
@@ -37,6 +44,12 @@ class Converter(TSTransform):
             if self.device != "cpu":
                 raise ValueError("Converting to numpy only supports device as cpu")
         elif self.backend == "torch":
+            if not TORCH_AVAILABLE:
+                raise ImportError(
+                    "PyTorch is not installed. Install it with 'pip install "
+                    "sgn-ts[torch]'"
+                )
+
             if isinstance(self.dtype, str):
                 if self.dtype == "float64":
                     self.dtype = torch.float64
@@ -81,10 +94,16 @@ class Converter(TSTransform):
                     else:
                         raise ValueError("Unsupported data type")
                 else:
+                    if not TORCH_AVAILABLE:
+                        raise ImportError(
+                            "PyTorch is not installed. Install it with 'pip "
+                            "install sgn-ts[torch]'"
+                        )
+
                     if isinstance(data, np.ndarray):
                         # numpy to torch
                         out = torch.from_numpy(data).to(self.dtype).to(self.device)
-                    elif isinstance(data, torch.Tensor):
+                    elif hasattr(torch, "Tensor") and isinstance(data, torch.Tensor):
                         # torch to torch
                         out = data.to(self.dtype).to(self.device)
                     else:

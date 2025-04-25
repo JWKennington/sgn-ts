@@ -17,6 +17,20 @@ To install SGN-TS, simply run:
 pip install sgn-ts
 ```
 
+### Optional Dependencies
+
+SGN-TS supports PyTorch as an optional dependency for improved performance in certain operations. To install SGN-TS with PyTorch support:
+
+```bash
+pip install sgn-ts[torch]
+```
+
+When PyTorch is not installed, SGN-TS will fall back to NumPy implementations for all operations. The following components benefit from PyTorch when available:
+
+- `TorchBackend` array operations
+- `Converter` transform for converting between NumPy and PyTorch arrays
+- `Resampler` transform for efficient resampling operations
+
 More SGN-TS-specific documentation coming soon.
 
 ## Developer's guide
