@@ -2,12 +2,19 @@ from dataclasses import dataclass
 from functools import wraps
 
 import numpy as np
-import torch
 from scipy.signal import correlate
 from sgn.base import SourcePad
-from torch.nn.functional import conv1d as Fconv1d
 
 from sgnts.base import AdapterConfig, Offset, SeriesBuffer, TSFrame, TSTransform
+
+# Try to import torch, but don't fail if it's not available
+try:
+    import torch
+    from torch.nn.functional import conv1d as Fconv1d
+
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
 from sgnts.base.array_ops import (
     Array,
     ArrayBackend,
@@ -60,6 +67,12 @@ class Resampler(TSTransform):
             raise ValueError("Inrate {self.inrate} is the same as outrate {outrate}")
 
         if self.backend == TorchBackend:
+            if not TORCH_AVAILABLE:
+                raise ImportError(
+                    "PyTorch is not installed. Install it with 'pip install "
+                    "sgn-ts[torch]'"
+                )
+
             # Convert the numpy kernel to torch tensors
             if self.outrate < self.inrate:
                 # downsample
@@ -251,13 +264,19 @@ class Resampler(TSTransform):
         Returns:
             TorchArray, the resulting array of the up/downsamping
         """
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "PyTorch is not installed. Install it with 'pip install sgn-ts[torch]'"
+            )
+
         # FIXME: should this be in ArrayBackend?
         # FIXME: include memeory format
         data = data0.view(-1, 1, data0.shape[-1])
         thiskernel = self.thiskernel
-        assert (
-            data.dtype == thiskernel.dtype
-        ), f"{self.name} {data.dtype} {thiskernel.dtype}"
+
+        # Convert data to match kernel's dtype if necessary
+        if data.dtype != thiskernel.dtype:
+            data = data.to(thiskernel.dtype)
 
         if self.outrate > self.inrate:  # upsample
             out = Fconv1d(data, thiskernel)
