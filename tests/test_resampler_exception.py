@@ -1,6 +1,5 @@
 import pytest
 import sys
-import importlib
 from unittest.mock import patch, MagicMock
 
 # This test file is specifically designed to test the three lines in resampler.py
@@ -38,16 +37,14 @@ def test_direct_coverage():
     """
     # First, we need to work with the real code, not abstractions
     # Import required modules for the test
-    import importlib
     import sys
-    from unittest.mock import patch
     import torch
 
     # Need to force reimport of the module to make sure TORCH_AVAILABLE is correct
     if "sgnts.transforms.resampler" in sys.modules:
         del sys.modules["sgnts.transforms.resampler"]
 
-    from sgnts.transforms.resampler import Resampler, TORCH_AVAILABLE
+    from sgnts.transforms.resampler import TORCH_AVAILABLE
     from sgnts.base.array_ops import TorchBackend
     import sgnts.transforms.resampler as resampler_module
 
@@ -58,14 +55,16 @@ def test_direct_coverage():
     resampler_module.TORCH_AVAILABLE = False
 
     try:
-        # Try to create a Resampler with TorchBackend which should trigger the ImportError
+        # Try to create a Resampler with TorchBackend which should trigger the
+        # ImportError
         with pytest.raises(ImportError) as excinfo:
             # This will execute the exact code on line 71
             backend = TorchBackend
             if backend == TorchBackend:
                 if not resampler_module.TORCH_AVAILABLE:
                     raise ImportError(
-                        "PyTorch is not installed. Install it with 'pip install sgn-ts[torch]'"
+                        "PyTorch is not installed. Install it with 'pip install "
+                        "sgn-ts[torch]'"
                     )
 
         # Verify the expected error message
@@ -85,7 +84,8 @@ def test_direct_coverage():
             # This is the exact code from line 268-270
             if not resampler_module.TORCH_AVAILABLE:
                 raise ImportError(
-                    "PyTorch is not installed. Install it with 'pip install sgn-ts[torch]'"
+                    "PyTorch is not installed. Install it with 'pip install"
+                    "sgn-ts[torch]'"
                 )
 
         # Verify the expected error message
@@ -117,7 +117,8 @@ def test_direct_coverage():
 
 
 def test_real_resampler_init():
-    """Test the actual Resampler class initialization with TorchBackend when torch is not available"""
+    """Test the actual Resampler class initialization with TorchBackend when
+    torch is not available"""
     # Use the real Resampler class, but patch TORCH_AVAILABLE to False
     if "sgnts.transforms.resampler" in sys.modules:
         del sys.modules["sgnts.transforms.resampler"]
@@ -134,7 +135,7 @@ def test_real_resampler_init():
 
         # Try to create a Resampler with TorchBackend which should trigger line 71
         with pytest.raises(ImportError) as excinfo:
-            resampler = Resampler(
+            Resampler(
                 inrate=inrate,
                 outrate=outrate,
                 backend=TorchBackend,
@@ -148,12 +149,12 @@ def test_real_resampler_init():
 
 def test_real_resample_torch():
     """Test the actual resample_torch method when torch is not available (line 268)"""
-    # Use the real Resampler class, but patch TORCH_AVAILABLE to False only for this specific test
+    # Use the real Resampler class, but patch TORCH_AVAILABLE to False only for
+    # this specific test
     with patch("sgnts.transforms.resampler.TORCH_AVAILABLE", False):
         # Create a resampler that works with numpy backend
         from sgnts.transforms.resampler import Resampler
         from sgnts.base.offset import Offset
-        import numpy as np
 
         # Get valid sample rates from the allowed rates
         allowed_rates = list(Offset.ALLOWED_RATES)
@@ -227,7 +228,7 @@ def test_data_type_conversion():
         mock_conv.return_value = torch.zeros(3, 1, 5)
 
         # Call resample_torch - this should convert the data dtype at line 279
-        result = resampler.resample_torch(data, output_shape)
+        resampler.resample_torch(data, output_shape)
 
         # Check that Fconv1d was called with data that has the same dtype as the kernel
         # This verifies line 279 executed
