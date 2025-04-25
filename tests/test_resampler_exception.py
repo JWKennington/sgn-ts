@@ -120,9 +120,6 @@ def test_real_resampler_init():
     """Test the actual Resampler class initialization with TorchBackend when
     torch is not available"""
     # Use the real Resampler class, but patch TORCH_AVAILABLE to False
-    if "sgnts.transforms.resampler" in sys.modules:
-        del sys.modules["sgnts.transforms.resampler"]
-
     with patch("sgnts.transforms.resampler.TORCH_AVAILABLE", False):
         from sgnts.transforms.resampler import Resampler
         from sgnts.base.array_ops import TorchBackend
