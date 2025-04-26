@@ -107,23 +107,6 @@ When implementing a custom backend, you must:
 3. Ensure that your methods follow the same API contract (parameters and return types)
 4. Make sure your array types are compatible with the rest of the SGN-TS library
 
-## Switching Between Backends
-
-SGN-TS components that use array operations typically accept a backend parameter, allowing you to specify which backend to use:
-
-```python
-# Example of switching backends (not tested by mkdocs)
-"""
-from sgnts.base.numpy_backend import NumpyBackend
-from sgnts.transforms.adder import Adder
-
-# Create an Adder component using the NumPy backend
-adder = Adder(backend=NumpyBackend)
-
-# Process data using the specified backend
-result = adder.process(data)
-"""
-```
 
 ### Global Backend Configuration
 
