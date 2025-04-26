@@ -25,17 +25,17 @@ The `FakeSeriesSource` generates synthetic time-series data in fixed-size buffer
 # Basic usage of FakeSeriesSource (not tested by mkdocs)
 """
 from sgnts.sources import FakeSeriesSource
-from sgnts.base import TSFrame
 
 # Create a white noise source at 2048 Hz
 source = FakeSeriesSource(
-    rate=2048,  # Sample rate
-    sample_shape=(),  # Shape of each sample (empty tuple for 1D data)
-    signal_type="white",  # Type of signal to generate
+    rate=2048,           # Sample rate
+    sample_shape=(),     # Shape of each sample (empty tuple for 1D data)
+    signal_type="white", # Type of signal to generate
+    source_pad_names=("pad",),
 )
 
 # Get a frame from the source
-frame = source.pull()
+frame = source.new(source.srcs["pad"])
 
 # Access the data from the frame
 for buf in frame:
