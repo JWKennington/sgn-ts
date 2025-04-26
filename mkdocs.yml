@@ -6,6 +6,30 @@ nav:
     - Introduction: user-guide/index.md
     - Buffers: user-guide/buffers.md
     - Frames: user-guide/frames.md
+    - Time Constants: user-guide/time_tutorial.md
+    - Offsets: user-guide/offset_tutorial.md
+    - Time Slices: user-guide/slice_tools_tutorial.md
+    - Array Backends: user-guide/array_backend_tutorial.md
+    - AudioAdapter: user-guide/audioadapter_tutorial.md
+    - Core Components: user-guide/base_tutorial.md
+    - Building Pipelines: user-guide/pipeline_tutorial.md
+    - Sources:
+      - FakeSeriesSource: user-guide/fake_series_source_tutorial.md
+      - SegmentSource: user-guide/segment_source_tutorial.md
+    - Transforms:
+      - Adder: user-guide/adder_tutorial.md
+      - Align: user-guide/align_tutorial.md
+      - Amplify: user-guide/amplify_tutorial.md
+      - Converter: user-guide/converter_tutorial.md
+      - Correlate: user-guide/correlate_tutorial.md
+      - Gate: user-guide/gate_tutorial.md
+      - Matmul: user-guide/matmul_tutorial.md
+      - Resampler: user-guide/resampler_tutorial.md
+      - SumIndex: user-guide/sumindex_tutorial.md
+      - Threshold: user-guide/threshold_tutorial.md
+    - Sinks:
+      - DumpSeriesSink: user-guide/dump_series_sink_tutorial.md
+      - NullSeriesSink: user-guide/null_series_sink_tutorial.md
   - Developer Guide:
     - Contributing: dev-guide/contributing.md
   - API Reference:
