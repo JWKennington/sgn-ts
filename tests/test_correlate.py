@@ -542,7 +542,7 @@ class TestAdaptiveCorrelate:
         with pytest.raises(ValueError):
             pipeline.run()
 
-    def test_pipeline_sine(self):
+    def test_pipeline_sine(self, tmp_path):
         """Test the AdaptiveCorrelate element in a sine pipeline at frequency
         f_src, with a two different low pass filters (f1, f2) applied
         in sequence (in time) using an adaptive filter, such that f1> f_src > f2.
@@ -550,6 +550,7 @@ class TestAdaptiveCorrelate:
         a sine wave at f_src, with the amplitude of the sine wave
         decreasing as the filter adapts to f2.
         """
+        out_file = str(tmp_path / "out.txt")
 
         # Parameters of test
         t0 = 0.0
@@ -656,13 +657,10 @@ class TestAdaptiveCorrelate:
             extract_data=False,
         )
 
-        def fname(buf: SeriesBuffer):
-            return f"test-{buf.offset}-{buf.duration}-{buf.is_gap}.txt"
-
         dsink = DumpSeriesSink(
             name="DumpSink",
             sink_pad_names=["C1"],
-            fname="out.txt",
+            fname=out_file,
             verbose=True,
         )
 
@@ -681,7 +679,7 @@ class TestAdaptiveCorrelate:
         )
         pipeline.run()
 
-        res = numpy.loadtxt("out.txt")
+        res = numpy.loadtxt(out_file)
         _, data = res[:, 0], res[:, 1]
 
         # Assert that max value in beginning is near 1
@@ -700,10 +698,11 @@ class TestAdaptiveCorrelate:
         # fig = express.line(df, x="time", y="data")
         # fig.show()
 
-    def test_pipeline_sine_no_overlap(self):
+    def test_pipeline_sine_no_overlap(self, tmp_path):
         """Test the similar case as test_pipeline_sine, but with no overlap
         between the new filter and the data (so there should be no change in behavior)
         """
+        out_file = str(tmp_path / "out.txt")
 
         # Parameters of test
         t0 = 0.0
@@ -807,13 +806,10 @@ class TestAdaptiveCorrelate:
             extract_data=False,
         )
 
-        def fname(buf: SeriesBuffer):
-            return f"test-{buf.offset}-{buf.duration}-{buf.is_gap}.txt"
-
         dsink = DumpSeriesSink(
             name="DumpSink",
             sink_pad_names=["C1"],
-            fname="out.txt",
+            fname=out_file,
             verbose=True,
         )
 
@@ -832,7 +828,7 @@ class TestAdaptiveCorrelate:
         )
         pipeline.run()
 
-        res = numpy.loadtxt("out.txt")
+        res = numpy.loadtxt(out_file)
         _, data = res[:, 0], res[:, 1]
 
         # Assert that max value in beginning is near 1

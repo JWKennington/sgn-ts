@@ -46,7 +46,7 @@ def test_valid_resampler():
     )
 
 
-def test_torch_resampler():
+def test_torch_resampler(tmp_path):
 
     pipeline = Pipeline()
 
@@ -128,7 +128,7 @@ def test_torch_resampler():
         DumpSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
-            fname="out.txt",
+            fname=str(tmp_path / "out.txt"),
             verbose=True,
         ),
         link_map={
@@ -143,7 +143,7 @@ def test_torch_resampler():
     pipeline.run()
 
 
-def test_resampler():
+def test_resampler(tmp_path):
 
     pipeline = Pipeline()
 
@@ -185,13 +185,13 @@ def test_resampler():
         DumpSeriesSink(
             name="snk1",
             sink_pad_names=("H1",),
-            fname="out.txt",
+            fname=str(tmp_path / "out.txt"),
             verbose=True,
         ),
         DumpSeriesSink(
             name="snk2",
             sink_pad_names=("H1",),
-            fname="in.txt",
+            fname=str(tmp_path / "in.txt"),
             verbose=True,
         ),
         link_map={
@@ -380,7 +380,3 @@ def test_module_import_without_torch():
         # Restore the original sys.modules
         sys.modules.clear()
         sys.modules.update(backup_modules)
-
-
-if __name__ == "__main__":
-    test_resampler()
