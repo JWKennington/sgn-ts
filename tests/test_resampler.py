@@ -12,6 +12,8 @@ from sgnts.base import AdapterConfig, TSTransform
 
 
 def test_valid_resampler():
+    pytest.importorskip("torch")
+
     with pytest.raises(ValueError):
         Resampler(
             name="trans1",
@@ -47,6 +49,7 @@ def test_valid_resampler():
 
 
 def test_torch_resampler(tmp_path):
+    pytest.importorskip("torch")
 
     pipeline = Pipeline()
 
@@ -235,7 +238,7 @@ def test_torch_not_available_resample():
     Test that ImportError is raised when calling resample_torch when torch is
     not available (line 268)
     """
-    import torch
+    torch = pytest.importorskip("torch")
 
     # Create a simpler class for testing to avoid kernel size issues
     class MockResampler:

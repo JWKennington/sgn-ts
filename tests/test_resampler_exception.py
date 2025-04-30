@@ -37,7 +37,8 @@ def test_direct_coverage():
     # First, we need to work with the real code, not abstractions
     # Import required modules for the test
     import sys
-    import torch
+
+    torch = pytest.importorskip("torch")
 
     # Need to force reimport of the module to make sure TORCH_AVAILABLE is correct
     if "sgnts.transforms.resampler" in sys.modules:
