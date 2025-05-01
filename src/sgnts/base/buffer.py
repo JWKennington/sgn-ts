@@ -15,7 +15,7 @@ from sgnts.base.array_ops import (
     TorchBackend,
 )
 from sgnts.base.offset import Offset
-from sgnts.base.slice_tools import TSSlice, TSSlices
+from sgnts.base.slice_tools import TIME_MAX, TSSlice, TSSlices
 from sgnts.base.time import Time
 
 
@@ -32,8 +32,8 @@ class EventBuffer:
             Any, Data of the event
     """
 
-    ts: Union[int, None] = None
-    te: Union[int, None] = None
+    ts: int = 0
+    te: int = int(TIME_MAX)
     data: Any = None
 
     def __post_init__(self):
