@@ -42,7 +42,6 @@ def test_multi_sink(capsys):
             end=end,
             signal_type="impulse",
             impulse_position=1,
-            verbose=True,
         ),
         FakeSeriesSource(
             name="src3",
