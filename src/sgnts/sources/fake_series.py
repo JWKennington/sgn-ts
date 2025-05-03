@@ -130,6 +130,7 @@ class FakeSeriesSource(TSSource):
             Array, the fake data array
         """
         offset = buf.offset
+        end_offset = buf.end_offset
         ngap = self.ngap
         cnt = self.cnt[pad]
         metadata: dict[str, int] = {}
@@ -172,22 +173,47 @@ class FakeSeriesSource(TSSource):
             if isinstance(self.const, collections.abc.Iterable):
                 data = np.array([])
                 buffer_t0 = Offset.tosec(offset)
-                transition_times = np.linspace(self.t0, self.end, len(self.const) + 1)
-                for i in range(len(self.const)):
+                buffer_end = Offset.tosec(end_offset)
+                if self.t0 is not None:
+                    t0 = self.t0
+                else:
+                    t0 = 0.0
+                if self.end is not None:
+                    piecewise_cycle_dur = self.end - t0
+                else:
+                    piecewise_cycle_dur = 100.0
+                const_dur = piecewise_cycle_dur / len(self.const)
+                first_transition = buffer_t0 - (buffer_t0 - t0) % const_dur
+                last_transition = buffer_end + const_dur - (buffer_end - t0) % const_dur
+                transition_times = np.arange(
+                    first_transition, last_transition + 1, const_dur
+                )
+                for i in range(len(transition_times)):
                     t_now = buffer_t0 + len(data) / buf.sample_rate
                     if t_now >= transition_times[i] and t_now < transition_times[i + 1]:
-                        samples_til_next_freq = int(
+                        samples_til_next_transition = int(
                             (transition_times[i + 1] - t_now) * buf.sample_rate
                         )
+                        current_const = self.const[
+                            int(
+                                (
+                                    (transition_times[i] + transition_times[i + 1]) / 2
+                                    - t0
+                                )
+                                / const_dur
+                            )
+                            % len(self.const)
+                        ]
                         remaining_buf_samples = buf.samples - len(data)
-                        if samples_til_next_freq >= remaining_buf_samples:
+                        if samples_til_next_transition >= remaining_buf_samples:
                             data = np.append(
-                                data, np.tile(self.const[i], remaining_buf_samples)
+                                data, np.tile(current_const, remaining_buf_samples)
                             )
                             break
                         else:
                             data = np.append(
-                                data, np.tile(self.const[i], samples_til_next_freq)
+                                data,
+                                np.tile(current_const, samples_til_next_transition),
                             )
                 if len(data) < buf.samples:
                     data = np.append(
