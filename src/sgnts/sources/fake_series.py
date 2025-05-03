@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections
 import time
 from dataclasses import dataclass
 from typing import Any, Optional, Union
@@ -49,7 +50,10 @@ class FakeSeriesSource(TSSource):
                 int, impulse position for 'impulse' signals. If -1,
                 then the impulse position will be random.
             const:
-                int | float, constant value for 'const' signals.
+                int | float | tuple[float, ...], the constant int or
+                float for output. If a tuple is given, the outputs
+                will form a piecewise function, with an equal amount
+                of time spent on each value in the tuple.
 
             These parameters may be specified directly as keyword
             arguments during class init, in which case they will be
@@ -76,7 +80,7 @@ class FakeSeriesSource(TSSource):
     sample_shape: tuple[int, ...] = ()
     fsin: float = 5
     impulse_position: int = -1
-    const: Union[int, float] = 1
+    const: Union[int, float, tuple[float, ...]] = 1
     ngap: int = 0
     random_seed: Optional[int] = None
     real_time: bool = False
@@ -165,7 +169,32 @@ class FakeSeriesSource(TSSource):
                 impulse_position, buf.sample_rate
             )
         elif signal_type == "const":
-            data = np.full(buf.shape, signal.get("const", self.const))
+            if isinstance(self.const, collections.abc.Iterable):
+                data = np.array([])
+                buffer_t0 = Offset.tosec(offset)
+                transition_times = np.linspace(self.t0, self.end, len(self.const) + 1)
+                for i in range(len(self.const)):
+                    t_now = buffer_t0 + len(data) / buf.sample_rate
+                    if t_now >= transition_times[i] and t_now < transition_times[i + 1]:
+                        samples_til_next_freq = int(
+                            (transition_times[i + 1] - t_now) * buf.sample_rate
+                        )
+                        remaining_buf_samples = buf.samples - len(data)
+                        if samples_til_next_freq >= remaining_buf_samples:
+                            data = np.append(
+                                data, np.tile(self.const[i], remaining_buf_samples)
+                            )
+                            break
+                        else:
+                            data = np.append(
+                                data, np.tile(self.const[i], samples_til_next_freq)
+                            )
+                if len(data) < buf.samples:
+                    data = np.append(
+                        data, np.tile(self.const[-1], buf.samples - len(data))
+                    )
+            else:
+                return np.full(buf.shape, self.const)
         else:
             msg = f"Unknown signal type '{signal_type}'."
             raise ValueError(msg)
