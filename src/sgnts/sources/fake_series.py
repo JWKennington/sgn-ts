@@ -220,7 +220,7 @@ class FakeSeriesSource(TSSource):
                         data, np.tile(self.const[-1], buf.samples - len(data))
                     )
             else:
-                return np.full(buf.shape, self.const)
+                data = np.full(buf.shape, self.const)
         else:
             msg = f"Unknown signal type '{signal_type}'."
             raise ValueError(msg)
