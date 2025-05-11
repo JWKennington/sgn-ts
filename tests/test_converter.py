@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import pytest
-import torch
 
 from sgn.apps import Pipeline
 from sgn.sinks import NullSink
@@ -8,6 +7,8 @@ from sgn.sinks import NullSink
 from sgnts.base import TSTransform
 from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import Converter
+
+torch = pytest.importorskip("torch")
 
 
 def test_invalid_converter():
