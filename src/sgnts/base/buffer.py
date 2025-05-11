@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional, Union
 
 import numpy
-from sgn.base import Frame
+from sgn.frames import DataSpec, Frame
 
 from sgnts.base.array_ops import (
     Array,
@@ -138,6 +138,21 @@ class EventFrame(Frame):
         return out
 
 
+@dataclass(frozen=True)
+class SeriesDataSpec(DataSpec):
+    """Data specification for timeseries.
+
+    Args:
+        sample_rate:
+            int, the sample rate associated with the data.
+        data_type:
+            Any, the data type associated with the data.
+    """
+
+    sample_rate: int
+    data_type: Any
+
+
 @dataclass
 class SeriesBuffer:
     """Timeseries buffer with associated metadata.
@@ -196,6 +211,11 @@ class SeriesBuffer:
 
         for t in self.shape:
             assert isinstance(t, int)
+
+        # set the data specification
+        self.spec = SeriesDataSpec(
+            sample_rate=self.sample_rate, data_type=self.backend.DTYPE
+        )
 
     @staticmethod
     def fromoffsetslice(
@@ -632,6 +652,7 @@ class TSFrame(Frame):
         super().__post_init__()
         assert len(self.buffers) > 0
         self.__sanity_check(self.buffers)
+        self.spec = self.buffers[0].spec
 
     def __getitem__(self, item):
         return self.buffers[item]
@@ -675,7 +696,11 @@ class TSFrame(Frame):
             len(backends) == 1
         ), f"All buffers must have the same backend, got {backends}"
 
-        # TODO check that all sample rates are the same
+        # check that data specifications are all the same
+        data_specs = {buf.spec for buf in bufs}
+        assert (
+            len(data_specs) == 1
+        ), f"All buffers must have the same data specifications, got {data_specs}"
 
     def set_buffers(self, bufs: list[SeriesBuffer]) -> None:
         """Set the buffers attribute to the bufs provided.
