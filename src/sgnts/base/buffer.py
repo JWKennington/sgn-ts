@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Optional, Union
+from functools import total_ordering
+from typing import Any, Optional, Protocol, Union, runtime_checkable
 
 import numpy
 from sgn.frames import DataSpec, Frame
@@ -15,98 +17,190 @@ from sgnts.base.array_ops import (
     TorchBackend,
 )
 from sgnts.base.offset import Offset
-from sgnts.base.slice_tools import TIME_MAX, TSSlice, TSSlices
+from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.base.time import Time
 
 
+@runtime_checkable
+class TimeLike(Protocol):
+    offset: int
+
+    @property
+    def time(self) -> int:
+        """The reference time, in integer nanoseconds.
+
+        Returns:
+            int, buffer time
+        """
+        return Offset.offset_ref_t0 + Offset.tons(self.offset)
+
+    @property
+    def t0(self) -> int:
+        """The start (reference) time, in integer nanoseconds.
+
+        Returns:
+            int, buffer start time
+        """
+        return self.time
+
+    @property
+    def start(self) -> int:
+        """The start (reference) time, in integer nanoseconds.
+
+        Returns:
+            int, buffer start time
+        """
+        return self.time
+
+
+@total_ordering
+@runtime_checkable
+class TimeSpanLike(TimeLike, Protocol):
+    noffset: int
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TimeSpanLike):
+            return NotImplemented
+        return self.end_offset == other.end_offset
+
+    def __lt__(self, other: TimeSpanLike) -> bool:
+        return self.end_offset < other.end_offset
+
+    @property
+    def end_offset(self) -> int:
+        """The end offset.
+
+        Returns:
+            int, end offset
+        """
+        return self.offset + self.noffset
+
+    @property
+    def slice(self) -> TSSlice:
+        """The offset slice that the item spans.
+
+        Returns:
+            TSSlices, the offset slice
+        """
+        return TSSlice(self.offset, self.end_offset)
+
+    @property
+    def duration(self) -> int:
+        """The duration of the buffer, in integer nanoseconds.
+
+        Returns:
+            int, the buffer duration
+        """
+        return Offset.tons(self.noffset)
+
+    @property
+    def end(self) -> int:
+        """The end time of the buffer, in integer nanoseconds.
+
+        Returns:
+            int, buffer end time
+        """
+        return self.t0 + self.duration
+
+
 @dataclass
-class EventBuffer:
+class Event(TimeLike):
+    """Event with metadata.
+
+    Args:
+        offset:
+            int, the offset of the buffer. See Offset class for definitions.
+        data:
+            Any, data of the event
+    """
+
+    offset: int
+    data: Any = None
+
+    @classmethod
+    def from_time(cls, time: int, data: Any = None) -> Event:
+        """Create an Event from a reference time (in nanoseconds)."""
+        offset = Offset.fromns(time) - Offset.offset_ref_t0
+        return cls(offset=offset, data=data)
+
+
+@dataclass(eq=False)
+class EventBuffer(TimeSpanLike):
     """Event buffer with associated metadata.
 
     Args:
-        ts:
-            int, Start time of event buffer in ns
-        te:
-            int, End time of event buffer in ns
+        offset:
+            int, the offset of the buffer. See Offset class for definitions.
+        noffset:
+            int, the number of offsets the buffer spans, or the duration.
         data:
-            Any, Data of the event
+            Sequence[Any], event data covering the span in question.
     """
 
-    ts: int = 0
-    te: int = int(TIME_MAX)
-    data: Any = None
+    offset: int
+    noffset: int
+    data: Sequence[Any] = field(default_factory=list)
 
     def __post_init__(self):
-        if (
-            not isinstance(self.ts, int)
-            or not isinstance(self.te, int)
-            or not (self.ts <= self.te)
-        ):
+        if not isinstance(self.offset, int) or not isinstance(self.noffset, int):
+            msg = "offset and noffset must be integers"
+            raise ValueError(msg)
+
+    @classmethod
+    def from_span(
+        cls, start: int, end: int, data: Sequence[Any] | None = None
+    ) -> EventBuffer:
+        """Create an EventBuffer from start/end times (in nanoseconds)."""
+        if not isinstance(start, int) or not isinstance(end, int) or not (start <= end):
             raise ValueError(
-                "ts and te must be integers and ts must be <= te,"
-                f"got {self.ts} and {self.te}"
+                "start and end must be integers and start must be <= end,"
+                f"got {start} and {end}"
             )
+        offset = Offset.fromns(start)
+        noffset = Offset.fromns(end) - offset
+        if data is None:
+            data = []
+        return cls(offset=offset, noffset=noffset, data=data)
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __getitem__(self, idx: int) -> Any:
+        return self.data[idx]
+
+    @property
+    def events(self) -> Sequence[Any]:
+        """The event data."""
+        return self.data
 
     def __repr__(self):
         with numpy.printoptions(threshold=3, edgeitems=1):
-            return "EventBuffer(ts=%d, te=%d, data=%s)" % (
-                self.ts,
-                self.te,
+            return "EventBuffer(offset=%d, end_offset=%d, data=%s)" % (
+                self.offset,
+                self.end_offset,
                 self.data,
             )
 
     def __bool__(self):
-        return self.data is not None
-
-    @property
-    def slice(self):
-        return TSSlice(self.ts, self.te)
-
-    @property
-    def duration(self):
-        return self.te - self.ts
+        return bool(self.data)
 
     @property
     def is_gap(self):
-        if self.data is None:
-            return True
-        else:
-            return False
+        return not self.data
 
     def __contains__(self, item):
-        # FIXME should this conditional actually be open from above?
+        # FIXME, is this what we want?
         if isinstance(item, int):
-            return self.ts <= item <= self.te
+            # The end offset is not actually in the buffer hence the second "<" vs "<="
+            return self.offset <= item < self.end_offset
+        elif isinstance(item, EventBuffer):
+            return (self.offset <= item.offset) and (item.end_offset <= self.end_offset)
         else:
             return False
 
-    def __lt__(self, item):
-        if isinstance(item, int):
-            return self.te < item
-        elif isinstance(item, EventBuffer):
-            return self.te < item.te
 
-    def __le__(self, item):
-        if isinstance(item, int):
-            return self.te <= item
-        elif isinstance(item, EventBuffer):
-            return self.te <= item.te
-
-    def __ge__(self, item):
-        if isinstance(item, int):
-            return self.ts >= item
-        elif isinstance(item, EventBuffer):
-            return self.te >= item.te
-
-    def __gt__(self, item):
-        if isinstance(item, int):
-            return self.ts > item
-        elif isinstance(item, EventBuffer):
-            return self.te > item.te
-
-
-@dataclass
-class EventFrame(Frame):
+@dataclass(eq=False)
+class EventFrame(Frame, TimeSpanLike):
     """An sgn Frame object that holds a dictionary of events.
 
     Args:
@@ -114,30 +208,72 @@ class EventFrame(Frame):
             dict, Dictionary of EventBuffers
     """
 
-    events: Union[dict, None] = None
+    data: list[EventBuffer] = field(default_factory=list)
 
     def __post_init__(self):
         super().__post_init__()
-        assert (
-            self.events is not None and len(self.events) > 0
-        ), "EventFrame must have non-empty events dictionary"
-
-    def __getitem__(self, item):
-        return self.events[item]
+        assert len(self.data) > 0
+        if (
+            not isinstance(self.start, int)
+            or not isinstance(self.end, int)
+            or not (self.start <= self.end)
+        ):
+            raise ValueError(
+                "start and end must be integers and start must be <= end,"
+                f"got {self.start} and {self.end}"
+            )
 
     def __iter__(self):
-        # FIXME this will just iterate over event keys. Is that what we want?
-        return iter(self.events)
+        return iter(self.data)
+
+    def __getitem__(self, idx: int) -> EventBuffer:
+        return self.data[idx]
+
+    def __contains__(self, other):
+        return other.slice in self.slice
+
+    @property
+    def events(self):
+        """The list of Events."""
+        return [event for buffer in self.data for event in buffer.data]
 
     def __repr__(self):
         out = (
             f"EventFrame(EOS={self.EOS}, is_gap={self.is_gap}, "
-            f"metadata={self.metadata}, events={{\n"
+            f"metadata={self.metadata}, buffers={{\n"
         )
-        for evt, v in self.events.items():
-            out += f"    {evt}: {v},\n"
+        for buf in self.data:
+            out += f"    {buf},\n"
         out += "}})"
         return out
+
+    @property
+    def offset(self) -> int:
+        """The offset of the EventFrame, which is the offset of the first buffer.
+
+        Returns:
+            int, the offset of the EventFrame
+        """
+        return self.data[0].offset
+
+    @offset.setter
+    def offset(self, other: int) -> None:
+        msg = "cannot set offset on an EventFrame"
+        raise AttributeError(msg)
+
+    @property
+    def noffset(self) -> int:
+        """The end offset of the EventFrame, which is the end offset of the last buffer.
+
+        Returns:
+            int, the end offset of the EventFrame
+        """
+        return self.data[-1].end_offset - self.offset
+
+    @noffset.setter
+    def noffset(self, other: int) -> None:
+        msg = "cannot set noffset on an EventFrame"
+        raise AttributeError(msg)
 
 
 @dataclass(frozen=True)
@@ -155,8 +291,8 @@ class SeriesDataSpec(DataSpec):
     data_type: Any
 
 
-@dataclass
-class SeriesBuffer:
+@dataclass(eq=False)
+class SeriesBuffer(TimeSpanLike):
     """Timeseries buffer with associated metadata.
 
     Args:
@@ -357,15 +493,6 @@ class SeriesBuffer:
         return share_data and share_offset and share_sample_rate
 
     @property
-    def slice(self) -> TSSlice:
-        """The offset slice that the buffer spans.
-
-        Returns:
-            TSSlices, the offset slice
-        """
-        return TSSlice(self.offset, self.end_offset)
-
-    @property
     def noffset(self) -> int:
         """The number of offsets the buffer spans, which is the buffer's duration in
         terms of offsets.
@@ -375,41 +502,10 @@ class SeriesBuffer:
         """
         return Offset.fromsamples(self.samples, self.sample_rate)
 
-    @property
-    def t0(self) -> int:
-        """The start time of the buffer, in integer nanoseconds.
-
-        Returns:
-            int, buffer start time
-        """
-        return Offset.offset_ref_t0 + Offset.tons(self.offset)
-
-    @property
-    def duration(self) -> int:
-        """The duration of the buffer, in integer nanoseconds.
-
-        Returns:
-            int, the buffer duration
-        """
-        return Offset.tons(self.noffset)
-
-    @property
-    def end(self) -> int:
-        """The end time of the buffer, in integer nanoseconds.
-
-        Returns:
-            int, buffer end time
-        """
-        return self.t0 + self.duration
-
-    @property
-    def end_offset(self) -> int:
-        """The end offset of the buffer.
-
-        Returns:
-            int, buffer end offset
-        """
-        return self.offset + self.noffset
+    @noffset.setter
+    def noffset(self, other: int) -> None:
+        msg = "cannot set noffset on a SeriesBuffer"
+        raise AttributeError(msg)
 
     @property
     def samples(self) -> int:
@@ -462,22 +558,6 @@ class SeriesBuffer:
             return (self.offset <= item.offset) and (item.end_offset <= self.end_offset)
         else:
             return False
-
-    def __lt__(self, item):
-        assert isinstance(item, SeriesBuffer)
-        return self.end_offset < item.end_offset
-
-    def __le__(self, item):
-        assert isinstance(item, SeriesBuffer)
-        return self.end_offset <= item.end_offset
-
-    def __ge__(self, item):
-        assert isinstance(item, SeriesBuffer)
-        return self.end_offset >= item.end_offset
-
-    def __gt__(self, item):
-        assert isinstance(item, SeriesBuffer)
-        return self.end_offset > item.end_offset
 
     def _insert(self, data: Array, offset) -> None:
         """TODO workshop the name
@@ -648,8 +728,8 @@ class SeriesBuffer:
         return sorted(out)
 
 
-@dataclass
-class TSFrame(Frame):
+@dataclass(eq=False)
+class TSFrame(Frame, TimeSpanLike):
     """An sgn Frame object that holds a list of buffers
 
     Args:
@@ -745,41 +825,24 @@ class TSFrame(Frame):
         """
         return self.buffers[0].offset
 
+    @offset.setter
+    def offset(self, other: int) -> None:
+        msg = "cannot set offset on a TSFrame"
+        raise AttributeError(msg)
+
     @property
-    def end_offset(self) -> int:
+    def noffset(self) -> int:
         """The end offset of the TSFrame, which is the end offset of the last buffer.
 
         Returns:
             int, the end offset of the TSFrame
         """
-        return self.buffers[-1].end_offset
+        return self.buffers[-1].end_offset - self.offset
 
-    @property
-    def t0(self) -> float:
-        """The t0 of the TSFrame, which is the t0 of the first buffer.
-
-        Returns:
-            float, the t0 of the TSFrame
-        """
-        return self.buffers[0].t0
-
-    @property
-    def end(self) -> float:
-        """The end of the TSFrame, which is the end time of the last buffer.
-
-        Returns:
-            float, the end time of the TSFrame
-        """
-        return self.buffers[-1].end
-
-    @property
-    def slice(self) -> TSSlice:
-        """The offset slice of the TSFrame.
-
-        Returns:
-            TSSclie, the offset slice of the TSFrame
-        """
-        return TSSlice(self.offset, self.end_offset)
+    @noffset.setter
+    def noffset(self, other: int) -> None:
+        msg = "cannot set noffset on a TSFrame"
+        raise AttributeError(msg)
 
     @property
     def shape(self) -> tuple[int, ...]:
