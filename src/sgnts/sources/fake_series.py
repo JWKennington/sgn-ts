@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections
 import time
 from dataclasses import dataclass
 from typing import Any, Optional, Union
@@ -49,7 +50,10 @@ class FakeSeriesSource(TSSource):
                 int, impulse position for 'impulse' signals. If -1,
                 then the impulse position will be random.
             const:
-                int | float, constant value for 'const' signals.
+                int | float | tuple[float, ...], the constant int or
+                float for output. If a tuple is given, the outputs
+                will form a piecewise function, with an equal amount
+                of time spent on each value in the tuple.
 
             These parameters may be specified directly as keyword
             arguments during class init, in which case they will be
@@ -76,7 +80,7 @@ class FakeSeriesSource(TSSource):
     sample_shape: tuple[int, ...] = ()
     fsin: float = 5
     impulse_position: int = -1
-    const: Union[int, float] = 1
+    const: Union[int, float, tuple[float, ...]] = 1
     ngap: int = 0
     random_seed: Optional[int] = None
     real_time: bool = False
@@ -126,6 +130,7 @@ class FakeSeriesSource(TSSource):
             Array, the fake data array
         """
         offset = buf.offset
+        end_offset = buf.end_offset
         ngap = self.ngap
         cnt = self.cnt[pad]
         metadata: dict[str, int] = {}
@@ -165,7 +170,57 @@ class FakeSeriesSource(TSSource):
                 impulse_position, buf.sample_rate
             )
         elif signal_type == "const":
-            data = np.full(buf.shape, signal.get("const", self.const))
+            if isinstance(self.const, collections.abc.Iterable):
+                data = np.array([])
+                buffer_t0 = Offset.tosec(offset)
+                buffer_end = Offset.tosec(end_offset)
+                if self.t0 is not None:
+                    t0 = self.t0
+                else:
+                    t0 = 0.0
+                if self.end is not None:
+                    piecewise_cycle_dur = self.end - t0
+                else:
+                    piecewise_cycle_dur = 100.0
+                const_dur = piecewise_cycle_dur / len(self.const)
+                first_transition = buffer_t0 - (buffer_t0 - t0) % const_dur
+                last_transition = buffer_end + const_dur - (buffer_end - t0) % const_dur
+                transition_times = np.arange(
+                    first_transition, last_transition + 1, const_dur
+                )
+                for i in range(len(transition_times)):
+                    t_now = buffer_t0 + len(data) / buf.sample_rate
+                    if t_now >= transition_times[i] and t_now < transition_times[i + 1]:
+                        samples_til_next_transition = int(
+                            (transition_times[i + 1] - t_now) * buf.sample_rate
+                        )
+                        current_const = self.const[
+                            int(
+                                (
+                                    (transition_times[i] + transition_times[i + 1]) / 2
+                                    - t0
+                                )
+                                / const_dur
+                            )
+                            % len(self.const)
+                        ]
+                        remaining_buf_samples = buf.samples - len(data)
+                        if samples_til_next_transition >= remaining_buf_samples:
+                            data = np.append(
+                                data, np.tile(current_const, remaining_buf_samples)
+                            )
+                            break
+                        else:
+                            data = np.append(
+                                data,
+                                np.tile(current_const, samples_til_next_transition),
+                            )
+                if len(data) < buf.samples:
+                    data = np.append(
+                        data, np.tile(self.const[-1], buf.samples - len(data))
+                    )
+            else:
+                data = np.full(buf.shape, self.const)
         else:
             msg = f"Unknown signal type '{signal_type}'."
             raise ValueError(msg)
