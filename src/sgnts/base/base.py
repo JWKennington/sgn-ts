@@ -350,6 +350,17 @@ class _TSTransSink:  # (HasValueProtocol):
             earliest = self.earliest
             # I tried to fix this properly see the notes above the definition
             # of _TSTransSink
+
+            rates = set(
+                self.inbufs[sink_pad].sample_rate for sink_pad in self.aligned_sink_pads
+            )
+            off = min_latest - earliest
+            for rate in rates:
+                factor = Offset.MAX_RATE // rate
+                if off % factor:
+                    off = off // factor * factor
+                    min_latest = earliest + off
+
             for sink_pad in self.aligned_sink_pads:  # type: ignore
                 out = self.inbufs[sink_pad].get_sliced_buffers(
                     (earliest, min_latest), pad_start=True
