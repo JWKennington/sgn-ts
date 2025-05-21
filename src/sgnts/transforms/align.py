@@ -14,7 +14,7 @@ class Align(TSTransform):
         assert set(self.source_pad_names) == set(self.sink_pad_names)
         super().__post_init__()
         self.pad_map = {
-            p: self.sink_pad_dict["%s:snk:%s" % (self.name, p.name.split(":")[-1])]
+            p: self.sink_pad_dict["%s:snk:%s" % (self.name, self.rsrcs[p])]
             for p in self.source_pads
         }
 
