@@ -65,9 +65,10 @@ class TestCorrelate:
     def test_corr(self):
         """Test the corr method"""
         # Create correlate element
+        sample_rate = 1
         crl = Correlate(
             filters=numpy.array([[1, 2, 3]]),
-            sample_rate=1,
+            sample_rate=sample_rate,
             source_pad_names=["O1"],
             sink_pad_names=["I1"],
         )
@@ -95,6 +96,46 @@ class TestCorrelate:
 
         assert res is not None
         assert res[0].data.shape == (1, 5)
+        assert res[0].offset == Offset.fromsamples(2, sample_rate)
+        numpy.testing.assert_almost_equal(
+            res[0].data, numpy.array([[14, 20, 26, 32, 38]])
+        )
+
+    def test_corr_latency(self):
+        """Test the corr method with nonzero latency"""
+        # Create correlate element
+        crl = Correlate(
+            filters=numpy.array([[1, 2, 3]]),
+            sample_rate=1,
+            latency=2,
+            source_pad_names=["O1"],
+            sink_pad_names=["I1"],
+        )
+
+        # Create SeriesBuffer
+        frame = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=0,
+                    data=numpy.array([1, 2, 3, 4, 5, 6, 7]),
+                    sample_rate=1,
+                    shape=(7,),
+                ),
+            ]
+        )
+
+        # Pull onto sink pad
+        crl.pull(pad=crl.snks["I1"], frame=frame)
+
+        # Call internal
+        crl.internal()
+
+        # Call new
+        res = crl.new(pad=crl.srcs["O1"])
+
+        assert res is not None
+        assert res[0].data.shape == (1, 5)
+        assert res[0].offset == 0
         numpy.testing.assert_almost_equal(
             res[0].data, numpy.array([[14, 20, 26, 32, 38]])
         )
