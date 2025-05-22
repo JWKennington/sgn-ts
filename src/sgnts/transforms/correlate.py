@@ -28,10 +28,13 @@ class Correlate(TSTransform):
     Args:
         filters:
             Array, the filter to correlate over
+        latency:
+            int, the latency of the filter in samples
     """
 
     sample_rate: int = -1
     filters: Optional[Array] = None
+    latency: int = 0
 
     def __post_init__(self):
         # FIXME: read sample_rate from data
@@ -90,7 +93,8 @@ class Correlate(TSTransform):
             outoffset = outoffsets[i]
             outbufs.append(
                 SeriesBuffer(
-                    offset=outoffset["offset"],
+                    offset=outoffset["offset"]
+                    - Offset.fromsamples(self.latency, self.sample_rate),
                     sample_rate=buf.sample_rate,
                     data=data,
                     shape=(
@@ -229,7 +233,6 @@ class AdaptiveCorrelate(Correlate):
         # Check that the frame overlaps the new filter slice
         new_slice = self.filters_new.slice
         frame_slice = frame.slice
-
         overlap = new_slice & frame_slice
         return overlap.isfinite()
 
