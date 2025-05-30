@@ -71,7 +71,7 @@ def test_medianmean():
     pipeline.run()
 
     # Get the output data
-    outdata = np.loadtxt("output.txt", dtype = np.complex_)
+    outdata = np.loadtxt("output.txt", dtype=np.complex_)
     t = np.real(np.transpose(outdata)[0])
     outdata = np.transpose(outdata)[1]
 
@@ -111,6 +111,7 @@ def test_medianmean():
 
     np.testing.assert_almost_equal(outdata.real, expected_outdata.real)
     np.testing.assert_almost_equal(outdata.imag, expected_outdata.imag)
+
 
 if __name__ == "__main__":
     test_medianmean()
