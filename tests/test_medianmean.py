@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
-import h5py
 import numpy as np
 from sgn.apps import Pipeline
-from sgnligo.sinks import FrameSink
+from sgnts.sinks import DumpSeriesSink
 from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import MedianMean
 
@@ -58,11 +57,10 @@ def test_medianmean():
             default_real=default_real,
             default_imag=default_imag,
         ),
-        FrameSink(
+        DumpSeriesSink(
             name="snk",
-            channels=("snk",),
-            duration=end,
-            path="{instruments}-{description}-{gps_start_time}-{duration}.hdf5",
+            fname="output.txt",
+            sink_pad_names=("snk",),
         ),
         link_map={
             "medianmean:snk:snk": "src:src:src",
@@ -73,13 +71,14 @@ def test_medianmean():
     pipeline.run()
 
     # Get the output data
-    f = h5py.File(
-        "snk-SGN--00000000%d-%d.hdf5"
-        % ((median_overlap_samples[1] + mean_overlap_samples[1]) // inrate, end),
-        "r",
-    )
-    dset = f["snk"]
-    outdata = dset[:]
+    outdata = np.loadtxt("output.txt", dtype = np.complex_)
+    t = np.real(np.transpose(outdata)[0])
+    outdata = np.transpose(outdata)[1]
+
+    # Check that the times include the expected latency
+    t_start = -(median_overlap_samples[1] + mean_overlap_samples[1]) / 16
+    t_end = t_start + end - 1.0 / inrate
+    np.testing.assert_almost_equal(t, np.linspace(t_start, t_end, end * inrate))
 
     # Compute the expected output data
     expected_outdata = np.empty(end * inrate, dtype=np.complex128)
