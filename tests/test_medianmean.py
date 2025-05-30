@@ -113,6 +113,5 @@ def test_medianmean():
     np.testing.assert_almost_equal(outdata.real, expected_outdata.real)
     np.testing.assert_almost_equal(outdata.imag, expected_outdata.imag)
 
-
 if __name__ == "__main__":
     test_medianmean()

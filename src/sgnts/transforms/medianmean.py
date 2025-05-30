@@ -72,8 +72,12 @@ class MedianMean(TSTransform):
         assert self.median_array_len > 0 and self.mean_array_len > 0
         self.latency = self.median_overlap_samples[1] + self.mean_overlap_samples[1]
         if self.default_real is not None:
-            self.median_array_real = np.tile(self.default_real, self.median_array_len)
-            self.mean_array_real = np.tile(self.default_real, self.mean_array_len)
+            self.median_array_real = np.tile(
+                float(self.default_real), self.median_array_len
+            )
+            self.mean_array_real = np.tile(
+                float(self.default_real), self.mean_array_len
+            )
             self.samples_in_median = self.median_array_len
             self.samples_in_mean = self.mean_array_len
             self.current_median_real = self.default_real
@@ -84,8 +88,12 @@ class MedianMean(TSTransform):
             self.current_median_real = 0.0
 
         if self.default_imag is not None:
-            self.median_array_imag = np.tile(self.default_imag, self.median_array_len)
-            self.mean_array_imag = np.tile(self.default_imag, self.mean_array_len)
+            self.median_array_imag = np.tile(
+                float(self.default_imag), self.median_array_len
+            )
+            self.mean_array_imag = np.tile(
+                float(self.default_imag), self.mean_array_len
+            )
             self.current_median_imag = self.default_imag
         else:
             self.median_array_imag = np.zeros(self.median_array_len)
