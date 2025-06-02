@@ -170,8 +170,7 @@ class FakeSeriesSource(TSSource):
                 impulse_position, buf.sample_rate
             )
         elif signal_type == "const":
-            value = signal.get("const", self.const)
-            if isinstance(value, collections.abc.Iterable):
+            if isinstance(self.const, collections.abc.Iterable):
                 data = np.array([])
                 buffer_t0 = Offset.tosec(offset)
                 buffer_end = Offset.tosec(end_offset)
@@ -183,7 +182,7 @@ class FakeSeriesSource(TSSource):
                     piecewise_cycle_dur = self.end - t0
                 else:
                     piecewise_cycle_dur = 100.0
-                const_dur = piecewise_cycle_dur / len(value)
+                const_dur = piecewise_cycle_dur / len(self.const)
                 first_transition = buffer_t0 - (buffer_t0 - t0) % const_dur
                 last_transition = buffer_end + const_dur - (buffer_end - t0) % const_dur
                 transition_times = np.arange(
@@ -195,7 +194,7 @@ class FakeSeriesSource(TSSource):
                         samples_til_next_transition = int(
                             (transition_times[i + 1] - t_now) * buf.sample_rate
                         )
-                        current_const = value[
+                        current_const = self.const[
                             int(
                                 (
                                     (transition_times[i] + transition_times[i + 1]) / 2
@@ -203,7 +202,7 @@ class FakeSeriesSource(TSSource):
                                 )
                                 / const_dur
                             )
-                            % len(value)
+                            % len(self.const)
                         ]
                         remaining_buf_samples = buf.samples - len(data)
                         if samples_til_next_transition >= remaining_buf_samples:
@@ -218,10 +217,10 @@ class FakeSeriesSource(TSSource):
                             )
                 if len(data) < buf.samples:
                     data = np.append(
-                        data, np.tile(value[-1], buf.samples - len(data))
+                        data, np.tile(self.const[-1], buf.samples - len(data))
                     )
             else:
-                data = np.full(buf.shape, value)
+                data = np.full(buf.shape, self.const)
         else:
             msg = f"Unknown signal type '{signal_type}'."
             raise ValueError(msg)
