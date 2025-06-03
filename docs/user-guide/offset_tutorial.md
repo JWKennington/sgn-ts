@@ -96,6 +96,10 @@ one_second_offset = Offset.fromsec(1.0)  # 16384 at MAX_RATE=16384
 # Convert nanoseconds to offsets
 billion_ns_offset = Offset.fromns(1_000_000_000)  # 16384 at MAX_RATE=16384
 
+# Convert nanoseconds to offsets with automatic rounding to sample boundaries
+# This is useful when you need the offset to align exactly with a sample point
+offset_aligned = Offset.fromns(1_000_000_500, sample_rate=1024)  # Rounds to nearest sample at 1024 Hz
+
 # Convert samples to offsets
 samples_at_8khz = 8000  # 8000 samples at 8 kHz
 offset_value = Offset.fromsamples(samples_at_8khz, 8192)  # 16000
@@ -210,6 +214,38 @@ except AssertionError:
 # For sample_rate=4096 and MAX_RATE=16384, offsets should be multiples of 4
 valid_offset = 10000 // 4 * 4  # Round to nearest valid offset
 samples = Offset.tosamples(valid_offset, 4096)  # Now it works
+"""
+```
+
+### Automatic Rounding to Sample Boundaries
+
+When converting from nanoseconds to offsets, you can use the optional `sample_rate` parameter to automatically round to the nearest sample boundary:
+
+```python
+# Example of automatic rounding (not tested by mkdocs)
+"""
+from sgnts.base import Offset
+
+# Without sample_rate parameter - exact conversion
+raw_offset = Offset.fromns(1_000_000_123)  # May not align with sample boundaries
+
+# With sample_rate parameter - rounds to nearest sample boundary
+aligned_offset = Offset.fromns(1_000_000_123, sample_rate=1024)
+
+# This is particularly useful when working with time segments that need to
+# align exactly with sample points, such as in SegmentSource
+
+# Example: Creating aligned time segments
+segment_start_ns = 1_500_000_000 + 123  # 1.5 seconds + 123 nanoseconds
+segment_end_ns = 2_000_000_000 - 456    # 2.0 seconds - 456 nanoseconds
+
+# These will be rounded to the nearest sample boundaries at 256 Hz
+start_offset = Offset.fromns(segment_start_ns, sample_rate=256)
+end_offset = Offset.fromns(segment_end_ns, sample_rate=256)
+
+# Now these offsets are guaranteed to map to integer sample points
+start_samples = Offset.tosamples(start_offset, 256)  # Integer result
+end_samples = Offset.tosamples(end_offset, 256)      # Integer result
 """
 ```
 

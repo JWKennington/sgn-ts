@@ -355,9 +355,10 @@ class TestTSResourceSource:
         src.setup()
         assert src.thread is not None
         src.__exit__()  # Calling exit here to make sure it calls "stop"
-        assert src.thread is not None
-        # TODO figure out how to check for thread
-        #  staying alive
+        # After __exit__, thread may be None (if it was alive and got cleaned up)
+        # or may still exist but be stopped (if it died before stop() was called)
+        if src.thread is not None:
+            assert not src.thread.is_alive()  # Thread should at least be stopped
 
     def test_set_data_empty_buf(self):
         """Test the set_data method with offset == end_offset"""

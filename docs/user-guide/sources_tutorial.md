@@ -132,10 +132,11 @@ for buf in frame:
 
 ## SegmentSource
 
-The `SegmentSource` produces non-gap buffers for specified time segments and gap buffers elsewhere. This is useful when you want to:
+The `SegmentSource` produces non-gap buffers for specified time segments and gap buffers elsewhere. The enhanced version now supports custom values for each segment. This is useful when you want to:
 
 - Simulate data that's only available during specific time periods
 - Create windowed segments of data for processing
+- Generate test signals with different values for different time windows
 
 ### Basic Usage
 
@@ -154,9 +155,13 @@ segments = (
 segment_source = SegmentSource(
     rate=2048,
     segments=segments,
-    t0=0,          # Start time
-    end=5          # End time (in seconds)
+    values=(10, 20),  # Optional: custom values for each segment
+    t0=0,             # Start time
+    end=5             # End time (in seconds)
 )
+
+# Note: SegmentSource automatically rounds segment times to the nearest
+# sample boundary to ensure proper alignment with the sample rate
 
 # Pull frames
 frame = segment_source.pull()
@@ -215,7 +220,7 @@ for _ in range(10):
 
 When working with sources:
 
-1. **Choose the appropriate source** for your needs - use `FakeSeriesSource` for testing and `SegmentSource` for windowed data
+1. **Choose the appropriate source** for your needs - use `FakeSeriesSource` for testing and `SegmentSource` for windowed data with custom values
 
 2. **Configure sample rate appropriately** - ensure your source's rate matches or is compatible with downstream components
 

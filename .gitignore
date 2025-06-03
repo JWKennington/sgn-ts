@@ -9,3 +9,8 @@ _version.py
 
 # IDE files
 .idea/
+
+# Example output files
+segment_*.txt
+segment_*.png
+segment_*.npz
