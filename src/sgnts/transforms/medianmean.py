@@ -122,7 +122,6 @@ class MedianMean(TSTransform):
             ) % self.median_array_len
 
         median_array[self.median_array_index] = new_sample
-
         if self.samples_in_median < self.median_array_len:
             # Then we are taking the median of a subset of this array
             median_array_subset = np.roll(
@@ -207,7 +206,7 @@ class MedianMean(TSTransform):
             else:
                 if self.real is None:
                     self.real = not isinstance(
-                        inbuf.data[0], (complex, np.complex128, np.complex256)
+                        inbuf.data[0], (complex, np.complex128, np.clongdouble)
                     )
                 if self.real:
                     outdata = np.empty(len(inbuf.data), dtype=np.float64)

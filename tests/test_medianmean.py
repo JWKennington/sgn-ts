@@ -23,6 +23,7 @@ def test_medianmean():
     indata_real = real_amp * np.sin(2 * np.pi * real_f * t)
     indata_imag = imag_amp * np.sin(2 * np.pi * imag_f * t)
     indata = indata_real + 1j * indata_imag
+    indata[0] = default_real + 1j * default_imag
 
     pipeline = Pipeline()
 
@@ -144,7 +145,6 @@ def test_medianmean():
         mean_array[idx % n_mean] = current_median
         expected_outdata[idx] = np.mean(mean_array)
 
-    print(outdata.real / expected_outdata.real)
     np.testing.assert_almost_equal(outdata.real, expected_outdata.real)
     np.testing.assert_almost_equal(outdata.imag, expected_outdata.imag)
 
