@@ -183,8 +183,8 @@ class MedianMean(TSTransform):
                     else:
                         outdata = np.empty(samples_to_fill, dtype=np.complex128)
                     for idx in range(samples_to_fill):
-                        # Take care of the real part first.  If the input is real, this is
-                        # all we need to do.
+                        # Take care of the real part first.  If the input is real, this
+                        # is all we need to do.
                         if self.default_to_median:
                             new_sample = self.current_median_real
                         else:
