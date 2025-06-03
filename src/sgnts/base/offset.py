@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Optional
+
 import numpy
 
 from sgnts.base.time import Time
@@ -135,17 +139,34 @@ class Offset:
         return round(seconds * Offset.MAX_RATE)
 
     @staticmethod
-    def fromns(nanoseconds: int) -> int:
+    def fromns(nanoseconds: int, sample_rate: Optional[int] = None) -> int:
         """Convert nanoseconds to offsets.
 
         Args:
             nanoseconds:
                 int, the time to convert to offsets, in nanoseconds
+            sample_rate:
+                int, optional sample rate to align the offset to. If provided,
+                the offset will be rounded to the nearest sample boundary for
+                this rate.
 
         Returns:
             int, the offset corresponding to the time
         """
-        return round(int(nanoseconds) / int(Time.SECONDS) * Offset.MAX_RATE)
+        if sample_rate is None:
+            # Standard behavior - convert directly
+            return round(int(nanoseconds) / int(Time.SECONDS) * Offset.MAX_RATE)
+        else:
+            # Align to sample boundary
+            assert (
+                sample_rate in Offset.ALLOWED_RATES
+            ), f"Invalid sample rate: {sample_rate}"
+
+            # Convert nanoseconds to samples at the given rate
+            samples = round(nanoseconds * sample_rate / Time.SECONDS)
+
+            # Convert samples back to offset - this ensures alignment
+            return Offset.fromsamples(int(samples), sample_rate)
 
     @staticmethod
     def tosamples(offset: int, sample_rate: int) -> int:

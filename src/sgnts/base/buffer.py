@@ -300,12 +300,15 @@ class SeriesBuffer:
 
         Args:
             data:
-                Optiona[Array], the new data to set to
+                Optional[Array], the new data to set to
         """
         if isinstance(data, int) and data == 1:
             self.data = self.backend.ones(self.shape)
         elif isinstance(data, int) and data == 0:
             self.data = self.backend.zeros(self.shape)
+        elif isinstance(data, (int, float, complex)):
+            # Handle any numeric value by creating an array filled with that value
+            self.data = self.backend.full(self.shape, data)
         elif data is not None and self.shape != data.shape:
             raise ValueError("Data are incompatible shapes")
         else:
