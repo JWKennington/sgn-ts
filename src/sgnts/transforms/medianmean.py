@@ -176,31 +176,34 @@ class MedianMean(TSTransform):
                 samples_to_fill = Offset.tosamples(
                     inbuf.end_offset - inbuf.offset, inbuf.sample_rate
                 )
-                if self.real:
-                    outdata = np.empty(samples_to_fill, dtype=np.float64)
+                if samples_to_fill <= 0:
+                    outdata = None
                 else:
-                    outdata = np.empty(samples_to_fill, dtype=np.complex128)
-                for idx in range(samples_to_fill):
-                    # Take care of the real part first.  If the input is real, this is
-                    # all we need to do.
-                    if self.default_to_median:
-                        new_sample = self.current_median_real
+                    if self.real:
+                        outdata = np.empty(samples_to_fill, dtype=np.float64)
                     else:
-                        new_sample = self.default_real
-                    # Update the current median
-                    self.update_median(new_sample)
-                    # Compute the mean to set the next output value
-                    outdata[idx] = self.compute_mean()
-                    if not self.real:
-                        # Then we need to add in the imaginary part
+                        outdata = np.empty(samples_to_fill, dtype=np.complex128)
+                    for idx in range(samples_to_fill):
+                        # Take care of the real part first.  If the input is real, this is
+                        # all we need to do.
                         if self.default_to_median:
-                            new_sample_imag = self.current_median_imag
+                            new_sample = self.current_median_real
                         else:
-                            new_sample_imag = self.default_imag
-                        # Update the imaginary part of the current median
-                        self.update_median(new_sample_imag, imag=True)
-                        # Add the imaginary mean to the next output value
-                        outdata[idx] += 1j * self.compute_mean(imag=True)
+                            new_sample = self.default_real
+                        # Update the current median
+                        self.update_median(new_sample)
+                        # Compute the mean to set the next output value
+                        outdata[idx] = self.compute_mean()
+                        if not self.real:
+                            # Then we need to add in the imaginary part
+                            if self.default_to_median:
+                                new_sample_imag = self.current_median_imag
+                            else:
+                                new_sample_imag = self.default_imag
+                            # Update the imaginary part of the current median
+                            self.update_median(new_sample_imag, imag=True)
+                            # Add the imaginary mean to the next output value
+                            outdata[idx] += 1j * self.compute_mean(imag=True)
             else:
                 if self.real is None:
                     self.real = not isinstance(
