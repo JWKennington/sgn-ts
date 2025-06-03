@@ -4,20 +4,25 @@ import numpy as np
 from sgn.apps import Pipeline
 from sgnts.sinks import DumpSeriesSink
 from sgnts.sources import FakeSeriesSource
-from sgnts.transforms import MedianMean
+from sgnts.transforms import Adder, Amplify, MedianMean
 
 
 def test_medianmean():
 
-    indata = (
-        1 + np.sin(np.linspace(0, 7, 128)) + 1j * (-1 - np.cos(np.linspace(0, 23, 128)))
-    )
     end = 8
     inrate = 16
     default_real = 3
     default_imag = -1
     median_overlap_samples = (8, 16)
     mean_overlap_samples = (3, 0)
+    real_f = 0.125
+    imag_f = 1.0
+    real_amp = 2.0
+    imag_amp = -5.0
+    t = np.linspace(0, end - 1.0 / inrate, end * inrate)
+    indata_real = real_amp * np.sin(2 * np.pi * real_f * t)
+    indata_imag = imag_amp * np.sin(2 * np.pi * imag_f * t)
+    indata = indata_real + 1j * indata_imag
 
     pipeline = Pipeline()
 
@@ -40,13 +45,39 @@ def test_medianmean():
 
     pipeline.insert(
         FakeSeriesSource(
-            name="src",
+            name="rsrc",
             source_pad_names=("src",),
             rate=inrate,
             ngap=ngap,
-            signal_type="const",
-            const=indata,
+            signal_type="sin",
+            fsin=real_f,
             end=end,
+        ),
+        FakeSeriesSource(
+            name="isrc",
+            source_pad_names=("src",),
+            rate=inrate,
+            ngap=ngap,
+            signal_type="sin",
+            fsin=imag_f,
+            end=end,
+        ),
+        Amplify(
+            name="ramp",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            factor = real_amp + 0j,
+        ),
+        Amplify(
+            name="iamp",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            factor = 1j * imag_amp,
+        ),
+        Adder(
+            name="adder",
+            sink_pad_names=("rsnk", "isnk"),
+            source_pad_names=("src",),
         ),
         MedianMean(
             name="medianmean",
@@ -63,7 +94,11 @@ def test_medianmean():
             sink_pad_names=("snk",),
         ),
         link_map={
-            "medianmean:snk:snk": "src:src:src",
+            "ramp:snk:snk": "rsrc:src:src",
+            "iamp:snk:snk": "isrc:src:src",
+            "adder:snk:rsnk": "ramp:src:src",
+            "adder:snk:isnk": "iamp:src:src",
+            "medianmean:snk:snk": "adder:src:src",
             "snk:snk:snk": "medianmean:src:src",
         },
     )
@@ -109,6 +144,7 @@ def test_medianmean():
         mean_array[idx % n_mean] = current_median
         expected_outdata[idx] = np.mean(mean_array)
 
+    print(outdata.real / expected_outdata.real)
     np.testing.assert_almost_equal(outdata.real, expected_outdata.real)
     np.testing.assert_almost_equal(outdata.imag, expected_outdata.imag)
 
