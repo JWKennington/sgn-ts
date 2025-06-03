@@ -67,13 +67,13 @@ def test_medianmean():
             name="ramp",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            factor = real_amp + 0j,
+            factor=real_amp+0j,
         ),
         Amplify(
             name="iamp",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            factor = 1j * imag_amp,
+            factor=1j*imag_amp,
         ),
         Adder(
             name="adder",
