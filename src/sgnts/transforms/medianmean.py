@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 
@@ -38,12 +38,9 @@ class MedianMean(TSTransform):
         mean_overlap_samples:
             tuple[int, int], how many previous and subsequent samples over which to
             take the running mean following the running median
-        default_real:
-            float, real part of default value, used to initialize the median array and
+        default_value:
+            float | complex, the default value, used to initialize the median array and
             to fill gaps, unless default-to-median is set to True
-        default_imag:
-            float, imaginary part of default value, used to initialize the median array
-            and to fill gaps, unless default-to-median is set to True
         default_to_median:
             bool, whether to fill gaps with the default value or the current median
         reject_zeros:
@@ -53,8 +50,7 @@ class MedianMean(TSTransform):
 
     median_overlap_samples: tuple[int, int] = (2048, 0)
     mean_overlap_samples: tuple[int, int] = (0, 0)
-    default_real: Optional[float] = 0.0
-    default_imag: Optional[float] = 0.0
+    default_value: Optional[float, complex] = 0.0
     default_to_median: bool = True
     reject_zeros: bool = True
 
@@ -63,106 +59,99 @@ class MedianMean(TSTransform):
         # This element is written to assume one channel, one source pad and one sink pad
         assert len(self.source_pads) == len(self.sink_pads) == 1
 
-        # If one of the defaults is None, both should be.
-        if self.default_real is None:
-            self.default_imag = None
-        assert len({self.default_real is None, self.default_imag is None}) == 1
-
         # Initialize the arrays
-        self.median_array_len = 1 + sum(self.median_overlap_samples)
-        self.mean_array_len = 1 + sum(self.mean_overlap_samples)
         assert self.median_array_len > 0 and self.mean_array_len > 0
-        self.latency = self.median_overlap_samples[1] + self.mean_overlap_samples[1]
-        if self.default_real is not None:
-            self.median_array_real = np.tile(
-                float(self.default_real), self.median_array_len
+        if self.default_value is not None:
+            self.median_array = np.tile(
+                self.default_value, self.median_array_len
             )
-            self.mean_array_real = np.tile(
-                float(self.default_real), self.mean_array_len
+            self.mean_array = np.tile(
+                self.default_value, self.mean_array_len
             )
             self.samples_in_median = self.median_array_len
             self.samples_in_mean = self.mean_array_len
-            self.current_median_real = self.default_real
+            self.current_median = self.default_value
         else:
-            self.median_array_real = np.zeros(self.median_array_len)
-            self.mean_array_real = np.zeros(self.mean_array_len)
+            self.median_array = np.zeros(self.median_array_len, dtype = float)
+            self.mean_array = np.zeros(self.mean_array_len, dtype = float)
             self.samples_in_median = self.samples_in_mean = 0
-            self.current_median_real = 0.0
-
-        if self.default_imag is not None:
-            self.median_array_imag = np.tile(
-                float(self.default_imag), self.median_array_len
-            )
-            self.mean_array_imag = np.tile(
-                float(self.default_imag), self.mean_array_len
-            )
-            self.current_median_imag = self.default_imag
-        else:
-            self.median_array_imag = np.zeros(self.median_array_len)
-            self.mean_array_imag = np.zeros(self.mean_array_len)
-            self.current_median_imag = 0.0
+            self.current_median = 0.0 + 0.0j
 
         # We won't know these until the first data arrives
         self.median_array_index = self.mean_array_index = 0
         self.array_index_set = False
         self.real = None
 
-    def update_median(self, new_sample, imag=False):
-        if imag:
-            median_array = self.median_array_imag
-            old_median = self.current_median_imag
-        else:
-            median_array = self.median_array_real
-            old_median = self.current_median_real
-            if self.samples_in_median < self.median_array_len:
-                self.samples_in_median += 1
-            # Update our location in the arrays
-            self.median_array_index = (
-                self.median_array_index + 1
-            ) % self.median_array_len
+    @property
+    def median_array_len(self):
+        """Get the length of the running median array"""
+        return 1 + sum(self.median_overlap_samples)
 
-        median_array[self.median_array_index] = new_sample
+    @property
+    def mean_array_len(self):
+        """Get the length of the running mean array"""
+        return 1 + sum(self.mean_overlap_samples)
+
+    @property
+    def latency(self):
+        """Get the latency of the element in samples"""
+        return self.median_overlap_samples[1] + self.mean_overlap_samples[1]
+
+    def update_median(self, new_sample):
+        # Update the number of samples in the array
+        if self.samples_in_median < self.median_array_len:
+            self.samples_in_median += 1
+        # Update our location in the array
+        self.median_array_index = (
+            self.median_array_index + 1
+        ) % self.median_array_len
+
+        self.median_array[self.median_array_index] = new_sample
         if self.samples_in_median < self.median_array_len:
             # Then we are taking the median of a subset of this array
             median_array_subset = np.roll(
-                median_array, self.median_array_len - self.median_array_index - 1
+                self.median_array, self.median_array_len - self.median_array_index - 1
             )[-self.samples_in_median :]
             if self.samples_in_median % 2:
-                new_median = get_new_median(median_array_subset, old_median)
+                if self.real:
+                    self.current_median = get_new_median(median_array_subset, self.current_median)
+                else:
+                    self.current_median = get_new_median(median_array_subset.real, self.current_median.real) + 1j * get_new_median(median_array_subset.imag, self.current_median.imag)
             else:
-                new_median = np.median(median_array_subset)
+                if self.real:
+                    self.current_median = np.median(median_array_subset)
+                else:
+                    self.current_median = np.median(median_array_subset.real) + 1j * np.median(median_array_subset.imag)
         else:
             if self.samples_in_median % 2:
-                new_median = get_new_median(median_array, old_median)
+                if self.real:
+                    self.current_median = get_new_median(self.median_array, self.current_median)
+                else:
+                    self.current_median = get_new_median(self.median_array.real, self.current_median.real) + 1j * get_new_median(self.median_array.imag, self.current_median.imag)
             else:
-                new_median = np.median(median_array)
-        if imag:
-            self.current_median_imag = new_median
-        else:
-            self.current_median_real = new_median
+                if self.real:
+                    self.current_median = np.median(self.median_array)
+                else:
+                    self.current_median = np.median(self.median_array.real) + 1j * np.median(self.median_array.imag)
 
-    def compute_mean(self, imag=False):
-        if imag:
-            mean_array = self.mean_array_imag
-            new_sample = self.current_median_imag
-        else:
-            mean_array = self.mean_array_real
-            new_sample = self.current_median_real
-            if self.samples_in_mean < self.mean_array_len:
-                self.samples_in_mean += 1
-            # Update our location in the arrays
-            self.mean_array_index = (self.mean_array_index + 1) % self.mean_array_len
+    def compute_mean(self):
+        new_sample = self.current_median
+        # Update the number of samples in the array
+        if self.samples_in_mean < self.mean_array_len:
+            self.samples_in_mean += 1
+        # Update our location in the arrays
+        self.mean_array_index = (self.mean_array_index + 1) % self.mean_array_len
 
-        mean_array[self.mean_array_index] = new_sample
+        self.mean_array[self.mean_array_index] = new_sample
 
         if self.samples_in_mean < self.mean_array_len:
             # Then we are taking the mean of a subset of this array
             mean_array_subset = np.roll(
-                mean_array, self.mean_array_len - self.mean_array_index - 1
+                self.mean_array, self.mean_array_len - self.mean_array_index - 1
             )[-self.samples_in_mean :]
             return np.mean(mean_array_subset)
         else:
-            return np.mean(mean_array)
+            return np.mean(self.mean_array)
 
     def internal(self):
         super().internal()
@@ -186,28 +175,34 @@ class MedianMean(TSTransform):
                         # Take care of the real part first.  If the input is real, this
                         # is all we need to do.
                         if self.default_to_median:
-                            new_sample = self.current_median_real
+                            new_sample = self.current_median
                         else:
-                            new_sample = self.default_real
+                            new_sample = self.default_value
                         # Update the current median
                         self.update_median(new_sample)
                         # Compute the mean to set the next output value
                         outdata[idx] = self.compute_mean()
-                        if not self.real:
-                            # Then we need to add in the imaginary part
-                            if self.default_to_median:
-                                new_sample_imag = self.current_median_imag
-                            else:
-                                new_sample_imag = self.default_imag
-                            # Update the imaginary part of the current median
-                            self.update_median(new_sample_imag, imag=True)
-                            # Add the imaginary mean to the next output value
-                            outdata[idx] += 1j * self.compute_mean(imag=True)
             else:
                 if self.real is None:
                     self.real = not isinstance(
                         inbuf.data[0], (complex, np.complex128, np.clongdouble)
                     )
+                    # Now, check whether the median and mean arrays are the right type
+                    if self.real and isinstance(self.median_array[0], (complex, np.complex128, np.clongdouble)):
+                        # FIXME: Should this warning be something other than a print
+                        # statement?
+                        msg = (
+                            "WARNING: MedianMean: data is real; discarding imaginary "
+                            "part of default value, median array, and mean array"
+                        )
+                        print(msg)
+                        if self.default_value is not None:
+                            self.default_value = self.default_value.real
+                        self.median_array = self.median_array.real
+                        self.mean_array = self.mean_array.real
+                    elif not self.real and isinstance(self.median_array[0], (float, np.float64, np.longdouble)):
+                        self.median_array = self.median_array.astype(complex)
+                        self.mean_array = self.mean_array.astype(complex)
                 if self.real:
                     outdata = np.empty(len(inbuf.data), dtype=np.float64)
                 else:
@@ -239,36 +234,20 @@ class MedianMean(TSTransform):
                 for idx in range(len(inbuf.data)):
                     # Take care of the real part first.  If the input is real, this is
                     # all we need to do.
-                    new_sample = np.real(inbuf.data[idx])
+                    new_sample = inbuf.data[idx]
                     if (
                         np.isinf(new_sample)
                         or np.isnan(new_sample)
                         or (new_sample == 0 and self.reject_zeros)
                     ):
                         if self.default_to_median:
-                            new_sample = self.current_median_real
+                            new_sample = self.current_median
                         else:
-                            new_sample = self.default_real
+                            new_sample = self.default_value
                     # Update the current median
                     self.update_median(new_sample)
                     # Compute the mean to set the next output value
                     outdata[idx] = self.compute_mean()
-                    if not self.real:
-                        # Then we need to add in the imaginary part
-                        new_sample_imag = np.imag(inbuf.data[idx])
-                        if (
-                            np.isinf(new_sample_imag)
-                            or np.isnan(new_sample_imag)
-                            or (new_sample_imag == 0 and self.reject_zeros)
-                        ):
-                            if self.default_to_median:
-                                new_sample_imag = self.current_median_imag
-                            else:
-                                new_sample_imag = self.default_imag
-                        # Update the imaginary part of the current median
-                        self.update_median(new_sample_imag, imag=True)
-                        # Add the imaginary mean to the next output value
-                        outdata[idx] += 1j * self.compute_mean(imag=True)
 
             outbuf = SeriesBuffer(
                 offset=inbuf.offset

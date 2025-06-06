@@ -11,8 +11,7 @@ def test_medianmean():
 
     end = 8
     inrate = 16
-    default_real = 3
-    default_imag = -1
+    default_value = 3 - 1j
     median_overlap_samples = (8, 16)
     mean_overlap_samples = (3, 0)
     real_f = 0.125
@@ -23,7 +22,7 @@ def test_medianmean():
     indata_real = real_amp * np.sin(2 * np.pi * real_f * t)
     indata_imag = imag_amp * np.sin(2 * np.pi * imag_f * t)
     indata = indata_real + 1j * indata_imag
-    indata[0] = default_real + 1j * default_imag
+    indata[0] = default_value
 
     pipeline = Pipeline()
 
@@ -86,8 +85,7 @@ def test_medianmean():
             sink_pad_names=("snk",),
             median_overlap_samples=median_overlap_samples,
             mean_overlap_samples=mean_overlap_samples,
-            default_real=default_real,
-            default_imag=default_imag,
+            default_value=default_value,
         ),
         DumpSeriesSink(
             name="snk",
@@ -120,7 +118,7 @@ def test_medianmean():
     expected_outdata = np.empty(end * inrate, dtype=np.complex128)
     n_median = 1 + sum(median_overlap_samples)
     n_mean = 1 + sum(mean_overlap_samples)
-    current_median = default_real + 1j * default_imag
+    current_median = default_value
     median_array = np.tile(current_median, n_median)
     mean_array = np.tile(current_median, n_mean)
     # Before the gap
