@@ -62,18 +62,14 @@ class MedianMean(TSTransform):
         # Initialize the arrays
         assert self.median_array_len > 0 and self.mean_array_len > 0
         if self.default_value is not None:
-            self.median_array = np.tile(
-                self.default_value, self.median_array_len
-            )
-            self.mean_array = np.tile(
-                self.default_value, self.mean_array_len
-            )
+            self.median_array = np.tile(self.default_value, self.median_array_len)
+            self.mean_array = np.tile(self.default_value, self.mean_array_len)
             self.samples_in_median = self.median_array_len
             self.samples_in_mean = self.mean_array_len
             self.current_median = self.default_value
         else:
-            self.median_array = np.zeros(self.median_array_len, dtype = float)
-            self.mean_array = np.zeros(self.mean_array_len, dtype = float)
+            self.median_array = np.zeros(self.median_array_len, dtype=float)
+            self.mean_array = np.zeros(self.mean_array_len, dtype=float)
             self.samples_in_median = self.samples_in_mean = 0
             self.current_median = 0.0 + 0.0j
 
@@ -102,9 +98,7 @@ class MedianMean(TSTransform):
         if self.samples_in_median < self.median_array_len:
             self.samples_in_median += 1
         # Update our location in the array
-        self.median_array_index = (
-            self.median_array_index + 1
-        ) % self.median_array_len
+        self.median_array_index = (self.median_array_index + 1) % self.median_array_len
 
         self.median_array[self.median_array_index] = new_sample
         if self.samples_in_median < self.median_array_len:
@@ -114,25 +108,41 @@ class MedianMean(TSTransform):
             )[-self.samples_in_median :]
             if self.samples_in_median % 2:
                 if self.real:
-                    self.current_median = get_new_median(median_array_subset, self.current_median)
+                    self.current_median = get_new_median(
+                        median_array_subset, self.current_median
+                    )
                 else:
-                    self.current_median = get_new_median(median_array_subset.real, self.current_median.real) + 1j * get_new_median(median_array_subset.imag, self.current_median.imag)
+                    self.current_median = get_new_median(
+                        median_array_subset.real, self.current_median.real
+                    ) + 1j * get_new_median(
+                        median_array_subset.imag, self.current_median.imag
+                    )
             else:
                 if self.real:
                     self.current_median = np.median(median_array_subset)
                 else:
-                    self.current_median = np.median(median_array_subset.real) + 1j * np.median(median_array_subset.imag)
+                    self.current_median = np.median(
+                        median_array_subset.real
+                    ) + 1j * np.median(median_array_subset.imag)
         else:
             if self.samples_in_median % 2:
                 if self.real:
-                    self.current_median = get_new_median(self.median_array, self.current_median)
+                    self.current_median = get_new_median(
+                        self.median_array, self.current_median
+                    )
                 else:
-                    self.current_median = get_new_median(self.median_array.real, self.current_median.real) + 1j * get_new_median(self.median_array.imag, self.current_median.imag)
+                    self.current_median = get_new_median(
+                        self.median_array.real, self.current_median.real
+                    ) + 1j * get_new_median(
+                        self.median_array.imag, self.current_median.imag
+                    )
             else:
                 if self.real:
                     self.current_median = np.median(self.median_array)
                 else:
-                    self.current_median = np.median(self.median_array.real) + 1j * np.median(self.median_array.imag)
+                    self.current_median = np.median(
+                        self.median_array.real
+                    ) + 1j * np.median(self.median_array.imag)
 
     def compute_mean(self):
         new_sample = self.current_median
@@ -188,7 +198,9 @@ class MedianMean(TSTransform):
                         inbuf.data[0], (complex, np.complex128, np.clongdouble)
                     )
                     # Now, check whether the median and mean arrays are the right type
-                    if self.real and isinstance(self.median_array[0], (complex, np.complex128, np.clongdouble)):
+                    if self.real and isinstance(
+                        self.median_array[0], (complex, np.complex128, np.clongdouble)
+                    ):
                         # FIXME: Should this warning be something other than a print
                         # statement?
                         msg = (
@@ -200,7 +212,9 @@ class MedianMean(TSTransform):
                             self.default_value = self.default_value.real
                         self.median_array = self.median_array.real
                         self.mean_array = self.mean_array.real
-                    elif not self.real and isinstance(self.median_array[0], (float, np.float64, np.longdouble)):
+                    elif not self.real and isinstance(
+                        self.median_array[0], (float, np.float64, np.longdouble)
+                    ):
                         self.median_array = self.median_array.astype(complex)
                         self.mean_array = self.mean_array.astype(complex)
                 if self.real:
