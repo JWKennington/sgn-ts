@@ -9,4 +9,5 @@ from sgnts.transforms.matmul import Matmul
 from sgnts.transforms.resampler import Resampler
 from sgnts.transforms.sumindex import SumIndex
 from sgnts.transforms.threshold import Threshold
-from sgnts.transforms.medianmean import MedianMean
+from sgnts.transforms.mean import Mean
+from sgnts.transforms.median import Median

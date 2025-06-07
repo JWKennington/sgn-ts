@@ -4,16 +4,15 @@ import numpy as np
 from sgn.apps import Pipeline
 from sgnts.sinks import DumpSeriesSink
 from sgnts.sources import FakeSeriesSource
-from sgnts.transforms import Adder, Amplify, MedianMean
+from sgnts.transforms import Adder, Amplify, Median
 
 
-def test_medianmean():
+def test_median():
 
     end = 8
     inrate = 16
     default_value = 3 - 1j
     median_overlap_samples = (8, 16)
-    mean_overlap_samples = (3, 0)
     real_f = 0.125
     imag_f = 1.0
     real_amp = 2.0
@@ -33,7 +32,7 @@ def test_medianmean():
     #              \
     #           H1  \ SR2
     #           ------------
-    #          | MedianMean |
+    #          |   Median   |
     #           ------------
     #                 \
     #             H1   \ SR2
@@ -79,12 +78,11 @@ def test_medianmean():
             sink_pad_names=("rsnk", "isnk"),
             source_pad_names=("src",),
         ),
-        MedianMean(
-            name="medianmean",
+        Median(
+            name="median",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
             median_overlap_samples=median_overlap_samples,
-            mean_overlap_samples=mean_overlap_samples,
             default_value=default_value,
         ),
         DumpSeriesSink(
@@ -97,8 +95,8 @@ def test_medianmean():
             "iamp:snk:snk": "isrc:src:src",
             "adder:snk:rsnk": "ramp:src:src",
             "adder:snk:isnk": "iamp:src:src",
-            "medianmean:snk:snk": "adder:src:src",
-            "snk:snk:snk": "medianmean:src:src",
+            "median:snk:snk": "adder:src:src",
+            "snk:snk:snk": "median:src:src",
         },
     )
 
@@ -110,42 +108,37 @@ def test_medianmean():
     outdata = np.transpose(outdata)[1]
 
     # Check that the times include the expected latency
-    t_start = -(median_overlap_samples[1] + mean_overlap_samples[1]) / 16
+    t_start = -median_overlap_samples[1] / 16
     t_end = t_start + end - 1.0 / inrate
     np.testing.assert_almost_equal(t, np.linspace(t_start, t_end, end * inrate))
 
     # Compute the expected output data
     expected_outdata = np.empty(end * inrate, dtype=np.complex128)
     n_median = 1 + sum(median_overlap_samples)
-    n_mean = 1 + sum(mean_overlap_samples)
     current_median = default_value
     median_array = np.tile(current_median, n_median)
-    mean_array = np.tile(current_median, n_mean)
     # Before the gap
     for idx in range((ngap - 1) * inrate):
         median_array[idx % n_median] = indata[idx]
         current_median = np.median(median_array.real) + 1j * np.median(
             median_array.imag
         )
-        mean_array[idx % n_mean] = current_median
-        expected_outdata[idx] = np.mean(mean_array)
+        expected_outdata[idx] = current_median
     # During the gap
     for idx in range((ngap - 1) * inrate, ngap * inrate):
         median_array[idx % n_median] = current_median
-        mean_array[idx % n_mean] = current_median
-        expected_outdata[idx] = np.mean(mean_array)
+        expected_outdata[idx] = current_median
     # After the gap
     for idx in range(ngap * inrate, end * inrate):
         median_array[idx % n_median] = indata[idx]
         current_median = np.median(median_array.real) + 1j * np.median(
             median_array.imag
         )
-        mean_array[idx % n_mean] = current_median
-        expected_outdata[idx] = np.mean(mean_array)
+        expected_outdata[idx] = current_median
 
     np.testing.assert_almost_equal(outdata.real, expected_outdata.real)
     np.testing.assert_almost_equal(outdata.imag, expected_outdata.imag)
 
 
 if __name__ == "__main__":
-    test_medianmean()
+    test_median()
