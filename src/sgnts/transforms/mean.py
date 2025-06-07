@@ -27,7 +27,7 @@ class Mean(TSTransform):
             current mean
     """
 
-    mean_overlap_samples: tuple[int, int] = (0, 0)
+    mean_overlap_samples: tuple[int, int] = (160, 0)
     default_value: Optional[Union[float, complex]] = 0.0
     default_to_mean: bool = True
     reject_zeros: bool = True
