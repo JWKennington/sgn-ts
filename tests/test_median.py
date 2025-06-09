@@ -5,6 +5,25 @@ from sgn.apps import Pipeline
 from sgnts.sinks import DumpSeriesSink
 from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import Adder, Amplify, Median
+from sgnts.transforms.median import get_new_median
+
+
+def test_get_new_median():
+    arr = 100 * (np.random.rand(201) - 0.5)
+    current_median = arr[0]
+    for i in range(1, 1000):
+        if i < len(arr):
+            # The array is still filling up
+            arr_sub = arr[:i]
+        else:
+            # The array is full, so replace a value
+            arr_sub = arr
+            arr_sub[i % len(arr_sub)] = 100 * (np.random.rand() - 0.5)
+        if len(arr_sub) % 2:
+            current_median = get_new_median(arr_sub, current_median)
+            assert current_median == np.median(arr_sub)
+        else:
+            current_median = np.median(arr_sub)
 
 
 def get_expected_output(input_dict):
@@ -434,5 +453,6 @@ def test_median_real():
 
 
 if __name__ == "__main__":
+    test_get_new_median()
     test_median_complex()
     test_median_real()

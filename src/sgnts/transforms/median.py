@@ -35,7 +35,7 @@ class Median(TSTransform):
             take the running median
         default_value:
             float | complex, the default value, used to initialize the median array and
-            to fill gaps, unless default-to-median is set to True
+            to fill gaps, unless default_to_median is set to True
         default_to_median:
             bool, whether to fill gaps with the default value or the current median
         initialize_array:
@@ -61,9 +61,9 @@ class Median(TSTransform):
         self.current_median = self.default_value
         self.median_array = np.tile(self.default_value, self.median_array_len)
         if self.initialize_array:
-            self.samples_in_median = self.median_array_len
+            self.valid_samples = self.median_array_len
         else:
-            self.samples_in_median = 0
+            self.valid_samples = 0
 
         # We won't know these until the first data arrives
         self.median_array_index = 0
@@ -77,18 +77,18 @@ class Median(TSTransform):
 
     def update_median(self, new_sample, sample_is_valid):
         # Update the number of samples in the array
-        if sample_is_valid and self.samples_in_median < self.median_array_len:
-            self.samples_in_median += 1
+        if sample_is_valid and self.valid_samples < self.median_array_len:
+            self.valid_samples += 1
         # Update our location in the array
         self.median_array_index = (self.median_array_index + 1) % self.median_array_len
 
         self.median_array[self.median_array_index] = new_sample
-        if self.samples_in_median < self.median_array_len:
+        if self.valid_samples < self.median_array_len:
             # Then we are taking the median of a subset of this array
             median_array_subset = np.roll(
                 self.median_array, self.median_array_len - self.median_array_index - 1
-            )[-self.samples_in_median :]
-            if self.samples_in_median % 2:
+            )[-self.valid_samples :]
+            if self.valid_samples % 2:
                 if self.real:
                     self.current_median = get_new_median(
                         median_array_subset, self.current_median
@@ -107,7 +107,7 @@ class Median(TSTransform):
                         median_array_subset.real
                     ) + 1j * np.median(median_array_subset.imag)
         else:
-            if self.samples_in_median % 2:
+            if self.valid_samples % 2:
                 if self.real:
                     self.current_median = get_new_median(
                         self.median_array, self.current_median

@@ -19,7 +19,7 @@ class Mean(TSTransform):
             take the running mean
         default_value:
             float | complex, the default value, used to initialize the mean array and
-            to fill gaps, unless default-to-mean is set to True
+            to fill gaps, unless default_to_mean is set to True
         default_to_mean:
             bool, whether to fill gaps with the default value or the current mean
         initialize_array:
@@ -45,9 +45,9 @@ class Mean(TSTransform):
         self.current_mean = self.default_value
         self.mean_array = np.tile(self.default_value, self.mean_array_len)
         if self.initialize_array:
-            self.samples_in_mean = self.mean_array_len
+            self.valid_samples = self.mean_array_len
         else:
-            self.samples_in_mean = 0
+            self.valid_samples = 0
 
         # We won't know these until the first data arrives
         self.mean_array_index = 0
@@ -61,18 +61,18 @@ class Mean(TSTransform):
 
     def update_mean(self, new_sample, sample_is_valid):
         # Update the number of samples in the array
-        if sample_is_valid and self.samples_in_mean < self.mean_array_len:
-            self.samples_in_mean += 1
+        if sample_is_valid and self.valid_samples < self.mean_array_len:
+            self.valid_samples += 1
         # Update our location in the arrays
         self.mean_array_index = (self.mean_array_index + 1) % self.mean_array_len
 
         self.mean_array[self.mean_array_index] = new_sample
 
-        if self.samples_in_mean < self.mean_array_len:
+        if self.valid_samples < self.mean_array_len:
             # Then we are taking the mean of a subset of this array
             mean_array_subset = np.roll(
                 self.mean_array, self.mean_array_len - self.mean_array_index - 1
-            )[-self.samples_in_mean :]
+            )[-self.valid_samples :]
             self.current_mean = np.mean(mean_array_subset)
         else:
             self.current_mean = np.mean(self.mean_array)
