@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 
@@ -22,14 +22,17 @@ class Mean(TSTransform):
             to fill gaps, unless default-to-mean is set to True
         default_to_mean:
             bool, whether to fill gaps with the default value or the current mean
+        initialize_array:
+            bool, whether to fill the mean array with the default value at startup
         reject_zeros:
             bool, whether or not to replace zeros with either the default value or
             current mean
     """
 
     mean_overlap_samples: tuple[int, int] = (160, 0)
-    default_value: Optional[Union[float, complex]] = 0.0
+    default_value: Union[float, complex] = 0.0
     default_to_mean: bool = True
+    initialize_array: bool = True
     reject_zeros: bool = True
 
     def __post_init__(self):
@@ -39,14 +42,12 @@ class Mean(TSTransform):
 
         # Initialize the arrays
         assert self.mean_array_len > 0
-        if self.default_value is not None:
-            self.mean_array = np.tile(self.default_value, self.mean_array_len)
+        self.current_mean = self.default_value
+        self.mean_array = np.tile(self.default_value, self.mean_array_len)
+        if self.initialize_array:
             self.samples_in_mean = self.mean_array_len
-            self.current_mean = self.default_value
         else:
-            self.mean_array = np.zeros(self.mean_array_len, dtype=float)
             self.samples_in_mean = 0
-            self.current_mean = 0.0
 
         # We won't know these until the first data arrives
         self.mean_array_index = 0
@@ -58,9 +59,9 @@ class Mean(TSTransform):
         """Get the length of the running mean array"""
         return 1 + sum(self.mean_overlap_samples)
 
-    def update_mean(self, new_sample):
+    def update_mean(self, new_sample, sample_is_valid):
         # Update the number of samples in the array
-        if self.samples_in_mean < self.mean_array_len:
+        if sample_is_valid and self.samples_in_mean < self.mean_array_len:
             self.samples_in_mean += 1
         # Update our location in the arrays
         self.mean_array_index = (self.mean_array_index + 1) % self.mean_array_len
@@ -100,7 +101,7 @@ class Mean(TSTransform):
                         else:
                             new_sample = self.default_value
                         # Update the current mean
-                        self.update_mean(new_sample)
+                        self.update_mean(new_sample, False)
                         outdata[idx] = self.current_mean
             else:
                 if self.real is None:
@@ -118,8 +119,8 @@ class Mean(TSTransform):
                             "default value and mean array"
                         )
                         print(msg)
-                        if self.default_value is not None:
-                            self.default_value = self.default_value.real
+                        self.default_value = self.default_value.real
+                        self.current_mean = self.current_mean.real
                         self.mean_array = self.mean_array.real
                     elif not self.real and not isinstance(
                         self.mean_array[0], (complex, np.complex128, np.clongdouble)
@@ -155,8 +156,10 @@ class Mean(TSTransform):
                             new_sample = self.current_mean
                         else:
                             new_sample = self.default_value
-                    # Update the current mean
-                    self.update_mean(new_sample)
+                        # Update the current mean
+                        self.update_mean(new_sample, False)
+                    else:
+                        self.update_mean(new_sample, True)
                     outdata[idx] = self.current_mean
 
             outbuf = SeriesBuffer(

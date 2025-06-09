@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 
@@ -38,14 +38,17 @@ class Median(TSTransform):
             to fill gaps, unless default-to-median is set to True
         default_to_median:
             bool, whether to fill gaps with the default value or the current median
+        initialize_array:
+            bool, whether to fill the median array with the default value at startup
         reject_zeros:
             bool, whether or not to replace zeros with either the default value or
             current median
     """
 
     median_overlap_samples: tuple[int, int] = (2048, 0)
-    default_value: Optional[Union[float, complex]] = 0.0
+    default_value: Union[float, complex] = 0.0
     default_to_median: bool = True
+    initialize_array: bool = True
     reject_zeros: bool = True
 
     def __post_init__(self):
@@ -55,14 +58,12 @@ class Median(TSTransform):
 
         # Initialize the arrays
         assert self.median_array_len > 0
-        if self.default_value is not None:
-            self.median_array = np.tile(self.default_value, self.median_array_len)
+        self.current_median = self.default_value
+        self.median_array = np.tile(self.default_value, self.median_array_len)
+        if self.initialize_array:
             self.samples_in_median = self.median_array_len
-            self.current_median = self.default_value
         else:
-            self.median_array = np.zeros(self.median_array_len, dtype=float)
             self.samples_in_median = 0
-            self.current_median = 0.0
 
         # We won't know these until the first data arrives
         self.median_array_index = 0
@@ -74,9 +75,9 @@ class Median(TSTransform):
         """Get the length of the running median array"""
         return 1 + sum(self.median_overlap_samples)
 
-    def update_median(self, new_sample):
+    def update_median(self, new_sample, sample_is_valid):
         # Update the number of samples in the array
-        if self.samples_in_median < self.median_array_len:
+        if sample_is_valid and self.samples_in_median < self.median_array_len:
             self.samples_in_median += 1
         # Update our location in the array
         self.median_array_index = (self.median_array_index + 1) % self.median_array_len
@@ -144,14 +145,12 @@ class Median(TSTransform):
                     else:
                         outdata = np.empty(samples_to_fill, dtype=np.complex128)
                     for idx in range(samples_to_fill):
-                        # Take care of the real part first.  If the input is real, this
-                        # is all we need to do.
                         if self.default_to_median:
                             new_sample = self.current_median
                         else:
                             new_sample = self.default_value
                         # Update the current median
-                        self.update_median(new_sample)
+                        self.update_median(new_sample, False)
                         outdata[idx] = self.current_median
             else:
                 if self.real is None:
@@ -169,8 +168,8 @@ class Median(TSTransform):
                             "part of default value and median array"
                         )
                         print(msg)
-                        if self.default_value is not None:
-                            self.default_value = self.default_value.real
+                        self.default_value = self.default_value.real
+                        self.current_median = self.current_median.real
                         self.median_array = self.median_array.real
                     elif not self.real and not isinstance(
                         self.median_array[0], (complex, np.complex128, np.clongdouble)
@@ -206,8 +205,10 @@ class Median(TSTransform):
                             new_sample = self.current_median
                         else:
                             new_sample = self.default_value
-                    # Update the current median
-                    self.update_median(new_sample)
+                        # Update the current median
+                        self.update_median(new_sample, False)
+                    else:
+                        self.update_median(new_sample, True)
                     outdata[idx] = self.current_median
 
             outbuf = SeriesBuffer(
