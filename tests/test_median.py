@@ -12,7 +12,7 @@ def test_get_new_median():
     arr = 100 * (np.random.rand(201) - 0.5)
     current_median = arr[0]
     for i in range(1, 1000):
-        if i < len(arr):
+        if i <= len(arr):
             # The array is still filling up
             arr_sub = arr[:i]
         else:
