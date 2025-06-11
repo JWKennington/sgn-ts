@@ -2,7 +2,7 @@ import numpy as np
 from sgn.apps import Pipeline
 from sgnts.sinks import DumpSeriesSink
 from sgnts.sources import FakeSeriesSource
-from sgnts.transforms import Adder, Amplify, Mean
+from sgnts.transforms import Adder, Amplify, Average
 
 
 def get_expected_output(input_dict):
@@ -11,14 +11,14 @@ def get_expected_output(input_dict):
     inrate = input_dict["inrate"]
     default_value = input_dict["default_value"]
     initialize_array = input_dict["initialize_array"]
-    mean_overlap_samples = input_dict["mean_overlap_samples"]
+    avg_overlap_samples = input_dict["avg_overlap_samples"]
     real_f = input_dict["real_f"]
     imag_f = input_dict["imag_f"]
     real_amp = input_dict["real_amp"]
     imag_amp = input_dict["imag_amp"]
     ngap = input_dict["ngap"]
     reject_zeros = input_dict["reject_zeros"]
-    default_to_mean = input_dict["default_to_mean"]
+    default_to_avg = input_dict["default_to_avg"]
 
     t = np.linspace(0, end - 1.0 / inrate, end * inrate)
     indata = real_amp * np.sin(2 * np.pi * real_f * t)
@@ -29,7 +29,7 @@ def get_expected_output(input_dict):
         data_is_complex = False
 
     # Compute the expected timestamps
-    t_start = -mean_overlap_samples[1] / 16
+    t_start = -avg_overlap_samples[1] / 16
     t_end = t_start + end - 1.0 / inrate
     expected_times = np.linspace(t_start, t_end, end * inrate)
 
@@ -37,7 +37,7 @@ def get_expected_output(input_dict):
     expected_outdata = np.empty(
         end * inrate, dtype=np.complex128 if data_is_complex else np.float64
     )
-    n_mean = 1 + sum(mean_overlap_samples)
+    n_mean = 1 + sum(avg_overlap_samples)
     current_mean = default_value
     if data_is_complex:
         current_mean += 0j
@@ -52,7 +52,7 @@ def get_expected_output(input_dict):
             and reject_zeros
         ):
             # This is either gap data or the values are undesirable
-            if default_to_mean:
+            if default_to_avg:
                 mean_array[idx % n_mean] = current_mean
             else:
                 mean_array[idx % n_mean] = default_value
@@ -85,13 +85,13 @@ def test_mean_complex(tmp_path):
     input_dict1["ngap"] = 5
     input_dict1["default_value"] = 3 - 1j
     input_dict1["initialize_array"] = True
-    input_dict1["mean_overlap_samples"] = (8, 16)
+    input_dict1["avg_overlap_samples"] = (8, 16)
     input_dict1["real_f"] = 0.125
     input_dict1["imag_f"] = 1.0
     input_dict1["real_amp"] = 2.0
     input_dict1["imag_amp"] = -5.0
     input_dict1["reject_zeros"] = True
-    input_dict1["default_to_mean"] = True
+    input_dict1["default_to_avg"] = True
 
     # Try different combinations of options
     input_dict2 = input_dict1.copy()
@@ -100,7 +100,7 @@ def test_mean_complex(tmp_path):
     input_dict3["reject_zeros"] = False
     input_dict4 = input_dict1.copy()
     input_dict4["initialize_array"] = False
-    input_dict4["default_to_mean"] = False
+    input_dict4["default_to_avg"] = False
 
     pipeline = Pipeline()
 
@@ -111,7 +111,7 @@ def test_mean_complex(tmp_path):
     #              \
     #           H1  \ SR2
     #           ------------
-    #          |    Mean    |
+    #          |  Average   |
     #           ------------
     #                 \
     #             H1   \ SR2
@@ -155,45 +155,49 @@ def test_mean_complex(tmp_path):
             sink_pad_names=("rsnk", "isnk"),
             source_pad_names=("src",),
         ),
-        Mean(
+        Average(
             name="mean1",
+            method="mean",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            mean_overlap_samples=input_dict1["mean_overlap_samples"],
+            avg_overlap_samples=input_dict1["avg_overlap_samples"],
             default_value=input_dict1["default_value"],
             initialize_array=input_dict1["initialize_array"],
             reject_zeros=input_dict1["reject_zeros"],
-            default_to_mean=input_dict1["default_to_mean"],
+            default_to_avg=input_dict1["default_to_avg"],
         ),
-        Mean(
+        Average(
             name="mean2",
+            method="mean",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            mean_overlap_samples=input_dict2["mean_overlap_samples"],
+            avg_overlap_samples=input_dict2["avg_overlap_samples"],
             default_value=input_dict2["default_value"],
             initialize_array=input_dict2["initialize_array"],
             reject_zeros=input_dict2["reject_zeros"],
-            default_to_mean=input_dict2["default_to_mean"],
+            default_to_avg=input_dict2["default_to_avg"],
         ),
-        Mean(
+        Average(
             name="mean3",
+            method="mean",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            mean_overlap_samples=input_dict3["mean_overlap_samples"],
+            avg_overlap_samples=input_dict3["avg_overlap_samples"],
             default_value=input_dict3["default_value"],
             initialize_array=input_dict3["initialize_array"],
             reject_zeros=input_dict3["reject_zeros"],
-            default_to_mean=input_dict3["default_to_mean"],
+            default_to_avg=input_dict3["default_to_avg"],
         ),
-        Mean(
+        Average(
             name="mean4",
+            method="mean",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            mean_overlap_samples=input_dict3["mean_overlap_samples"],
+            avg_overlap_samples=input_dict3["avg_overlap_samples"],
             default_value=input_dict4["default_value"],
             initialize_array=input_dict4["initialize_array"],
             reject_zeros=input_dict4["reject_zeros"],
-            default_to_mean=input_dict4["default_to_mean"],
+            default_to_avg=input_dict4["default_to_avg"],
         ),
         DumpSeriesSink(
             name="snk1",
@@ -276,13 +280,13 @@ def test_mean_real(tmp_path):
     input_dict1["ngap"] = 5
     input_dict1["default_value"] = 0.0
     input_dict1["initialize_array"] = True
-    input_dict1["mean_overlap_samples"] = (8, 16)
+    input_dict1["avg_overlap_samples"] = (8, 16)
     input_dict1["real_f"] = 0.125
     input_dict1["imag_f"] = 1.0
     input_dict1["real_amp"] = 2.0
     input_dict1["imag_amp"] = 0.0
     input_dict1["reject_zeros"] = True
-    input_dict1["default_to_mean"] = True
+    input_dict1["default_to_avg"] = True
 
     # Try different combinations of options
     input_dict2 = input_dict1.copy()
@@ -291,7 +295,7 @@ def test_mean_real(tmp_path):
     input_dict3["reject_zeros"] = False
     input_dict4 = input_dict1.copy()
     input_dict4["initialize_array"] = False
-    input_dict4["default_to_mean"] = False
+    input_dict4["default_to_avg"] = False
 
     pipeline = Pipeline()
 
@@ -302,7 +306,7 @@ def test_mean_real(tmp_path):
     #              \
     #           H1  \ SR2
     #           ------------
-    #          |    Mean    |
+    #          |  Average   |
     #           ------------
     #                 \
     #             H1   \ SR2
@@ -326,45 +330,49 @@ def test_mean_real(tmp_path):
             sink_pad_names=("snk",),
             factor=input_dict1["real_amp"],
         ),
-        Mean(
+        Average(
             name="mean1",
+            method="mean",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            mean_overlap_samples=input_dict1["mean_overlap_samples"],
+            avg_overlap_samples=input_dict1["avg_overlap_samples"],
             default_value=input_dict1["default_value"],
             initialize_array=input_dict1["initialize_array"],
             reject_zeros=input_dict1["reject_zeros"],
-            default_to_mean=input_dict1["default_to_mean"],
+            default_to_avg=input_dict1["default_to_avg"],
         ),
-        Mean(
+        Average(
             name="mean2",
+            method="mean",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            mean_overlap_samples=input_dict2["mean_overlap_samples"],
+            avg_overlap_samples=input_dict2["avg_overlap_samples"],
             default_value=input_dict2["default_value"],
             initialize_array=input_dict2["initialize_array"],
             reject_zeros=input_dict2["reject_zeros"],
-            default_to_mean=input_dict2["default_to_mean"],
+            default_to_avg=input_dict2["default_to_avg"],
         ),
-        Mean(
+        Average(
             name="mean3",
+            method="mean",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            mean_overlap_samples=input_dict3["mean_overlap_samples"],
+            avg_overlap_samples=input_dict3["avg_overlap_samples"],
             default_value=input_dict3["default_value"],
             initialize_array=input_dict3["initialize_array"],
             reject_zeros=input_dict3["reject_zeros"],
-            default_to_mean=input_dict3["default_to_mean"],
+            default_to_avg=input_dict3["default_to_avg"],
         ),
-        Mean(
+        Average(
             name="mean4",
+            method="mean",
             source_pad_names=("src",),
             sink_pad_names=("snk",),
-            mean_overlap_samples=input_dict3["mean_overlap_samples"],
+            avg_overlap_samples=input_dict3["avg_overlap_samples"],
             default_value=input_dict4["default_value"],
             initialize_array=input_dict4["initialize_array"],
             reject_zeros=input_dict4["reject_zeros"],
-            default_to_mean=input_dict4["default_to_mean"],
+            default_to_avg=input_dict4["default_to_avg"],
         ),
         DumpSeriesSink(
             name="snk1",
