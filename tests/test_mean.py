@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import numpy as np
 from sgn.apps import Pipeline
 from sgnts.sinks import DumpSeriesSink
@@ -78,7 +76,7 @@ def get_expected_output(input_dict):
     return expected_times, expected_outdata
 
 
-def test_mean_complex():
+def test_mean_complex(tmp_path):
 
     # Options for input data and element configuration
     input_dict1 = {}
@@ -199,22 +197,22 @@ def test_mean_complex():
         ),
         DumpSeriesSink(
             name="snk1",
-            fname="output1.txt",
+            fname=str(tmp_path / "meanc1.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk2",
-            fname="output2.txt",
+            fname=str(tmp_path / "meanc2.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk3",
-            fname="output3.txt",
+            fname=str(tmp_path / "meanc3.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk4",
-            fname="output4.txt",
+            fname=str(tmp_path / "meanc4.txt"),
             sink_pad_names=("snk",),
         ),
         link_map={
@@ -236,7 +234,7 @@ def test_mean_complex():
     pipeline.run()
 
     # Get the output data
-    outdata1 = np.loadtxt("output1.txt", dtype=np.complex128)
+    outdata1 = np.loadtxt(str(tmp_path / "meanc1.txt"), dtype=np.complex128)
     t1 = np.real(np.transpose(outdata1)[0])
     outdata1 = np.transpose(outdata1)[1]
     expected_t1, expected_outdata1 = get_expected_output(input_dict1)
@@ -244,7 +242,7 @@ def test_mean_complex():
     np.testing.assert_almost_equal(outdata1.real, expected_outdata1.real)
     np.testing.assert_almost_equal(outdata1.imag, expected_outdata1.imag)
 
-    outdata2 = np.loadtxt("output2.txt", dtype=np.complex128)
+    outdata2 = np.loadtxt(str(tmp_path / "meanc2.txt"), dtype=np.complex128)
     t2 = np.real(np.transpose(outdata2)[0])
     outdata2 = np.transpose(outdata2)[1]
     expected_t2, expected_outdata2 = get_expected_output(input_dict2)
@@ -252,7 +250,7 @@ def test_mean_complex():
     np.testing.assert_almost_equal(outdata2.real, expected_outdata2.real)
     np.testing.assert_almost_equal(outdata2.imag, expected_outdata2.imag)
 
-    outdata3 = np.loadtxt("output3.txt", dtype=np.complex128)
+    outdata3 = np.loadtxt(str(tmp_path / "meanc3.txt"), dtype=np.complex128)
     t3 = np.real(np.transpose(outdata3)[0])
     outdata3 = np.transpose(outdata3)[1]
     expected_t3, expected_outdata3 = get_expected_output(input_dict3)
@@ -260,7 +258,7 @@ def test_mean_complex():
     np.testing.assert_almost_equal(outdata3.real, expected_outdata3.real)
     np.testing.assert_almost_equal(outdata3.imag, expected_outdata3.imag)
 
-    outdata4 = np.loadtxt("output4.txt", dtype=np.complex128)
+    outdata4 = np.loadtxt(str(tmp_path / "meanc4.txt"), dtype=np.complex128)
     t4 = np.real(np.transpose(outdata4)[0])
     outdata4 = np.transpose(outdata4)[1]
     expected_t4, expected_outdata4 = get_expected_output(input_dict4)
@@ -269,7 +267,7 @@ def test_mean_complex():
     np.testing.assert_almost_equal(outdata4.imag, expected_outdata4.imag)
 
 
-def test_mean_real():
+def test_mean_real(tmp_path):
 
     # Options for input data and element configuration
     input_dict1 = {}
@@ -370,22 +368,22 @@ def test_mean_real():
         ),
         DumpSeriesSink(
             name="snk1",
-            fname="output1.txt",
+            fname=str(tmp_path / "meanr1.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk2",
-            fname="output2.txt",
+            fname=str(tmp_path / "meanr2.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk3",
-            fname="output3.txt",
+            fname=str(tmp_path / "meanr3.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk4",
-            fname="output4.txt",
+            fname=str(tmp_path / "meanr4.txt"),
             sink_pad_names=("snk",),
         ),
         link_map={
@@ -404,35 +402,30 @@ def test_mean_real():
     pipeline.run()
 
     # Get the output data
-    outdata1 = np.loadtxt("output1.txt")
+    outdata1 = np.loadtxt(str(tmp_path / "meanr1.txt"))
     t1 = np.real(np.transpose(outdata1)[0])
     outdata1 = np.transpose(outdata1)[1]
     expected_t1, expected_outdata1 = get_expected_output(input_dict1)
     np.testing.assert_almost_equal(t1, expected_t1)
     np.testing.assert_almost_equal(outdata1, expected_outdata1)
 
-    outdata2 = np.loadtxt("output2.txt")
+    outdata2 = np.loadtxt(str(tmp_path / "meanr2.txt"))
     t2 = np.real(np.transpose(outdata2)[0])
     outdata2 = np.transpose(outdata2)[1]
     expected_t2, expected_outdata2 = get_expected_output(input_dict2)
     np.testing.assert_almost_equal(t2, expected_t2)
     np.testing.assert_almost_equal(outdata2, expected_outdata2)
 
-    outdata3 = np.loadtxt("output3.txt")
+    outdata3 = np.loadtxt(str(tmp_path / "meanr3.txt"))
     t3 = np.real(np.transpose(outdata3)[0])
     outdata3 = np.transpose(outdata3)[1]
     expected_t3, expected_outdata3 = get_expected_output(input_dict3)
     np.testing.assert_almost_equal(t3, expected_t3)
     np.testing.assert_almost_equal(outdata3, expected_outdata3)
 
-    outdata4 = np.loadtxt("output4.txt")
+    outdata4 = np.loadtxt(str(tmp_path / "meanr4.txt"))
     t4 = np.real(np.transpose(outdata4)[0])
     outdata4 = np.transpose(outdata4)[1]
     expected_t4, expected_outdata4 = get_expected_output(input_dict4)
     np.testing.assert_almost_equal(t4, expected_t4)
     np.testing.assert_almost_equal(outdata4, expected_outdata4)
-
-
-if __name__ == "__main__":
-    test_mean_complex()
-    test_mean_real()

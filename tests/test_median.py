@@ -216,22 +216,22 @@ def test_median_complex(tmp_path):
         ),
         DumpSeriesSink(
             name="snk1",
-            fname=str(tmp_path / "outputc1.txt"),
+            fname=str(tmp_path / "medianc1.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk2",
-            fname=str(tmp_path / "outputc2.txt"),
+            fname=str(tmp_path / "medianc2.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk3",
-            fname=str(tmp_path / "outputc3.txt"),
+            fname=str(tmp_path / "medianc3.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk4",
-            fname=str(tmp_path / "outputc4.txt"),
+            fname=str(tmp_path / "medianc4.txt"),
             sink_pad_names=("snk",),
         ),
         link_map={
@@ -253,7 +253,7 @@ def test_median_complex(tmp_path):
     pipeline.run()
 
     # Get the output data
-    outdata1 = np.loadtxt(str(tmp_path / "outputc1.txt"), dtype=np.complex128)
+    outdata1 = np.loadtxt(str(tmp_path / "medianc1.txt"), dtype=np.complex128)
     t1 = np.real(np.transpose(outdata1)[0])
     outdata1 = np.transpose(outdata1)[1]
     expected_t1, expected_outdata1 = get_expected_output(input_dict1)
@@ -261,7 +261,7 @@ def test_median_complex(tmp_path):
     np.testing.assert_almost_equal(outdata1.real, expected_outdata1.real)
     np.testing.assert_almost_equal(outdata1.imag, expected_outdata1.imag)
 
-    outdata2 = np.loadtxt(str(tmp_path / "outputc2.txt"), dtype=np.complex128)
+    outdata2 = np.loadtxt(str(tmp_path / "medianc2.txt"), dtype=np.complex128)
     t2 = np.real(np.transpose(outdata2)[0])
     outdata2 = np.transpose(outdata2)[1]
     expected_t2, expected_outdata2 = get_expected_output(input_dict2)
@@ -269,7 +269,7 @@ def test_median_complex(tmp_path):
     np.testing.assert_almost_equal(outdata2.real, expected_outdata2.real)
     np.testing.assert_almost_equal(outdata2.imag, expected_outdata2.imag)
 
-    outdata3 = np.loadtxt(str(tmp_path / "outputc3.txt"), dtype=np.complex128)
+    outdata3 = np.loadtxt(str(tmp_path / "medianc3.txt"), dtype=np.complex128)
     t3 = np.real(np.transpose(outdata3)[0])
     outdata3 = np.transpose(outdata3)[1]
     expected_t3, expected_outdata3 = get_expected_output(input_dict3)
@@ -277,7 +277,7 @@ def test_median_complex(tmp_path):
     np.testing.assert_almost_equal(outdata3.real, expected_outdata3.real)
     np.testing.assert_almost_equal(outdata3.imag, expected_outdata3.imag)
 
-    outdata4 = np.loadtxt(str(tmp_path / "outputc4.txt"), dtype=np.complex128)
+    outdata4 = np.loadtxt(str(tmp_path / "medianc4.txt"), dtype=np.complex128)
     t4 = np.real(np.transpose(outdata4)[0])
     outdata4 = np.transpose(outdata4)[1]
     expected_t4, expected_outdata4 = get_expected_output(input_dict4)
@@ -387,22 +387,22 @@ def test_median_real(tmp_path):
         ),
         DumpSeriesSink(
             name="snk1",
-            fname=str(tmp_path / "outputr1.txt"),
+            fname=str(tmp_path / "medianr1.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk2",
-            fname=str(tmp_path / "outputr2.txt"),
+            fname=str(tmp_path / "medianr2.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk3",
-            fname=str(tmp_path / "outputr3.txt"),
+            fname=str(tmp_path / "medianr3.txt"),
             sink_pad_names=("snk",),
         ),
         DumpSeriesSink(
             name="snk4",
-            fname=str(tmp_path / "outputr4.txt"),
+            fname=str(tmp_path / "medianr4.txt"),
             sink_pad_names=("snk",),
         ),
         link_map={
@@ -421,28 +421,28 @@ def test_median_real(tmp_path):
     pipeline.run()
 
     # Get the output data
-    outdata1 = np.loadtxt(str(tmp_path / "outputr1.txt"))
+    outdata1 = np.loadtxt(str(tmp_path / "medianr1.txt"))
     t1 = np.real(np.transpose(outdata1)[0])
     outdata1 = np.transpose(outdata1)[1]
     expected_t1, expected_outdata1 = get_expected_output(input_dict1)
     np.testing.assert_almost_equal(t1, expected_t1)
     np.testing.assert_almost_equal(outdata1, expected_outdata1)
 
-    outdata2 = np.loadtxt(str(tmp_path / "outputr2.txt"))
+    outdata2 = np.loadtxt(str(tmp_path / "medianr2.txt"))
     t2 = np.real(np.transpose(outdata2)[0])
     outdata2 = np.transpose(outdata2)[1]
     expected_t2, expected_outdata2 = get_expected_output(input_dict2)
     np.testing.assert_almost_equal(t2, expected_t2)
     np.testing.assert_almost_equal(outdata2, expected_outdata2)
 
-    outdata3 = np.loadtxt(str(tmp_path / "outputr3.txt"))
+    outdata3 = np.loadtxt(str(tmp_path / "medianr3.txt"))
     t3 = np.real(np.transpose(outdata3)[0])
     outdata3 = np.transpose(outdata3)[1]
     expected_t3, expected_outdata3 = get_expected_output(input_dict3)
     np.testing.assert_almost_equal(t3, expected_t3)
     np.testing.assert_almost_equal(outdata3, expected_outdata3)
 
-    outdata4 = np.loadtxt(str(tmp_path / "outputr4.txt"))
+    outdata4 = np.loadtxt(str(tmp_path / "medianr4.txt"))
     t4 = np.real(np.transpose(outdata4)[0])
     outdata4 = np.transpose(outdata4)[1]
     expected_t4, expected_outdata4 = get_expected_output(input_dict4)
