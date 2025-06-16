@@ -157,7 +157,8 @@ class Average(TSTransform):
                 samples_to_fill = Offset.tosamples(
                     inbuf.end_offset - inbuf.offset, inbuf.sample_rate
                 )
-                if samples_to_fill <= 0:
+                assert samples_to_fill >= 0
+                if samples_to_fill == 0:
                     outdata = None
                 else:
                     if self.real:

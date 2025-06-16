@@ -456,3 +456,199 @@ def test_median_real(tmp_path):
     expected_t4, expected_outdata4 = get_expected_output(input_dict4)
     np.testing.assert_almost_equal(t4, expected_t4)
     np.testing.assert_almost_equal(outdata4, expected_outdata4)
+
+
+def test_median_even_valid_samples_real(tmp_path):
+    """Test median with even number of valid samples, real data, initialize_array=True
+    This covers lines 142-143 in average.py
+    """
+    pipeline = Pipeline()
+
+    pipeline.insert(
+        FakeSeriesSource(
+            name="src",
+            source_pad_names=("src",),
+            rate=16,
+            signal_type="const",
+            const=1.0,
+            end=1,
+        ),
+        Average(
+            name="median",
+            method="median",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            avg_overlap_samples=(1, 0),  # Total array size = 2 (even)
+            default_value=0.0,
+            initialize_array=True,  # Important: must be True to reach lines 142-143
+        ),
+        DumpSeriesSink(
+            name="snk",
+            fname=str(tmp_path / "median_even_real.txt"),
+            sink_pad_names=("snk",),
+        ),
+        link_map={
+            "median:snk:snk": "src:src:src",
+            "snk:snk:snk": "median:src:src",
+        },
+    )
+
+    pipeline.run()
+
+    # Check that output was created
+    outdata = np.loadtxt(str(tmp_path / "median_even_real.txt"))
+    assert len(outdata) > 0
+
+
+def test_median_even_valid_samples_complex(tmp_path):
+    """Test median with even valid samples, complex data, initialize_array=True
+    This covers lines 144-147 in average.py
+    """
+    pipeline = Pipeline()
+
+    pipeline.insert(
+        # Real source
+        FakeSeriesSource(
+            name="rsrc",
+            source_pad_names=("src",),
+            rate=16,
+            signal_type="const",
+            const=1.0,
+            end=1,
+        ),
+        # Imaginary source
+        FakeSeriesSource(
+            name="isrc",
+            source_pad_names=("src",),
+            rate=16,
+            signal_type="const",
+            const=2.0,
+            end=1,
+        ),
+        # Make real part
+        Amplify(
+            name="ramp",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            factor=1.0 + 0j,
+        ),
+        # Make imaginary part
+        Amplify(
+            name="iamp",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            factor=1j,
+        ),
+        # Add to create complex signal
+        Adder(
+            name="adder",
+            sink_pad_names=("rsnk", "isnk"),
+            source_pad_names=("src",),
+        ),
+        Average(
+            name="median",
+            method="median",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            avg_overlap_samples=(1, 0),  # Total array size = 2 (even)
+            default_value=0.0 + 0j,
+            initialize_array=True,  # Important: must be True to reach lines 144-147
+        ),
+        DumpSeriesSink(
+            name="snk",
+            fname=str(tmp_path / "median_even_complex.txt"),
+            sink_pad_names=("snk",),
+        ),
+        link_map={
+            "ramp:snk:snk": "rsrc:src:src",
+            "iamp:snk:snk": "isrc:src:src",
+            "adder:snk:rsnk": "ramp:src:src",
+            "adder:snk:isnk": "iamp:src:src",
+            "median:snk:snk": "adder:src:src",
+            "snk:snk:snk": "median:src:src",
+        },
+    )
+
+    pipeline.run()
+
+    # Check that output was created
+    outdata = np.loadtxt(str(tmp_path / "median_even_complex.txt"), dtype=np.complex128)
+    assert len(outdata) > 0
+
+
+def test_zero_length_gap_median(tmp_path):
+    """Test handling of zero-length gap buffer in median
+    This covers line 161 in average.py
+    """
+    from dataclasses import dataclass
+    from sgnts.base import TSSource, TSSlice
+
+    @dataclass
+    class ZeroLengthGapSource(TSSource):
+        """Custom source that produces a zero-length gap buffer"""
+
+        def __post_init__(self):
+            super().__post_init__()
+            self._counter = 0
+            # Set up buffer params for the source pad
+            for pad in self.source_pads:
+                self.set_pad_buffer_params(pad=pad, sample_shape=(), rate=16)
+
+        def new(self, pad):
+            # Get the next frame
+            frame = self.prepare_frame(pad)
+
+            # For the second buffer, create a zero-length gap
+            self._counter += 1
+
+            if self._counter == 2:
+                # Create a zero-length gap buffer
+                buf = frame[0]
+                # Set the buffer to have zero length by making offset == end_offset
+                gap_buf = buf.new(
+                    TSSlice(buf.offset, buf.offset),  # Zero length
+                    data=None,  # Gap buffer
+                )
+                frame.set_buffers([gap_buf])
+            elif self._counter < 2:
+                # Normal data buffer
+                frame[0].set_data(np.ones(frame[0].shape))
+            else:
+                # Normal data buffer
+                frame[0].set_data(2 * np.ones(frame[0].shape))
+
+            return frame
+
+    pipeline = Pipeline()
+
+    pipeline.insert(
+        ZeroLengthGapSource(
+            name="src",
+            source_pad_names=("src",),
+            t0=0,
+            end=2,
+        ),
+        Average(
+            name="median",
+            method="median",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            avg_overlap_samples=(0, 0),  # No overlap to simplify
+            default_value=0.0,
+        ),
+        DumpSeriesSink(
+            name="snk",
+            fname=str(tmp_path / "median_zero_gap.txt"),
+            sink_pad_names=("snk",),
+        ),
+        link_map={
+            "median:snk:snk": "src:src:src",
+            "snk:snk:snk": "median:src:src",
+        },
+    )
+
+    pipeline.run()
+
+    # Check that output was created
+    outdata = np.loadtxt(str(tmp_path / "median_zero_gap.txt"))
+    assert len(outdata) > 0

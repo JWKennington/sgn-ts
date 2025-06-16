@@ -437,3 +437,207 @@ def test_mean_real(tmp_path):
     expected_t4, expected_outdata4 = get_expected_output(input_dict4)
     np.testing.assert_almost_equal(t4, expected_t4)
     np.testing.assert_almost_equal(outdata4, expected_outdata4)
+
+
+def test_real_data_complex_avg_array_warning(tmp_path, capsys):
+    """Test warning when real data is sent but avg_array was initialized as complex
+    This covers lines 189-196 in average.py
+    """
+    pipeline = Pipeline()
+
+    # Initialize with complex default value to force complex avg_array
+    pipeline.insert(
+        FakeSeriesSource(
+            name="src",
+            source_pad_names=("src",),
+            rate=16,
+            signal_type="sin",
+            fsin=0.125,
+            end=2,
+        ),
+        Average(
+            name="avg",
+            method="mean",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            avg_overlap_samples=(4, 4),
+            default_value=1.0 + 2.0j,  # Complex default value
+            initialize_array=True,
+        ),
+        DumpSeriesSink(
+            name="snk",
+            fname=str(tmp_path / "real_complex_warning.txt"),
+            sink_pad_names=("snk",),
+        ),
+        link_map={
+            "avg:snk:snk": "src:src:src",
+            "snk:snk:snk": "avg:src:src",
+        },
+    )
+
+    pipeline.run()
+
+    # Check that the warning was printed
+    captured = capsys.readouterr()
+    assert "WARNING: Average: data is real; discarding imaginary" in captured.out
+
+    # Check that output was created
+    outdata = np.loadtxt(str(tmp_path / "real_complex_warning.txt"))
+    assert len(outdata) > 0
+
+
+def test_complex_data_real_avg_array_conversion(tmp_path):
+    """Test conversion of avg_array to complex when complex data arrives
+    This covers line 200 in average.py
+    """
+    pipeline = Pipeline()
+
+    # Start with real default value, then send complex data
+    pipeline.insert(
+        # Real source
+        FakeSeriesSource(
+            name="rsrc",
+            source_pad_names=("src",),
+            rate=16,
+            signal_type="sin",
+            fsin=0.125,
+            end=2,
+        ),
+        # Imaginary source
+        FakeSeriesSource(
+            name="isrc",
+            source_pad_names=("src",),
+            rate=16,
+            signal_type="sin",
+            fsin=0.25,
+            end=2,
+        ),
+        # Make real part
+        Amplify(
+            name="ramp",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            factor=1.0 + 0j,
+        ),
+        # Make imaginary part
+        Amplify(
+            name="iamp",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            factor=1j,
+        ),
+        # Add to create complex signal
+        Adder(
+            name="adder",
+            sink_pad_names=("rsnk", "isnk"),
+            source_pad_names=("src",),
+        ),
+        Average(
+            name="avg",
+            method="mean",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            avg_overlap_samples=(4, 4),
+            default_value=1.0,  # Real default value
+            initialize_array=True,
+        ),
+        DumpSeriesSink(
+            name="snk",
+            fname=str(tmp_path / "complex_conversion.txt"),
+            sink_pad_names=("snk",),
+        ),
+        link_map={
+            "ramp:snk:snk": "rsrc:src:src",
+            "iamp:snk:snk": "isrc:src:src",
+            "adder:snk:rsnk": "ramp:src:src",
+            "adder:snk:isnk": "iamp:src:src",
+            "avg:snk:snk": "adder:src:src",
+            "snk:snk:snk": "avg:src:src",
+        },
+    )
+
+    pipeline.run()
+
+    # Check that output was created and is complex
+    outdata = np.loadtxt(str(tmp_path / "complex_conversion.txt"), dtype=np.complex128)
+    assert len(outdata) > 0
+    # Verify we have complex data (some imaginary parts should be non-zero)
+    assert np.any(np.imag(outdata[:, 1]) != 0)
+
+
+def test_zero_length_gap_mean(tmp_path):
+    """Test handling of zero-length gap buffer in mean
+    This covers line 161 in average.py
+    """
+    from dataclasses import dataclass
+    from sgnts.base import TSSource, TSSlice
+
+    @dataclass
+    class ZeroLengthGapSource(TSSource):
+        """Custom source that produces a zero-length gap buffer"""
+
+        def __post_init__(self):
+            super().__post_init__()
+            self._counter = 0
+            # Set up buffer params for the source pad
+            for pad in self.source_pads:
+                self.set_pad_buffer_params(pad=pad, sample_shape=(), rate=16)
+
+        def new(self, pad):
+            # Get the next frame
+            frame = self.prepare_frame(pad)
+
+            # For the second buffer, create a zero-length gap
+            self._counter += 1
+
+            if self._counter == 2:
+                # Create a zero-length gap buffer
+                buf = frame[0]
+                # Set the buffer to have zero length by making offset == end_offset
+                gap_buf = buf.new(
+                    TSSlice(buf.offset, buf.offset),  # Zero length
+                    data=None,  # Gap buffer
+                )
+                frame.set_buffers([gap_buf])
+            elif self._counter < 2:
+                # Normal data buffer
+                frame[0].set_data(np.ones(frame[0].shape))
+            else:
+                # Normal data buffer
+                frame[0].set_data(2 * np.ones(frame[0].shape))
+
+            return frame
+
+    pipeline = Pipeline()
+
+    pipeline.insert(
+        ZeroLengthGapSource(
+            name="src",
+            source_pad_names=("src",),
+            t0=0,
+            end=2,
+        ),
+        Average(
+            name="avg",
+            method="mean",
+            source_pad_names=("src",),
+            sink_pad_names=("snk",),
+            avg_overlap_samples=(0, 0),  # No overlap to simplify
+            default_value=0.0,
+        ),
+        DumpSeriesSink(
+            name="snk",
+            fname=str(tmp_path / "mean_zero_gap.txt"),
+            sink_pad_names=("snk",),
+        ),
+        link_map={
+            "avg:snk:snk": "src:src:src",
+            "snk:snk:snk": "avg:src:src",
+        },
+    )
+
+    pipeline.run()
+
+    # Check that output was created
+    outdata = np.loadtxt(str(tmp_path / "mean_zero_gap.txt"))
+    assert len(outdata) > 0
