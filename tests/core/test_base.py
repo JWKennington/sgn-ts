@@ -44,6 +44,69 @@ class TestAdapterConfig:
         assert isinstance(outbuf, SeriesBuffer)
         assert outbuf.slice == TSSlice(0, 0)
 
+    def test_valid_buffer_with_shape(self):
+        """Test the valid_buffer method with non-empty buffer (shape != 0)"""
+        # Create an AdapterConfig with overlap
+        ac = AdapterConfig(
+            overlap=(Offset.fromsec(1), Offset.fromsec(2)), stride=Offset.fromsec(1)
+        )
+
+        # Create a buffer with the expected shape based on overlap and stride
+        # expected_shape = overlap[0] samples + overlap[1] samples + stride samples
+        sample_rate = 16  # 16 Hz (allowed rate - power of 2)
+        overlap0_samples = Offset.tosamples(ac.overlap[0], sample_rate)  # 16 samples
+        overlap1_samples = Offset.tosamples(ac.overlap[1], sample_rate)  # 32 samples
+        stride_samples = Offset.sample_stride(sample_rate)  # 1024 samples at 16Hz
+        expected_shape = (
+            overlap0_samples + overlap1_samples + stride_samples
+        )  # 1072 samples
+
+        # Create input buffer with the expected shape
+        inbuf = SeriesBuffer(
+            offset=Offset.fromsec(0),
+            sample_rate=sample_rate,
+            shape=(expected_shape,),
+            data=numpy.zeros(expected_shape),
+        )
+
+        # Test valid_buffer
+        # The valid_buffer will create a new buffer with the non-overlapping portion
+        # So the new shape will be smaller than the input shape
+        outbuf = ac.valid_buffer(inbuf, data=0)  # Use 0 to create zeros array
+
+        # Verify the output buffer
+        assert isinstance(outbuf, SeriesBuffer)
+        assert outbuf.slice == TSSlice(
+            inbuf.slice[0] + ac.overlap[0], inbuf.slice[1] - ac.overlap[1]
+        )
+        # The new buffer should have removed the overlap samples
+        # New shape = original shape - overlap[0] samples - overlap[1] samples
+        expected_output_shape = expected_shape - overlap0_samples - overlap1_samples
+        assert outbuf.shape == (expected_output_shape,)
+        assert outbuf.data is not None
+
+    def test_valid_buffer_with_wrong_shape(self):
+        """Test the valid_buffer method with wrong shape - should raise assertion"""
+        # Create an AdapterConfig with overlap
+        ac = AdapterConfig(
+            overlap=(Offset.fromsec(1), Offset.fromsec(2)), stride=Offset.fromsec(1)
+        )
+
+        # Create a buffer with wrong shape
+        sample_rate = 16  # Use allowed rate (power of 2)
+        wrong_shape = 50  # This is not the expected shape
+
+        inbuf = SeriesBuffer(
+            offset=Offset.fromsec(0),
+            sample_rate=sample_rate,
+            shape=(wrong_shape,),
+            data=numpy.zeros(wrong_shape),
+        )
+
+        # This should raise AssertionError because the shape doesn't match expected
+        with pytest.raises(AssertionError):
+            ac.valid_buffer(inbuf)
+
 
 class Test_TSTransSink:
     """Test group for the TSTransSink class
