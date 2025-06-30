@@ -65,7 +65,7 @@ class Average(TSTransform):
         # Initialize the arrays
         assert self.avg_array_len > 0
         self.current_avg = self.default_value
-        self.avg_array = np.tile(self.default_value, self.avg_array_len)
+        self.avg_array = np.tile(complex(self.default_value), self.avg_array_len)
         if self.initialize_array:
             self.valid_samples = self.avg_array_len
         else:
