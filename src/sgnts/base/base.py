@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import queue
-import threading
 import time as stime
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Generic, Optional, Sequence, Type, TypeVar, Union
+from typing import Any, Generic, Optional, Sequence, Type, TypeVar, Union
 
 import numpy
 from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
 from sgn.sources import SignalEOS
+from sgn.subprocess import ParallelizeSourceElement, WorkerContext
 
 from sgnts.base.array_ops import Array
 from sgnts.base.audioadapter import AdapterConfig, Audioadapter
@@ -642,61 +642,68 @@ class TSSource(_TSSource):
 
 
 @dataclass
-class TSResourceSource(_TSSource):
+class TSResourceSource(ParallelizeSourceElement, _TSSource):
     """Source class that is entirely data driven by an external resource.
 
-    The resource will gather data in a separate thread.  The user
-    must implement the get_data() method and probably doesn't
-    need to implement any other methods.  The get_data()
-    method must fill a queue with a single buffer of the next data block.
-    It must block until the queue is not full.
+    This class uses ParallelizeSourceElement to run data generation in a separate
+    worker thread. Subclasses must override the worker_process method
+    to define how data is generated in the worker.
 
-    Assume we have a service with a client called "server" that has a
-    "stream" method that takes a list of channels
-    Assume it returns objects called blocks
-    with additional metadata e.g.,  "time_ns", "sample_rate", and "data".
-    An implementation of get_data() might look like this:
+    The worker communicates with the main thread via queues provided by
+    ParallelizeSourceElement. Data should be sent as (pad, buffer) tuples to
+    the output queue using context.output_queue.put((pad, buf)).
 
-    def get_data(self):
-        for stream in server.stream(tuple(self.srcs)):
-            for channel, block in stream.items():
-                pad = self.srcs[channel]
-                buf = SeriesBuffer(
-                    offset=Offset.fromns(block.time_ns),
-                    data=block.data,
-                    sample_rate=block.channel.sample_rate,
-                )
-                yield pad, buf
+    Important: Since the worker starts when entering the Parallelize context
+    (before setup() is called), all parameters needed by the worker must be
+    added as instance attributes and will be automatically passed to worker_process
+    via the parameter extraction mechanism.
+
+    Subclasses should:
+    1. Override worker_process to implement data generation
+    2. Use context.output_queue.put((pad, buf)) to send data
+    3. Check context.should_stop() to know when to exit
+
+    Exception handling follows SGN's improved Parallelize pattern: exceptions in the
+    worker are caught by the framework, printed to stdout, and cause the
+    worker to terminate. The main thread detects abnormal termination via
+    the internal() method.
 
     Args:
         start_time: Optional[int] = None
-            - If None, implies should start at now and is a real-time
-              server
+            Start time in GPS seconds. Used by subclasses to determine
+            when data generation should begin.
         duration: Optional[int] = None
-            - If None, go on forever
+            Duration in nanoseconds. If None, defaults to maximum int64 value.
         in_queue_timeout: int = 60
-            - How long to wait for a buffer from the resource before
-              timing out with a fatal error. This needs to be longer
-              than the duration of buffers coming from a real-time
-              server or it will hang.
+            Timeout in seconds when waiting for data from the worker.
+            Used by get_data_from_queue() in the main thread.
 
     """
 
     start_time: Optional[int] = None
     duration: Optional[int] = None
     in_queue_timeout: int = 60
+    _use_threading_override: bool = (
+        True  # Always use threading for I/O bound data sources
+    )
 
     def __post_init__(self):
-        super().__post_init__()
-        self.__in_queue_length = 100
+        self.queue_maxsize = 100
+
         self.__is_setup = False
-        self.thread = None
         self.__end = None
         if self.duration is None:
             self.duration = numpy.iinfo(numpy.int64).max
             self.__end = numpy.iinfo(numpy.int64).max
         if self.start_time is not None and self.duration is not None:
             self.__end = self.duration + self.start_time
+
+        # Initialize parent classes - IMPORTANT: Order matters!
+        # _TSSource must come first because it creates self.source_pads and self.srcs
+        # ParallelizeSourceElement must come after because it extracts self.srcs
+        # for worker
+        _TSSource.__post_init__(self)
+        ParallelizeSourceElement.__post_init__(self)
 
     @property
     def end_time(self):
@@ -718,8 +725,8 @@ class TSResourceSource(_TSSource):
 
     @property
     def latest_offset(self):
-        """Since the thread is responsible for producing a queue of
-        buffers, the latest offest can be derived from those"""
+        """Since the worker is responsible for producing a queue of
+        buffers, the latest offset can be derived from those"""
         latest = numpy.iinfo(numpy.int64).min
         for properties in self.latest_buffer_properties.values():
             if properties is not None:
@@ -742,109 +749,74 @@ class TSResourceSource(_TSSource):
         return Offset.tosec(self.start_offset)
 
     def setup(self):
-        """Initialize the RealTimeDataSource class."""
+        """Initialize the TSResourceSource data structures."""
         if not self.__is_setup:
-            self.stop_event = threading.Event()
-            self.exception_event = threading.Event()
-            self.in_queue = {p: queue.Queue(self.__in_queue_length) for p in self.rsrcs}
-            self.out_queue = {p: deque() for p in self.rsrcs}
+            self.buffer_queue = {p: deque() for p in self.rsrcs}
             self.latest_buffer_properties = {p: None for p in self.rsrcs}
             self.first_buffer_properties = {p: None for p in self.rsrcs}
             self.__is_setup = True
-            self.start()
 
     @property
     def queued_duration(self):
-        durations = [d[-1].end - d[0].t0 for d in self.out_queue.values() if d]
+        durations = [d[-1].end - d[0].t0 for d in self.buffer_queue.values() if d]
         if durations:
             return max(durations)
         else:
             return 0.0
 
-    def get_data(self):
-        """User implemented function that pairs with thread_get_data()"""
-        raise NotImplementedError
-
-    def thread_get_data(self):
-        """This will run in a separate thread. It must fill the self.in_queue
-        with SeriesBuffers.  The buffers should be contiguous or else errors will happen
-        later"""
-        try:
-            for pad, buf in self.get_data():
-                self.in_queue[pad].put(buf)
-                if self.stop_event.is_set():
-                    break
-        except Exception:
-            self.exception_event.set()
-            raise
-
-    def __exit__(self):
-        self.stop()
-
-    def start(self):
-        assert (
-            self.__is_setup
-        ), "Element must be setup before starting - call setup() first"
-        if self.thread is None or not self.thread.is_alive():
-            self.thread = threading.Thread(target=self.thread_get_data)
-            self.thread.start()
-
-    def stop(self):
-        self.stop_event.set()
-        if self.thread and self.thread.is_alive():
-            self.thread.join()
-            self.thread = None
-            self.__is_setup = False
-
-    def _flush_queue(self, q, timeout=0):
-        assert timeout >= 1, "timeouts can not be less than one second."
-        # how long do we block before checking for resource exceptions
-        # FIXME: is should we wait for more or less time?
-        sleep = 0.01  # seconds
-        # track start time so we know when timeout is reached
+    def _get_data_from_worker(self, timeout=60):
+        """Get data from the worker via ParallelizeSourceElement's queue."""
+        data_by_pad = {p: [] for p in self.rsrcs}
         start_time = stime.time()
-        # now wait for the elements in the queue, checking for
-        # execeptions from the resource while we wait
+
+        # Collect data from worker until we have data for all pads or timeout
         while stime.time() - start_time < timeout:
-            # check to see if any exceptions have been raise by the
-            # resource, and stop the thread and exit is so.
-            if self.exception_event.is_set():
-                self.stop()
-                raise RuntimeError("exception raised in resource thread, aborting.")
-            if q.empty():
-                stime.sleep(sleep)
-            else:
-                break
+            try:
+                # Get data from worker queue (provided by ParallelizeSourceElement)
+                item = self.out_queue.get(timeout=0.1)
+
+                pad, buf = item
+                data_by_pad[pad].append(buf)
+
+                # Check if we have at least one buffer for each pad
+                if all(data_by_pad[p] for p in self.rsrcs):
+                    break
+
+            except queue.Empty:
+                # No data available yet, continue waiting
+                continue
         else:
-            self.stop()
-            raise ValueError(f"could not read from resource after {timeout} seconds")
-        # drain the queue
-        out = []
-        while not q.empty():
-            out.append(q.get(block=False))
-        return out
+            # Timeout reached
+            raise ValueError(f"Could not read from resource after {timeout} seconds")
+
+        return data_by_pad
 
     def get_data_from_queue(self):
-        """Retrieve data from the queue with a timeout."""
-        for pad in self.out_queue:
-            self.out_queue[pad] += self._flush_queue(
-                self.in_queue[pad],
-                timeout=self.in_queue_timeout,
-            )
-            self.latest_buffer_properties[pad] = self.out_queue[pad][-1].properties
-            if self.first_buffer_properties[pad] is None:
-                self.first_buffer_properties[pad] = self.out_queue[pad][0].properties
-            # We should have a t0 now
-            if self.__end is None and self.duration is not None:
-                self.__end = self.t0 + self.duration
+        """Retrieve data from the worker with a timeout."""
+        # Get data from worker
+        data_by_pad = self._get_data_from_worker(timeout=self.in_queue_timeout)
+
+        # Add data to output queues
+        for pad, buffers in data_by_pad.items():
+            self.buffer_queue[pad].extend(buffers)
+
+            if buffers:  # If we got any buffers for this pad
+                buffer_queue = self.buffer_queue[pad]
+                self.latest_buffer_properties[pad] = buffer_queue[-1].properties
+                if self.first_buffer_properties[pad] is None:
+                    self.first_buffer_properties[pad] = buffer_queue[0].properties
+
+        # We should have a t0 now
+        if self.__end is None and self.duration is not None:
+            self.__end = self.t0 + self.duration
 
     def set_data(self, out_frame, pad):
         """This method will set data on out_frame based on the contents of the
         internal queue"""
 
-        # Check if were are at EOS, if so, stop the thread
+        # Check if we are at EOS, if so, set the flag
         if out_frame.EOS:
-            self.stop()
+            self.at_eos = True
 
         # If we have been given a zero length frame, just return it. That means
         # we didn't have data at the time the frame was prepared and we should
@@ -853,7 +825,7 @@ class TSResourceSource(_TSSource):
             return out_frame
 
         # Otherwise create a TSFrame from all the buffers that we have queued up
-        in_frame = TSFrame(buffers=self.out_queue[pad])
+        in_frame = TSFrame(buffers=self.buffer_queue[pad])
 
         # make sure nothing is fishy
         assert out_frame.end_offset <= in_frame.end_offset, (
@@ -865,11 +837,11 @@ class TSResourceSource(_TSSource):
         before, intersection, after = out_frame.intersect(in_frame)
 
         # Clear the queue
-        self.out_queue[pad].clear()
+        self.buffer_queue[pad].clear()
 
         # and repopulate it with only stuff that is newer than what we just sent.
         if after is not None:
-            self.out_queue[pad].extend(after.buffers)
+            self.buffer_queue[pad].extend(after.buffers)
 
         # It is possible that the out_frame is before the data we have in the
         # queue, if so the intersection will be None. Thats okay, we can just
@@ -886,7 +858,6 @@ class TSResourceSource(_TSSource):
         pad: SourcePad,
     ) -> None:
         # Make sure this has only been called once per pad
-        # assert self.resource is not None
         assert (
             pad not in self._new_buffer_dict
         ), f"Pad {pad.name} already exists in _new_buffer_dict - duplicate pad entry"
@@ -900,12 +871,31 @@ class TSResourceSource(_TSSource):
             offset=self.start_offset, data=None, **self._new_buffer_dict[pad]
         )
 
+    @staticmethod
+    def worker_process(context: WorkerContext, *args: Any, **kwargs: Any) -> None:
+        """Override this method in subclasses to implement data generation.
+
+        This method runs in a separate worker (process or thread) and should:
+        1. Generate data from the external resource
+        2. Send (pad, buffer) tuples via context.output_queue.put((pad, buf))
+        3. Check context.should_stop() to know when to exit
+
+        Args:
+            context: WorkerContext with access to queues and events
+            *args: Automatically extracted instance attributes
+            **kwargs: Automatically extracted instance attributes with defaults
+        """
+        raise NotImplementedError("Subclasses must implement worker_process method")
+
     def internal(self):
-        """Since internal() is gauranteed to be called prior to producing any
+        """Since internal() is guaranteed to be called prior to producing any
         data on a source pad, all setup is done here. First the resource itself is
-        setup and the first data is pulled from the resource.  Subsequent calls to
+        setup and the first data is pulled from the resource. Subsequent calls to
         internal only gets data from the resource if there is not enough data queued up
         to produce a result"""
+
+        # Check if worker has terminated abnormally
+        super().internal()
 
         # First setup the resource and pull the first data
         if not self.is_setup:
