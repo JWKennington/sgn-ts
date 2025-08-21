@@ -21,6 +21,7 @@ class DataServer:
     block_duration: int = 2
     simulate_skip_data: bool = False
     simulate_hang: int = 0
+    simulate_exception: bool = False
 
     description = {
         "H1:FOO": {"rate": 2048, "sample-shape": ()},
@@ -31,6 +32,8 @@ class DataServer:
         assert not (set(channels) - set(self.description))
         t0 = int(gpsnow()) - 1.0 if start is None else start
         time.sleep(self.simulate_hang)
+        if self.simulate_exception:
+            raise ValueError("Simulated worker exception")
         while True:
             out = {}
             if end is not None and t0 >= end:
@@ -62,6 +65,7 @@ class FakeLiveSource(TSResourceSource):
     simulate_skip_data: bool = False
     block_duration: int = 4
     simulate_hang: int = 0
+    simulate_exception: bool = False
 
     def __post_init__(self):
         super().__post_init__()
@@ -75,6 +79,7 @@ class FakeLiveSource(TSResourceSource):
         block_duration,
         simulate_skip_data,
         simulate_hang,
+        simulate_exception,
     ):
         """Worker process implementation for data generation."""
         # Create the DataServer in the worker context (like original MR)
@@ -82,6 +87,7 @@ class FakeLiveSource(TSResourceSource):
             block_duration=block_duration,
             simulate_skip_data=simulate_skip_data,
             simulate_hang=simulate_hang,
+            simulate_exception=simulate_exception,
         )
 
         for stream in server.stream(srcs, start_time, end_time):
@@ -173,8 +179,55 @@ def test_resource_hang():
         link_map={snk.snks["H1"]: src.srcs["H1:FOO"]},
     )
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError, match="Could not read from resource after"):
         pipeline.run()
+
+
+def test_resource_worker_exception():
+    """Test that worker exceptions are properly propagated"""
+
+    pipeline = Pipeline()
+
+    src = FakeLiveSource(
+        name="src",
+        source_pad_names=("H1:FOO",),
+        duration=10,
+        block_duration=4,
+        simulate_exception=True,
+    )
+    snk = NullSeriesSink(
+        name="snk",
+        sink_pad_names=("H1",),
+        verbose=True,
+    )
+    pipeline.insert(
+        src,
+        snk,
+        link_map={snk.snks["H1"]: src.srcs["H1:FOO"]},
+    )
+
+    # Should raise RuntimeError indicating worker stopped before EOS
+    with pytest.raises(RuntimeError, match="worker stopped before EOS") as exc_info:
+        pipeline.run()
+
+    # Verify the original exception is preserved in the exception chain
+    # The chain might be RuntimeError -> RuntimeError -> ValueError
+    current_exc = exc_info.value
+    found_original = False
+
+    # Walk through the exception chain to find the original ValueError
+    while current_exc is not None:
+        if isinstance(current_exc, ValueError) and "Simulated worker exception" in str(
+            current_exc
+        ):
+            found_original = True
+            break
+        current_exc = current_exc.__cause__
+
+    assert found_original, (
+        f"Expected to find ValueError with 'Simulated worker"
+        f"exception' in chain, final cause: {exc_info.value.__cause__}"
+    )
 
 
 # TSResourceSource unit tests (moved from tests/core/test_base.py)

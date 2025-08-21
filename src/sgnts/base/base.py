@@ -771,6 +771,8 @@ class TSResourceSource(ParallelizeSourceElement, _TSSource):
 
         # Collect data from worker until we have data for all pads or timeout
         while stime.time() - start_time < timeout:
+            # Check if worker has terminated abnormally before trying to get data
+            self.check_worker_terminated()
             try:
                 # Get data from worker queue (provided by ParallelizeSourceElement)
                 item = self.out_queue.get(timeout=0.1)
@@ -786,6 +788,7 @@ class TSResourceSource(ParallelizeSourceElement, _TSSource):
                 # No data available yet, continue waiting
                 continue
         else:
+            self.check_worker_terminated()
             # Timeout reached
             raise ValueError(f"Could not read from resource after {timeout} seconds")
 
