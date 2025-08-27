@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from functools import wraps
 
 import numpy as np
+from sgn.base import SourcePad
 
 from sgnts.base import SeriesBuffer, TSFrame, TSTransform
 
@@ -73,12 +75,12 @@ class Converter(TSTransform):
             for p in self.source_pads
         }
 
-    @wraps(TSTransform.new)
-    def new(self, pad):
+    def new(self, pad: SourcePad) -> TSFrame:
         frame = self.preparedframes[self.pad_map[pad]]
         self.preparedframes[self.pad_map[pad]] = None
 
         outbufs = []
+        out: None | np.ndarray | torch.Tensor
         for buf in frame:
             if buf.is_gap:
                 out = None

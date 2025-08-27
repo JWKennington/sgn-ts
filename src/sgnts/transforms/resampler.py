@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from functools import wraps
 
 import numpy as np
 from scipy.signal import correlate
@@ -287,10 +286,7 @@ class Resampler(TSTransform):
 
         return out.view(output_shape)
 
-    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
-    # that a future version of mypy will be able to handle this
-    @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
+    def new(self, pad: SourcePad) -> TSFrame:
         frame = self.preparedframes[self.sink_pad]
         assert frame.sample_rate == self.inrate
         outoffsets = self.preparedoutoffsets[self.sink_pad]
