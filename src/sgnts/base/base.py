@@ -903,3 +903,31 @@ class TSResourceSource(_TSSource):
         frame = self.prepare_frame(pad, latest_offset=self.latest_offset)
         frame = self.set_data(frame, pad)
         return frame
+
+
+def make_ts_element(sgn_element_class: Type) -> Type:
+    """Factory to create TS-enabled versions of SGN elements.
+
+    This provides a simple way to add TS capabilities to existing SGN elements
+    so they can connect to TS pipelines. Uses a basic AdapterConfig() that works
+    for most general-purpose applications.
+
+    Args:
+        sgn_element_class: SGN element class to enhance
+
+    Returns:
+        New class that combines SGN element with TS capabilities
+    """
+
+    @dataclass
+    class TSEnabledElement(TimeSeriesMixin, sgn_element_class):
+        """Dynamically created TS-enabled element."""
+
+        # Use basic adapter config that works for general TS connectivity
+        adapter_config: Optional[AdapterConfig] = field(default_factory=AdapterConfig)
+
+    # Set a meaningful name for the new class
+    TSEnabledElement.__name__ = f"TS{sgn_element_class.__name__}"
+    TSEnabledElement.__qualname__ = f"TS{sgn_element_class.__qualname__}"
+
+    return TSEnabledElement
