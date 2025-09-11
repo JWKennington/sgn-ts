@@ -74,6 +74,24 @@ dev = [
     "sgn-ts[test]",
 ]
 
+[project.entry-points.sgn_elements]
+FakeSeriesSource = "sgnts.sources:FakeSeriesSource"
+SegmentSource = "sgnts.sources:SegmentSource"
+Adder = "sgnts.transforms:Adder"
+Align = "sgnts.transforms:Align"
+Amplify = "sgnts.transforms:Amplify"
+Converter = "sgnts.transforms:Converter"
+AdaptiveCorrelate = "sgnts.transforms:AdaptiveCorrelate"
+Correlate = "sgnts.transforms:Correlate"
+Gate = "sgnts.transforms:Gate"
+Matmul = "sgnts.transforms:Matmul"
+Resampler = "sgnts.transforms:Resampler"
+SumIndex = "sgnts.transforms:SumIndex"
+Threshold = "sgnts.transforms:Threshold"
+Average = "sgnts.transforms:Average"
+DumpSeriesSink = "sgnts.sinks:DumpSeriesSink"
+NullSeriesSink = "sgnts.sinks:NullSeriesSink"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 exclude = ["multiplier.py"]
