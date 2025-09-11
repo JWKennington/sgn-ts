@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Optional, Union
 
 import numpy as np
-from sgn.base import SourcePad, get_sgn_logger
+from sgn.base import SourcePad
 
 from sgnts.base import Array, Offset, SeriesBuffer, TSFrame, TSSource
 from sgnts.base.time import Time
 from sgnts.utils import gpsnow
 
-LOGGER = get_sgn_logger("sgn-ts")
+logger = logging.getLogger("sgn")
 
 
 @dataclass
@@ -181,7 +182,7 @@ class FakeSeriesSource(TSSource):
             sleep = self.current_end / Time.SECONDS - gpsnow()
             if sleep < 0:
                 if sleep < -1:
-                    LOGGER.warning(
+                    logger.getChild(self.name).warning(
                         "Warning: FakeSeriesSource falling behind real time (%.2f s)",
                         sleep,
                     )
