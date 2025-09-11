@@ -1,10 +1,9 @@
+import logging
 import time
 from datetime import datetime
 from typing import Callable
 
-from sgn.base import get_sgn_logger
-
-LOGGER = get_sgn_logger("sgn-ts")
+logger = logging.getLogger("sgn.ts")
 
 gpsnow: Callable
 
@@ -28,7 +27,7 @@ except ImportError:
             return time.time() - 315964782
 
         gpsnow = ___gpsnow
-        LOGGER.warning(
+        logger.warning(
             (
                 "A GPS time function could not be imported, GPS times will not "
                 "be leap second accurate.  For more accurate times install the "
