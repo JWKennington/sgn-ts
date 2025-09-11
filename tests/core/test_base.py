@@ -181,6 +181,15 @@ class TestTSTransform:
             ts.new(pad=ts.srcs["O1"])
 
 
+class DummyTSSource(TSSource):
+    """Concrete test implementation of TSSource for testing purposes"""
+
+    def new(self, pad):
+        """Simple implementation that returns an empty frame for testing"""
+        frame = self.prepare_frame(pad)
+        return frame
+
+
 class Test_TSSource:
     """Test group for the _TSSource class. Similar to the _TSTransSink class,
     we use the TSSource class to test the _TSSource class, since it
@@ -190,7 +199,7 @@ class Test_TSSource:
     @pytest.fixture(autouse=True)
     def src(self):
         """Test creating an instance of the TSSource class"""
-        src = TSSource(
+        src = DummyTSSource(
             t0=0,
             duration=Offset.fromsamples(100, sample_rate=1),
             source_pad_names=["O1"],
@@ -265,7 +274,7 @@ class TestTSSource:
 
     def test_init(self):
         """Test creating an instance of the TSSource class"""
-        src = TSSource(
+        src = DummyTSSource(
             t0=0,
             duration=Offset.fromsamples(100, sample_rate=1),
             source_pad_names=["O1"],
@@ -275,7 +284,7 @@ class TestTSSource:
     def test_init_err_t0_none(self):
         """Test creating an instance of the TSSource class with t0=None"""
         with pytest.raises(ValueError):
-            TSSource(
+            DummyTSSource(
                 t0=None,
                 duration=Offset.fromsamples(100, sample_rate=1),
                 source_pad_names=["O1"],
@@ -284,7 +293,7 @@ class TestTSSource:
     def test_init_err_end_and_duation(self):
         """Test creating an instance of the TSSource class with t0=None"""
         with pytest.raises(ValueError):
-            TSSource(
+            DummyTSSource(
                 t0=0,
                 end=1,
                 duration=1,
@@ -295,7 +304,7 @@ class TestTSSource:
         """Test the end_offset method with end=None"""
         # This seems unlikely / unintended since the end attribute is always not None
         # by the end of the __post_init__ method, but we're aiming for coverage
-        src = TSSource(
+        src = DummyTSSource(
             t0=0,
             end=float("inf"),
             source_pad_names=["O1"],
