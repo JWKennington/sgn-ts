@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import InitVar, dataclass
-from functools import wraps
 from typing import Deque, Optional
 
 import numpy
 import scipy
-from sgn.base import Frame, SinkPad, SourcePad
+from sgn.base import SinkPad, SourcePad
 
 from sgnts.base import (
     AdapterConfig,
@@ -75,10 +74,7 @@ class Correlate(TSTransform):
             os.append(scipy.signal.correlate(data, self.filters[j], mode="valid"))
         return numpy.vstack(os).reshape(shape[:-1] + (-1,))
 
-    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
-    # that a future version of mypy will be able to handle this
-    @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
+    def new(self, pad: SourcePad) -> TSFrame:
         outbufs = []
         outoffsets = self.preparedoutoffsets[self.sink_pads[0]]
         frames = self.preparedframes[self.sink_pads[0]]
@@ -236,10 +232,9 @@ class AdaptiveCorrelate(Correlate):
         overlap = new_slice & frame_slice
         return overlap.isfinite()
 
-    @wraps(TSTransform.pull)  # type: ignore
-    def pull(self, pad: SinkPad, frame: Frame) -> None:  # type: ignore
+    def pull(self, pad: SinkPad, frame: TSFrame) -> None:
         # Pull the data from the sink pad
-        super().pull(pad, frame)  # type: ignore
+        super().pull(pad, frame)
 
         # If the pad is the special filter sink pad, then update filter
         # metadata values
@@ -268,8 +263,7 @@ class AdaptiveCorrelate(Correlate):
             # Set the new filters
             self.filter_deque.append(buf)
 
-    @wraps(TSTransform.new)  # type: ignore
-    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
+    def new(self, pad: SourcePad) -> TSFrame:
         # Get a aligned buffer to see if overlaps with new filters
         frame = self.preparedframes[self.sink_pads[0]]
 
@@ -277,12 +271,12 @@ class AdaptiveCorrelate(Correlate):
             # Call the parent's new method for each set of filters
             assert self.filters_cur is not None
             self.filters = self.filters_cur.data
-            res_cur = super().new(pad)  # type: ignore  # not recognizing self
+            res_cur = super().new(pad)
 
             # Change the state of filters
             assert self.filters_new is not None
             self.filters = self.filters_new.data
-            res_new = super().new(pad)  # type: ignore  # not recognizing self
+            res_new = super().new(pad)
 
             # Combine data with window functions
 
@@ -301,7 +295,7 @@ class AdaptiveCorrelate(Correlate):
             data = win_cur * res_cur[0].data + win_new * res_new[0].data
 
         else:
-            res_new = super().new(pad)  # type: ignore  # not recognizing self
+            res_new = super().new(pad)
             if res_new.is_gap:
                 data = None
             else:

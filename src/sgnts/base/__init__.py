@@ -2,7 +2,7 @@ from sgnts.base.audioadapter import Audioadapter
 from sgnts.base.array_ops import Array
 from sgnts.base.array_ops import ArrayBackend
 from sgnts.base.array_ops import NumpyBackend
-from sgnts.base.base import AdapterConfig
+from sgnts.base.audioadapter import AdapterConfig
 from sgnts.base.base import TSTransform
 from sgnts.base.base import TSSink
 from sgnts.base.base import TSSource

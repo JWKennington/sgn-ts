@@ -8,10 +8,9 @@ Note:
 import numpy
 import pytest
 
-from sgnts.base import Offset, TSFrame, TSResourceSource, Time
+from sgnts.base import Offset, SeriesBuffer, TSFrame, TSResourceSource, Time
 from sgnts.base.base import (
     AdapterConfig,
-    SeriesBuffer,
     TSSlice,
     TSSource,
     TSTransform,
@@ -150,9 +149,9 @@ class Test_TSTransSink:
     def test__align_slice_from_pad_no_inbufs(self, ts):
         """Test _align method in case of no inbufs"""
         # If there are no inbufs, the method should return None
-        assert not ts._is_aligned
+        assert not ts.is_aligned
         ts._align()
-        assert ts._is_aligned
+        assert ts.is_aligned
 
     def test_latest(self, ts):
         """Test the latest property"""

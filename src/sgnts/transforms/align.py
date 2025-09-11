@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from functools import wraps
 
 from sgn.base import SourcePad
 
@@ -18,10 +17,7 @@ class Align(TSTransform):
             for p in self.source_pads
         }
 
-    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
-    # that a future version of mypy will be able to handle this
-    @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
+    def new(self, pad: SourcePad) -> TSFrame:
         out = self.preparedframes[self.pad_map[pad]]
         self.preparedframes[self.pad_map[pad]] = None
         return out

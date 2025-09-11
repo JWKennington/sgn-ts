@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from functools import wraps
 
 from sgn.base import SourcePad
 
@@ -30,10 +29,7 @@ class Gate(TSTransform):
             % (self.name, list(set(self.sink_pad_names) - set([self.control]))[0])
         ]
 
-    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
-    # that a future version of mypy will be able to handle this
-    @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
+    def new(self, pad: SourcePad) -> TSFrame:
         nongap_slices = TSSlices(
             [b.slice for b in self.preparedframes[self.controlpad] if b]
         )

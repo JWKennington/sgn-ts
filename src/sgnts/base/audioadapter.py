@@ -3,12 +3,67 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Deque, Optional
+from dataclasses import dataclass
+from typing import Deque, Optional, Union
 
 from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
 from sgnts.base.buffer import SeriesBuffer
 from sgnts.base.offset import Offset
 from sgnts.base.slice_tools import TSSlice
+
+
+@dataclass
+class AdapterConfig:
+    """Config to hold parameters used for the audioadapter in _TSTransSink.
+
+    Args:
+        overlap:
+            tuple[int, int], the overlap before and after the data segment to process,
+            in offsets
+        stride:
+            int, the stride to produce, in offsets
+        pad_zeros_startup:
+            bool, when overlap is provided, whether to pad zeros in front of the
+            first buffer, or wait until there is enough data.
+        skip_gaps:
+            bool, produce a whole gap buffer if there are any gaps in the copied data
+            segment
+        backend:
+            type[ArrayBackend], the ArrayBackend wrapper
+    """
+
+    overlap: tuple[int, int] = (0, 0)
+    stride: int = 0
+    pad_zeros_startup: bool = False
+    skip_gaps: bool = False
+    backend: type[ArrayBackend] = NumpyBackend
+
+    def valid_buffer(self, buf, data: Optional[Union[int, Array]] = 0):
+        """
+        Return a new buffer corresponding to the non overlapping part of a
+        buffer "buf" as defined by this classes overlap properties As a special case,
+        if the buffer is shape zero (a heartbeat buffer) a new heartbeat buffer is
+        returned with the offsets shifted by overlap[0].
+        Otherwise, in order for the buffer to be valid it must be what is expected
+        based on the adapter's overlap and stride etc.
+        """
+
+        if buf.shape == (0,):
+            new_slice = TSSlice(
+                buf.slice[0] + self.overlap[0], buf.slice[0] + self.overlap[0]
+            )
+            return buf.new(new_slice, data=None)
+        else:
+            expected_shape = (
+                Offset.tosamples(self.overlap[0], buf.sample_rate)
+                + Offset.tosamples(self.overlap[1], buf.sample_rate)
+                + Offset.sample_stride(buf.sample_rate),
+            )
+            assert buf.shape == expected_shape
+            new_slice = TSSlice(
+                buf.slice[0] + self.overlap[0], buf.slice[1] - self.overlap[1]
+            )
+            return buf.new(new_slice, data)
 
 
 class Audioadapter:

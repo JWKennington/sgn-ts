@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import wraps
 from typing import Optional
 
 from sgn.base import SourcePad
@@ -38,10 +37,7 @@ class Matmul(TSTransform):
         assert self.matrix is not None
         self.shape = self.matrix.shape
 
-    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
-    # that a future version of mypy will be able to handle this
-    @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
+    def new(self, pad: SourcePad) -> TSFrame:
         outbufs = []
         # loop over the input data, only perform matmul on non-gaps
         frame = self.preparedframes[self.sink_pads[0]]

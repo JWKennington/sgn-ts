@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from functools import wraps
 
 import numpy
 from sgn.base import SourcePad
@@ -80,10 +79,7 @@ class Threshold(TSTransform):
             for i in range(0, len(idx), 2)
         ]
 
-    # FIXME: wraps are not playing well with mypy.  For now ignore and hope
-    # that a future version of mypy will be able to handle this
-    @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
+    def new(self, pad: SourcePad) -> TSFrame:
         frame = self.preparedframes[self.sinkpad]
         boundary_offsets = TSSlice(
             frame[0].offset,

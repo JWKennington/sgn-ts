@@ -4,108 +4,43 @@ import queue
 import threading
 import time as stime
 from collections import deque
-from dataclasses import dataclass
-
-# from typing import Optional, Union, Callable, Protocol, Sequence
-from typing import Optional, Sequence, Union
+from dataclasses import dataclass, field
+from typing import Generic, Optional, Sequence, Type, TypeVar, Union
 
 import numpy
 from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
 from sgn.sources import SignalEOS
 
-from sgnts.base.array_ops import Array, ArrayBackend, NumpyBackend
-from sgnts.base.audioadapter import Audioadapter
+from sgnts.base.array_ops import Array
+from sgnts.base.audioadapter import AdapterConfig, Audioadapter
 from sgnts.base.buffer import SeriesBuffer, TSFrame
 from sgnts.base.offset import Offset
 from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.base.time import Time
 
-
-@dataclass
-class AdapterConfig:
-    """Config to hold parameters used for the audioadapter in _TSTransSink.
-
-    Args:
-        overlap:
-            tuple[int, int], the overlap before and after the data segment to process,
-            in offsets
-        stride:
-            int, the stride to produce, in offsets
-        pad_zeros_startup:
-            bool, when overlap is provided, whether to pad zeros in front of the
-            first buffer, or wait until there is enough data.
-        skip_gaps:
-            bool, produce a whole gap buffer if there are any gaps in the copied data
-            segment
-        backend:
-            type[ArrayBackend], the ArrayBackend wrapper
-    """
-
-    overlap: tuple[int, int] = (0, 0)
-    stride: int = 0
-    pad_zeros_startup: bool = False
-    skip_gaps: bool = False
-    backend: type[ArrayBackend] = NumpyBackend
-
-    def valid_buffer(self, buf, data: Optional[Union[int, Array]] = 0):
-        """
-        Return a new buffer corresponding to the non overlapping part of a
-        buffer "buf" as defined by this classes overlap properties As a special case,
-        if the buffer is shape zero (a heartbeat buffer) a new heartbeat buffer is
-        returned with the offsets shifted by overlap[0].
-        Otherwise, in order for the buffer to be valid it must be what is expected
-        based on the adapter's overlap and stride etc.
-        """
-
-        if buf.shape == (0,):
-            new_slice = TSSlice(
-                buf.slice[0] + self.overlap[0], buf.slice[0] + self.overlap[0]
-            )
-            return buf.new(new_slice, data=None)
-        else:
-            expected_shape = (
-                Offset.tosamples(self.overlap[0], buf.sample_rate)
-                + Offset.tosamples(self.overlap[1], buf.sample_rate)
-                + Offset.sample_stride(buf.sample_rate),
-            )
-            assert buf.shape == expected_shape
-            new_slice = TSSlice(
-                buf.slice[0] + self.overlap[0], buf.slice[1] - self.overlap[1]
-            )
-            return buf.new(new_slice, data)
-
-
-#
-# NOTE FIXME. I have tried multiple times to get the _TSTransSink mixin class
-# to play well with mypy, but each time just dug a deeper hole. The issue is
-# that the mixin class refers to sink_pads which of course don't exist unless
-# it is mixed in.  Below you can see remnants of a couple of attemps including
-# using a Protocol class (mypy recommendation) and making it a subclass of
-# ElementLike. I couldn't get either to work but encourage others to try.
-#
-
-# class HasValueProtocol(Protocol):
-#    @property
-#    def sink_pads(self) -> Sequence: ...
-#
-#    @sink_pads.setter
-#    def sink_pads(self, value: Sequence) -> Sequence: ...
+TSFrameLike = TypeVar("TSFrameLike", bound=TSFrame)
 
 
 @dataclass
-class _TSTransSink:  # (HasValueProtocol):
-    # class _TSTransSink(ElementLike)
-    """Base class for TSTransforms and TSSinks.
+class TimeSeriesMixin(Generic[TSFrameLike]):
+    """Mixin that adds time-series capabilities to any SGN element.
 
     This will produce aligned frames in preparedframes. If
     adapter_config is provided, will trigger the audioadapter to queue
     data, and make padded or strided frames in preparedframes.
+
+    This mixin provides:
+    - Frame alignment across multiple input pads
+    - Optional adapter processing (overlap/stride/gap handling)
+    - Timeout detection and EOS handling
 
     Args:
         max_age:
             int, the max age before timeout, in nanoseconds
         adapter_config:
             AdapterConfig, holds parameters used for audioadapter behavior
+        unaligned:
+            list[str], the list of unaligned sink pads
 
     """
 
@@ -114,7 +49,9 @@ class _TSTransSink:  # (HasValueProtocol):
     unaligned: Optional[Sequence[str]] = None
 
     def __post_init__(self):
-        """Initialize the _TSTransSink class."""
+        """Initialize timeseries state."""
+        super().__post_init__()
+
         # First, determine which input pads actually require alignment
         if self.unaligned is None:
             self.unaligned_sink_pads = []
@@ -135,6 +72,8 @@ class _TSTransSink:  # (HasValueProtocol):
         self._last_ts = {p: None for p in self.aligned_sink_pads}
         self._last_offset = {p: None for p in self.aligned_sink_pads}
         self.metadata = {p: None for p in self.aligned_sink_pads}
+
+        # Initialize adapter-specific state only if config provided
         self.audioadapters = None
         if self.adapter_config is not None:
             self.overlap = self.adapter_config.overlap
@@ -154,17 +93,18 @@ class _TSTransSink:  # (HasValueProtocol):
                 self.pad_zeros_offset = self.overlap[0]
             self.preparedoutoffsets = {p: None for p in self.aligned_sink_pads}
 
-    def pull(self, pad: SinkPad, frame: TSFrame) -> None:
-        """Pull data from the input pads (source pads of upstream elements) and queue
-        data to perform alignment once frames from all pads are pulled.
+    def pull(self, pad: SinkPad, frame: TSFrameLike) -> None:
+        """Pull data and queue for alignment.
+
+        Pull data from the input pads (source pads of upstream elements) and
+        queue data to perform alignment once frames from all pads are pulled.
 
         Args:
             pad:
                 SinkPad, The sink pad that is pulling the frame
             frame:
-                Frame, The frame that is pulled to sink pad
+                TSFrame, The frame that is pulled to sink pad
         """
-
         self.at_EOS |= frame.EOS
 
         # Handle case of a pad that is exempt from alignment
@@ -179,10 +119,11 @@ class _TSTransSink:  # (HasValueProtocol):
         for buf in frame:
             self.inbufs[pad].push(buf)
         self.metadata[pad] = frame.metadata
+
         if self.timeout(pad):
             raise ValueError("pad %s has timed out" % pad.name)
 
-    def __adapter(self, pad: SinkPad, frame: TSFrame) -> list[SeriesBuffer]:
+    def __adapter(self, pad: SinkPad, frame: list[SeriesBuffer]) -> list[SeriesBuffer]:
         """Use the audioadapter to handle streaming scenarios.
 
         This will pad with overlap before and after the target output
@@ -252,6 +193,7 @@ class _TSTransSink:  # (HasValueProtocol):
         offset = a.offset - self.pad_zeros_offset
         outoffset = offset + self.overlap[0]
         preparedbufs = []
+
         if a.size < min_samples:
             # not enough samples to produce output yet
             # make a heartbeat buffer
@@ -263,7 +205,6 @@ class _TSTransSink:  # (HasValueProtocol):
             )
             # prepare output frames, one buffer per frame
             self.preparedoutoffsets[pad] = [{"offset": outoffset, "noffset": 0}]
-
         else:
             # We have enough samples, find out how many samples to copy
             # out of the audioadapter
@@ -322,16 +263,13 @@ class _TSTransSink:  # (HasValueProtocol):
 
         If AdapterConfig is provided, perform the requested
         overlap/stride streaming of frames.
-
         """
         # align if possible
         self._align()
 
         # put in heartbeat buffer if not aligned
         if not self._is_aligned:
-            # I tried to fix this properly see the notes above the definition
-            # of _TSTransSink
-            for sink_pad in self.aligned_sink_pads:  # type: ignore
+            for sink_pad in self.aligned_sink_pads:
                 self.preparedframes[sink_pad] = TSFrame(
                     EOS=self.at_EOS,
                     buffers=[
@@ -348,8 +286,6 @@ class _TSTransSink:  # (HasValueProtocol):
         else:
             min_latest = self.min_latest
             earliest = self.earliest
-            # I tried to fix this properly see the notes above the definition
-            # of _TSTransSink
 
             rates = set(
                 self.inbufs[sink_pad].sample_rate for sink_pad in self.aligned_sink_pads
@@ -361,15 +297,18 @@ class _TSTransSink:  # (HasValueProtocol):
                     off = off // factor * factor
                     min_latest = earliest + off
 
-            for sink_pad in self.aligned_sink_pads:  # type: ignore
+            for sink_pad in self.aligned_sink_pads:
                 out = self.inbufs[sink_pad].get_sliced_buffers(
                     (earliest, min_latest), pad_start=True
                 )
                 if min_latest > self.inbufs[sink_pad].offset:
                     self.inbufs[sink_pad].flush_samples_by_end_offset(min_latest)
                 assert len(out) > 0
+
+                # Apply adapter processing only if config provided
                 if self.adapter_config is not None:
                     out = self.__adapter(sink_pad, out)
+
                 self.preparedframes[sink_pad] = TSFrame(
                     EOS=self.at_EOS,
                     buffers=out,
@@ -385,12 +324,12 @@ class _TSTransSink:  # (HasValueProtocol):
             else:
                 return TSSlice(-1, -1)
 
-        def __can_align(self=self):
+        def can_align():
             return TSSlices(
                 [slice_from_pad(self.inbufs[p]) for p in self.inbufs]
             ).intersection()
 
-        if not self._is_aligned and __can_align():
+        if not self._is_aligned and can_align():
             self._is_aligned = True
 
     def timeout(self, pad: SinkPad) -> bool:
@@ -401,7 +340,7 @@ class _TSTransSink:  # (HasValueProtocol):
                 SinkPad, the sink pad to check for timeout
 
         Returns:
-            bool, whether pad has timed-out
+            True if the pad has timed out
 
         """
         return self.inbufs[pad].end_offset - self.inbufs[pad].offset > Offset.fromns(
@@ -421,7 +360,7 @@ class _TSTransSink:  # (HasValueProtocol):
         """
         return self.inbufs[pad].end_offset if self.inbufs[pad] else -1
 
-    def earliest_by_pad(self, pad) -> int:
+    def earliest_by_pad(self, pad: SinkPad) -> int:
         """The earliest offset among the queued up buffers in this pad.
 
         Args:
@@ -435,37 +374,34 @@ class _TSTransSink:  # (HasValueProtocol):
         return self.inbufs[pad].offset if self.inbufs[pad] else -1
 
     @property
-    def latest(self):
+    def latest(self) -> int:
         """The latest offset among all the buffers from all the pads."""
         return max(self.latest_by_pad(n) for n in self.inbufs)
 
     @property
-    def earliest(self):
+    def earliest(self) -> int:
         """The earliest offset among all the buffers from all the pads."""
         return min(self.earliest_by_pad(n) for n in self.inbufs)
 
     @property
-    def min_latest(self):
+    def min_latest(self) -> int:
         """The earliest offset among each pad's latest offset."""
         return min(self.latest_by_pad(n) for n in self.inbufs)
 
+    @property
+    def is_aligned(self) -> bool:
+        """Check if input frames are currently aligned across all pads.
+
+        Returns:
+            True if frames from all input pads have overlapping time ranges
+            and can be processed together. False if waiting for more data.
+        """
+        return self._is_aligned
+
 
 @dataclass
-class TSTransform(TransformElement, _TSTransSink):
+class TSTransform(TimeSeriesMixin[TSFrame], TransformElement[TSFrame]):
     """A time-series transform element."""
-
-    # FIXME mypy complains that this takes a TSFrame instead of a Frame.  Not
-    # sure what the right fix is.
-    # FIXME, I also cannot get type hints to work
-    # pull: Callable[[SourcePad, TSFrame], None] = _TSTransSink.pull  # type: ignore
-    pull = _TSTransSink.pull  # type: ignore
-
-    def __post_init__(self):
-        TransformElement.__post_init__(self)
-        _TSTransSink.__post_init__(self)
-
-    def internal(self):
-        _TSTransSink.internal(self)
 
     def new(self, pad: SourcePad) -> TSFrame:
         """The transform function must be provided by the subclass.
@@ -485,21 +421,10 @@ class TSTransform(TransformElement, _TSTransSink):
 
 
 @dataclass
-class TSSink(SinkElement, _TSTransSink):
+class TSSink(TimeSeriesMixin[TSFrame], SinkElement[TSFrame]):
     """A time-series sink element."""
 
-    # FIXME mypy complains that this takes a TSFrame instead of a Frame.  Not
-    # sure what the right fix is.
-    # FIXME, I also cannot get type hints to work
-    # pull: Callable[[SourcePad, TSFrame], None] = _TSTransSink.pull  # type: ignore
-    pull = _TSTransSink.pull  # type: ignore
-
-    def __post_init__(self):
-        SinkElement.__post_init__(self)
-        _TSTransSink.__post_init__(self)
-
-    def internal(self):
-        _TSTransSink.internal(self)
+    pass
 
 
 @dataclass
@@ -978,3 +903,31 @@ class TSResourceSource(_TSSource):
         frame = self.prepare_frame(pad, latest_offset=self.latest_offset)
         frame = self.set_data(frame, pad)
         return frame
+
+
+def make_ts_element(sgn_element_class: Type) -> Type:
+    """Factory to create TS-enabled versions of SGN elements.
+
+    This provides a simple way to add TS capabilities to existing SGN elements
+    so they can connect to TS pipelines. Uses a basic AdapterConfig() that works
+    for most general-purpose applications.
+
+    Args:
+        sgn_element_class: SGN element class to enhance
+
+    Returns:
+        New class that combines SGN element with TS capabilities
+    """
+
+    @dataclass
+    class TSEnabledElement(TimeSeriesMixin, sgn_element_class):
+        """Dynamically created TS-enabled element."""
+
+        # Use basic adapter config that works for general TS connectivity
+        adapter_config: Optional[AdapterConfig] = field(default_factory=AdapterConfig)
+
+    # Set a meaningful name for the new class
+    TSEnabledElement.__name__ = f"TS{sgn_element_class.__name__}"
+    TSEnabledElement.__qualname__ = f"TS{sgn_element_class.__qualname__}"
+
+    return TSEnabledElement
