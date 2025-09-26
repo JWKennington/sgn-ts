@@ -57,13 +57,20 @@ class Average(TSTransform):
     def __post_init__(self):
         super().__post_init__()
         # This element is written to assume one channel, one source pad and one sink pad
-        assert len(self.source_pads) == len(self.sink_pads) == 1
+        assert (
+            len(self.source_pads) == len(self.sink_pads) == 1
+        ), "Average transform requires exactly one source pad and one sink pad"
 
         # We only know these two methods
-        assert self.method in ["mean", "median"]
+        assert self.method in [
+            "mean",
+            "median",
+        ], f"Method must be 'mean' or 'median', got '{self.method}'"
 
         # Initialize the arrays
-        assert self.avg_array_len > 0
+        assert (
+            self.avg_array_len > 0
+        ), f"avg_array_len must be positive, got {self.avg_array_len}"
         self.current_avg = self.default_value
         self.avg_array = np.tile(complex(self.default_value), self.avg_array_len)
         if self.initialize_array:
@@ -157,7 +164,9 @@ class Average(TSTransform):
                 samples_to_fill = Offset.tosamples(
                     inbuf.end_offset - inbuf.offset, inbuf.sample_rate
                 )
-                assert samples_to_fill >= 0
+                assert (
+                    samples_to_fill >= 0
+                ), f"samples_to_fill cannot be negative, got {samples_to_fill}"
                 if samples_to_fill == 0:
                     outdata = None
                 else:
@@ -205,10 +214,13 @@ class Average(TSTransform):
                     outdata = np.empty(len(inbuf.data), dtype=np.complex128)
                 if self.array_index_set:
                     # Check that the array index is still aligned with the offset
-                    assert (
-                        self.avg_array_index
-                        == Offset.tosamples(inbuf.offset, inbuf.sample_rate)
+                    expected_index = (
+                        Offset.tosamples(inbuf.offset, inbuf.sample_rate)
                         % self.avg_array_len
+                    )
+                    assert self.avg_array_index == expected_index, (
+                        f"Array index {self.avg_array_index} misaligned with "
+                        f"offset-derived index {expected_index}"
                     )
                 else:
                     # Make sure the order of the arrays is independent of start time.

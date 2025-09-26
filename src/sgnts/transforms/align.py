@@ -10,7 +10,10 @@ class Align(TSTransform):
     """Align frames from multiple sink pads."""
 
     def __post_init__(self):
-        assert set(self.source_pad_names) == set(self.sink_pad_names)
+        assert set(self.source_pad_names) == set(self.sink_pad_names), (
+            f"Source and sink pad names must match. "
+            f"Source: {self.source_pad_names}, Sink: {self.sink_pad_names}"
+        )
         super().__post_init__()
         self.pad_map = {
             p: self.sink_pad_dict["%s:snk:%s" % (self.name, self.rsrcs[p])]

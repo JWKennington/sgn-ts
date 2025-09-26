@@ -31,10 +31,12 @@ class Matmul(TSTransform):
 
     def __post_init__(self):
         super().__post_init__()
-        assert (
-            len(self.sink_pads) == 1 and len(self.source_pads) == 1
-        ), "only one sink_pad and one source_pad is allowed"
-        assert self.matrix is not None
+        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
+            f"MatMul requires exactly one sink pad and one source pad, "
+            f"got {len(self.sink_pads)} sink pads and "
+            f"{len(self.source_pads)} source pads"
+        )
+        assert self.matrix is not None, "Matrix must be provided for MatMul operation"
         self.shape = self.matrix.shape
 
     def new(self, pad: SourcePad) -> TSFrame:

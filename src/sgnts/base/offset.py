@@ -183,7 +183,9 @@ class Offset:
             int, the number of samples corresponding to the offset at the given sample
             rate
         """
-        assert sample_rate in Offset.ALLOWED_RATES
+        assert (
+            sample_rate in Offset.ALLOWED_RATES
+        ), f"Sample rate {sample_rate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
         assert not offset % (Offset.MAX_RATE // sample_rate), (
             "Offset does not map to"
             f" integer sample points. Offset: {offset}, sample rate: {sample_rate}"
@@ -204,5 +206,7 @@ class Offset:
             int, the offset corresponding to the number of sample points at the given
             sample rate
         """
-        assert sample_rate in Offset.ALLOWED_RATES
+        assert (
+            sample_rate in Offset.ALLOWED_RATES
+        ), f"Sample rate {sample_rate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
         return samples * Offset.MAX_RATE // sample_rate

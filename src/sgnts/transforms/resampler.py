@@ -45,8 +45,12 @@ class Resampler(TSTransform):
     backend: type[ArrayBackend] = NumpyBackend
 
     def __post_init__(self):
-        assert self.inrate in Offset.ALLOWED_RATES
-        assert self.outrate in Offset.ALLOWED_RATES
+        assert (
+            self.inrate in Offset.ALLOWED_RATES
+        ), f"Input rate {self.inrate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
+        assert (
+            self.outrate in Offset.ALLOWED_RATES
+        ), f"Output rate {self.outrate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
         self.next_out_offset = None
 
         if self.outrate < self.inrate:
@@ -92,7 +96,10 @@ class Resampler(TSTransform):
         if self.adapter_config is None:
             self.adapter_config = AdapterConfig(backend=self.backend)
         else:
-            assert self.adapter_config.backend == self.backend
+            assert self.adapter_config.backend == self.backend, (
+                f"Adapter backend {self.adapter_config.backend} must match "
+                f"resampler backend {self.backend}"
+            )
         self.adapter_config.overlap = (
             Offset.fromsamples(self.half_length, self.inrate),
             Offset.fromsamples(self.half_length, self.inrate),
@@ -288,7 +295,10 @@ class Resampler(TSTransform):
 
     def new(self, pad: SourcePad) -> TSFrame:
         frame = self.preparedframes[self.sink_pad]
-        assert frame.sample_rate == self.inrate
+        assert frame.sample_rate == self.inrate, (
+            f"Frame sample rate {frame.sample_rate} doesn't match "
+            f"resampler input rate {self.inrate}"
+        )
         outoffsets = self.preparedoutoffsets[self.sink_pad]
 
         outbufs = []

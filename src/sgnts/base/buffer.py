@@ -118,7 +118,9 @@ class EventFrame(Frame):
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.events is not None and len(self.events) > 0
+        assert (
+            self.events is not None and len(self.events) > 0
+        ), "EventFrame must have non-empty events dictionary"
 
     def __getitem__(self, item):
         return self.events[item]
@@ -207,7 +209,7 @@ class SeriesBuffer:
                 )
 
         assert isinstance(self.shape, tuple)
-        assert len(self.shape) > 0
+        assert len(self.shape) > 0, f"Buffer shape cannot be empty, got {self.shape}"
 
         for t in self.shape:
             assert isinstance(t, int)
@@ -416,7 +418,7 @@ class SeriesBuffer:
         Return:
             int, the number of samples
         """
-        assert len(self.shape) > 0
+        assert len(self.shape) > 0, f"Buffer shape cannot be empty, got {self.shape}"
         return self.shape[-1]
 
     @property
@@ -573,7 +575,9 @@ class SeriesBuffer:
         Returns:
             SeriesBuffer, the pad buffer
         """
-        assert off < self.offset
+        assert (
+            off < self.offset
+        ), f"Requested offset {off} must be before buffer offset {self.offset}"
         return SeriesBuffer(
             offset=off,
             sample_rate=self.sample_rate,
@@ -594,7 +598,9 @@ class SeriesBuffer:
         Returns:
             SeriesBuffer, the sub buffer
         """
-        assert slc in self.slice
+        assert (
+            slc in self.slice
+        ), f"Requested slice {slc} not contained in buffer slice {self.slice}"
         startsamples, stopsamples = Offset.tosamples(
             slc.start - self.offset, self.sample_rate
         ), Offset.tosamples(slc.stop - self.offset, self.sample_rate)
@@ -631,7 +637,9 @@ class SeriesBuffer:
         if not isinstance(boundaries, TSSlices):
             raise NotImplementedError
         for slc in boundaries.slices:
-            assert slc in self.slice
+            assert (
+                slc in self.slice
+            ), f"Slice {slc} must be within buffer bounds {self.slice}"
             out.append(self.sub_buffer(slc))
         if contiguous:
             gap_boundaries = boundaries.invert(self.slice)
@@ -653,7 +661,7 @@ class TSFrame(Frame):
 
     def __post_init__(self):
         super().__post_init__()
-        assert len(self.buffers) > 0
+        assert len(self.buffers) > 0, "Cannot create TSFrame with empty buffers list"
         self.__sanity_check(self.buffers)
         self.spec = self.buffers[0].spec
 
@@ -689,7 +697,10 @@ class TSFrame(Frame):
             slices = [buf.slice for buf in bufs]
             off0 = slices[0].stop
             for sl in slices[1:]:
-                assert off0 == sl.start
+                assert off0 == sl.start, (
+                    f"Buffer offset {off0} must match slice start {sl.start} "
+                    f"for contiguous buffers"
+                )
                 off0 = sl.stop
         self.is_gap = all([b.is_gap for b in self.buffers])
 
@@ -892,6 +903,10 @@ class TSFrame(Frame):
                 for obuf in outside_bufs:
                     assert (obuf.end_offset <= self.offset) or (
                         obuf.offset >= self.end_offset
+                    ), (
+                        f"Buffer overlap detected - output buffer "
+                        f"[{obuf.offset}, {obuf.end_offset}] must not overlap "
+                        f"with frame range [{self.offset}, {self.end_offset}]"
                     )
                     if obuf.end_offset <= self.offset:
                         bbuf.append(obuf)
