@@ -30,7 +30,9 @@ class SegmentSource(TSSource):
     values: Optional[tuple[Union[int, Array], ...]] = None
 
     def __post_init__(self):
-        assert self.segments is not None
+        assert (
+            self.segments is not None
+        ), "Segments must be provided during initialization"
 
         # Assert that segments are non-overlapping (but adjacent is OK)
         # Check by ensuring no two segments have overlapping interiors
@@ -59,7 +61,9 @@ class SegmentSource(TSSource):
             )
 
         super().__post_init__()
-        assert len(self.source_pads) == 1
+        assert (
+            len(self.source_pads) == 1
+        ), f"SegmentSource requires exactly one source pad, got {len(self.source_pads)}"
 
         # Filter segments that overlap with the source time range and track
         # their indices

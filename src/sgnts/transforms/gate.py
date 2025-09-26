@@ -19,10 +19,17 @@ class Gate(TSTransform):
     control: str = ""
 
     def __post_init__(self):
-        assert self.control and self.control in self.sink_pad_names
+        assert self.control and self.control in self.sink_pad_names, (
+            f"Control pad '{self.control}' must be specified and exist "
+            f"in sink_pad_names: {self.sink_pad_names}"
+        )
         super().__post_init__()
-        assert len(self.sink_pads) == 2
-        assert len(self.source_pads) == 1
+        assert (
+            len(self.sink_pads) == 2
+        ), f"Gate requires exactly 2 sink pads, got {len(self.sink_pads)}"
+        assert (
+            len(self.source_pads) == 1
+        ), f"Gate requires exactly 1 source pad, got {len(self.source_pads)}"
         self.controlpad = self.sink_pad_dict["%s:snk:%s" % (self.name, self.control)]
         self.sinkpad = self.sink_pad_dict[
             "%s:snk:%s"

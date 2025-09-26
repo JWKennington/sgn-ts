@@ -131,7 +131,9 @@ class FakeSeriesSource(TSSource):
         cnt = self.cnt[pad]
         metadata: dict[str, int] = {}
 
-        assert self.signals is not None
+        assert (
+            self.signals is not None
+        ), "Signals dictionary must be initialized before generating data"
 
         signal = self.signals.get(self.rsrcs[pad], {})
         signal_type = signal.get("signal_type", self.signal_type)

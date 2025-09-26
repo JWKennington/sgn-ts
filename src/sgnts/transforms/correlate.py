@@ -37,8 +37,10 @@ class Correlate(TSTransform):
 
     def __post_init__(self):
         # FIXME: read sample_rate from data
-        assert self.filters is not None
-        assert self.sample_rate != -1
+        assert (
+            self.filters is not None
+        ), "Filters must be provided during initialization"
+        assert self.sample_rate != -1, "Sample rate must be specified (not -1)"
         self.shape = self.filters.shape
         if self.adapter_config is None:
             self.adapter_config = AdapterConfig()
@@ -48,9 +50,11 @@ class Correlate(TSTransform):
         )
         self.adapter_config.pad_zeros_startup = False
         super().__post_init__()
-        assert (
-            len(self.aligned_sink_pads) == 1 and len(self.source_pads) == 1
-        ), "only one sink_pad and one source_pad is allowed"
+        assert len(self.aligned_sink_pads) == 1 and len(self.source_pads) == 1, (
+            f"Correlate requires exactly one aligned sink pad and one "
+            f"source pad, got {len(self.aligned_sink_pads)} aligned sink "
+            f"pads and {len(self.source_pads)} source pads"
+        )
 
     def corr(self, data: Array) -> Array:
         """Correlate an array of data with an array of filters.
@@ -62,7 +66,7 @@ class Correlate(TSTransform):
         Returns:
             Array, the result of the correlation
         """
-        assert self.filters is not None
+        assert self.filters is not None, "Filters must not be None during correlation"
         if len(self.filters.shape) == 1:
             return scipy.signal.correlate(data, self.filters, mode="valid")
 
@@ -79,7 +83,10 @@ class Correlate(TSTransform):
         outoffsets = self.preparedoutoffsets[self.sink_pads[0]]
         frames = self.preparedframes[self.sink_pads[0]]
         for i, buf in enumerate(frames):
-            assert buf.sample_rate == self.sample_rate
+            assert buf.sample_rate == self.sample_rate, (
+                f"Buffer sample rate {buf.sample_rate} doesn't match "
+                f"correlator sample rate {self.sample_rate}"
+            )
             if buf.is_gap:
                 data = None
             else:
@@ -149,7 +156,7 @@ class AdaptiveCorrelate(Correlate):
         # Check that filters are provided for initial condition
         assert (
             init_filters is not None
-        ), "filters must be provided to create AdaptiveCorrelate"
+        ), "init_filters parameter must be provided to create AdaptiveCorrelate"
 
         # Set the initial filters
         self.filter_deque.append(init_filters)
@@ -165,16 +172,18 @@ class AdaptiveCorrelate(Correlate):
         """Validate arguments given to the adaptive filter"""
         # Check that the filters attribute is not used
         assert self.filters is None, (
-            "filters attribute is not used, in adaptive case, use init_filters "
-            "instead"
+            "The 'filters' attribute should not be set for "
+            "AdaptiveCorrelate. Use 'init_filters' parameter instead"
         )
 
         # Check that the filters are properly formatted if given
-        assert self.filters_cur is not None, "filters must be provided"
+        assert self.filters_cur is not None, (
+            "Current filters are None - init_filters must provide valid " "EventBuffer"
+        )
         if self.filters_cur is not None:
             assert isinstance(
                 self.filters_cur, EventBuffer
-            ), "filters must be an EventBuffer"
+            ), f"Filters must be an EventBuffer, got {type(self.filters_cur)}"
             assert self.filters_cur.te == TIME_MAX, "te must be TIME_MAX"
 
         # Set filters to the initial filters
@@ -183,9 +192,10 @@ class AdaptiveCorrelate(Correlate):
     def _validate_filters_pad(self):
         """Validate the filter sink pad before initializing the filter"""
         # Make sure the filter sink name is not already in use
-        assert (
-            self.filter_sink_name not in self.sink_pad_names
-        ), "Filter sink name already in use"
+        assert self.filter_sink_name not in self.sink_pad_names, (
+            f"Filter sink name '{self.filter_sink_name}' already exists "
+            f"in sink_pad_names: {self.sink_pad_names}"
+        )
 
         # Check that if unaligned pads are specified, that the filter sink name MUST
         # be one of them, if not included then add
@@ -225,7 +235,9 @@ class AdaptiveCorrelate(Correlate):
             return False
 
         # The below check is unnecessary except for Mypy
-        assert self.filters_new is not None  # already checked in first line
+        assert (
+            self.filters_new is not None
+        ), "filters_new should not be None when can_adapt returns True"
         # Check that the frame overlaps the new filter slice
         new_slice = self.filters_new.slice
         frame_slice = frame.slice
@@ -269,12 +281,16 @@ class AdaptiveCorrelate(Correlate):
 
         if self.can_adapt(frame):
             # Call the parent's new method for each set of filters
-            assert self.filters_cur is not None
+            assert (
+                self.filters_cur is not None
+            ), "Current filters are None during adaptation"
             self.filters = self.filters_cur.data
             res_cur = super().new(pad)
 
             # Change the state of filters
-            assert self.filters_new is not None
+            assert (
+                self.filters_new is not None
+            ), "New filters are None during adaptation"
             self.filters = self.filters_new.data
             res_new = super().new(pad)
 

@@ -64,7 +64,9 @@ def low_pass_filter(
 
     # Compute size from n_zeros
     if size is None:
-        assert n_zeros is not None
+        assert (
+            n_zeros is not None
+        ), "n_zeros must be specified when size is not provided"
         size = sinc_sample_size(f_cutoff, f_sample, n_zeros)
 
     # Compute the raw sample size

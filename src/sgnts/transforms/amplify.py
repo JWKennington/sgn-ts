@@ -18,9 +18,11 @@ class Amplify(TSTransform):
 
     def __post_init__(self):
         super().__post_init__()
-        assert (
-            len(self.sink_pads) == 1 and len(self.source_pads) == 1
-        ), "only one sink_pad and one source_pad is allowed"
+        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
+            f"Amplify requires exactly one sink pad and one source pad, "
+            f"got {len(self.sink_pads)} sink pads and "
+            f"{len(self.source_pads)} source pads"
+        )
         self.sink_pad = self.sink_pads[0]
 
     def new(self, pad: SourcePad) -> TSFrame:

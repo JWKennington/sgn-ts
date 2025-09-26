@@ -24,7 +24,9 @@ class SumIndex(TSTransform):
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.sl is not None
+        assert (
+            self.sl is not None
+        ), "Slice list (sl) must be provided for SumIndex operation"
         for sl in self.sl:
             assert isinstance(sl, slice)
 
@@ -40,7 +42,9 @@ class SumIndex(TSTransform):
                 data_all = []
                 # NOTE mypy complains about None not being iterable but None
                 # should actually be impossible at this point.
-                assert self.sl is not None
+                assert (
+                    self.sl is not None
+                ), "Slice list (sl) should not be None during processing"
                 for sl in self.sl:
                     if sl.stop - sl.start == 1:
                         data_all.append((data[sl.start, :, :]))
@@ -51,7 +55,9 @@ class SumIndex(TSTransform):
 
             # NOTE mypy complains about None not being iterable but None should
             # actually be impossible at this point.
-            assert self.sl is not None
+            assert (
+                self.sl is not None
+            ), "Slice list (sl) should not be None when creating output buffer"
             outbuf = SeriesBuffer(
                 offset=buf.offset,
                 sample_rate=buf.sample_rate,

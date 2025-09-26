@@ -303,7 +303,9 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                 )
                 if min_latest > self.inbufs[sink_pad].offset:
                     self.inbufs[sink_pad].flush_samples_by_end_offset(min_latest)
-                assert len(out) > 0
+                assert (
+                    len(out) > 0
+                ), "No buffers returned from get_sliced_buffers for aligned processing"
 
                 # Apply adapter processing only if config provided
                 if self.adapter_config is not None:
@@ -464,7 +466,9 @@ class _TSSource(SourceElement, SignalEOS):
         """Return the smallest t0 of the current prepared frame, which should
         be the same for all pads when called in the internal method, but maybe
         different otherwise"""
-        assert len(self._next_frame_dict) > 0
+        assert (
+            len(self._next_frame_dict) > 0
+        ), "_next_frame_dict is empty - no frames available for processing"
         return min(f.t0 for f in self._next_frame_dict.values())
 
     @property
@@ -472,7 +476,9 @@ class _TSSource(SourceElement, SignalEOS):
         """Return the largest end time of the current prepared frame, which
         should be the same for all pads when called in the internal method but maybe
         different otherwise"""
-        assert len(self._next_frame_dict) > 0
+        assert (
+            len(self._next_frame_dict) > 0
+        ), "_next_frame_dict is empty - no frames available for processing"
         return max(f.end for f in self._next_frame_dict.values())
 
     @property
@@ -480,7 +486,9 @@ class _TSSource(SourceElement, SignalEOS):
         """Return the largest end offset of the current prepared frame, which
         should be the same for all pads when called in the internal method but maybe
         different otherwise"""
-        assert len(self._next_frame_dict) > 0
+        assert (
+            len(self._next_frame_dict) > 0
+        ), "_next_frame_dict is empty - no frames available for processing"
         return max(f.end_offset for f in self._next_frame_dict.values())
 
     def prepare_frame(
@@ -514,7 +522,9 @@ class _TSSource(SourceElement, SignalEOS):
 
         """
         frame = self._next_frame_dict[pad]
-        assert len(frame) == 1
+        assert (
+            len(frame) == 1
+        ), "Expected exactly one buffer in frame for single-pad element"
 
         EOS = (
             (frame[0].end_offset >= self.end_offset or self.signaled_eos())
@@ -527,7 +537,10 @@ class _TSSource(SourceElement, SignalEOS):
         # See if we need to pass a heartbeat frame
         # If so, return the heartbeat and move on
         if latest_offset is not None:
-            assert latest_offset >= frame.offset
+            assert latest_offset >= frame.offset, (
+                f"Latest offset {latest_offset} cannot be before "
+                f"frame offset {frame.offset}"
+            )
             if latest_offset < frame.end_offset:
                 return frame.heartbeat(EOS)
 
@@ -615,7 +628,9 @@ class TSSource(_TSSource):
 
         """
         # Make sure this has only been called once per pad
-        assert pad not in self._new_buffer_dict
+        assert (
+            pad not in self._new_buffer_dict
+        ), f"Pad {pad.name} already exists in _new_buffer_dict - duplicate pad entry"
 
         self._new_buffer_dict[pad] = {
             "sample_rate": rate,
@@ -767,7 +782,9 @@ class TSResourceSource(_TSSource):
         self.stop()
 
     def start(self):
-        assert self.__is_setup
+        assert (
+            self.__is_setup
+        ), "Element must be setup before starting - call setup() first"
         if self.thread is None or not self.thread.is_alive():
             self.thread = threading.Thread(target=self.thread_get_data)
             self.thread.start()
@@ -839,7 +856,10 @@ class TSResourceSource(_TSSource):
         in_frame = TSFrame(buffers=self.out_queue[pad])
 
         # make sure nothing is fishy
-        assert out_frame.end_offset <= in_frame.end_offset
+        assert out_frame.end_offset <= in_frame.end_offset, (
+            f"Output frame end_offset {out_frame.end_offset} extends beyond "
+            f"input frame end_offset {in_frame.end_offset}"
+        )
 
         # intersect the TSSource provided output frame with the in_frame
         before, intersection, after = out_frame.intersect(in_frame)
@@ -867,7 +887,9 @@ class TSResourceSource(_TSSource):
     ) -> None:
         # Make sure this has only been called once per pad
         # assert self.resource is not None
-        assert pad not in self._new_buffer_dict
+        assert (
+            pad not in self._new_buffer_dict
+        ), f"Pad {pad.name} already exists in _new_buffer_dict - duplicate pad entry"
 
         self._new_buffer_dict[pad] = {
             "sample_rate": self.sample_rate(pad),

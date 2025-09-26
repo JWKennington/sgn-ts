@@ -31,8 +31,12 @@ class Threshold(TSTransform):
 
     def __post_init__(self):
         super().__post_init__()
-        assert len(self.sink_pads) == 1
-        assert len(self.source_pads) == 1
+        assert (
+            len(self.sink_pads) == 1
+        ), f"Threshold requires exactly 1 sink pad, got {len(self.sink_pads)}"
+        assert (
+            len(self.source_pads) == 1
+        ), f"Threshold requires exactly 1 source pad, got {len(self.source_pads)}"
         self.sinkpad = self.sink_pads[0]
         self.nongap_slices = TSSlices([])
 
@@ -130,7 +134,10 @@ class Threshold(TSTransform):
         # sanity check that buffers don't overlap
         o0 = out[0]
         for o in out[1:]:
-            assert o.offset == o0.end_offset
+            assert o.offset == o0.end_offset, (
+                f"Buffer overlap detected: buffer offset {o.offset} != "
+                f"previous buffer end_offset {o0.end_offset}"
+            )
             o0 = o
 
         return TSFrame(buffers=out, EOS=self.at_EOS, metadata=frame.metadata)
