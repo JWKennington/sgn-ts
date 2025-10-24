@@ -662,7 +662,8 @@ class TSFrame(Frame):
     def __post_init__(self):
         super().__post_init__()
         assert len(self.buffers) > 0, "Cannot create TSFrame with empty buffers list"
-        self.__sanity_check(self.buffers)
+        self.validate_buffers()
+        self.update_buffer_attrs()
         self.spec = self.buffers[0].spec
 
     def __getitem__(self, item):
@@ -684,7 +685,7 @@ class TSFrame(Frame):
     def __len__(self):
         return len(self.buffers)
 
-    def __sanity_check(self, bufs: list[SeriesBuffer]) -> None:
+    def validate_buffers(self) -> None:
         """Sanity check that the buffers don't overlap nor have discontinuities.
 
         Args:
@@ -693,8 +694,8 @@ class TSFrame(Frame):
         """
         # FIXME: is there a smart way using TSSlics?
 
-        if len(bufs) > 1:
-            slices = [buf.slice for buf in bufs]
+        if len(self.buffers) > 1:
+            slices = [buf.slice for buf in self.buffers]
             off0 = slices[0].stop
             for sl in slices[1:]:
                 assert off0 == sl.start, (
@@ -702,19 +703,27 @@ class TSFrame(Frame):
                     f"for contiguous buffers"
                 )
                 off0 = sl.stop
-        self.is_gap = all([b.is_gap for b in self.buffers])
 
         # Check all backends are the same
-        backends = {buf.backend for buf in bufs}
+        backends = {buf.backend for buf in self.buffers}
         assert (
             len(backends) == 1
         ), f"All buffers must have the same backend, got {backends}"
 
         # check that data specifications are all the same
-        data_specs = {buf.spec for buf in bufs}
+        data_specs = {buf.spec for buf in self.buffers}
         assert (
             len(data_specs) == 1
         ), f"All buffers must have the same data specifications, got {data_specs}"
+
+    def update_buffer_attrs(self):
+        """Helper method for updating buffer dependent attributes.
+
+        This is useful since buffers are mutable, and there are cases where we modify
+        the buffer contents after the TSFrame has been created, e.g., when preparing a
+        return frame in a "new" method.
+        """
+        self.is_gap = all([b.is_gap for b in self.buffers])
 
     def set_buffers(self, bufs: list[SeriesBuffer]) -> None:
         """Set the buffers attribute to the bufs provided.
@@ -724,7 +733,8 @@ class TSFrame(Frame):
                 list[SeriesBuffers], the list of buffers to set to
         """
         self.buffers = bufs
-        self.__sanity_check(bufs)
+        self.validate_buffers()
+        self.update_buffer_attrs()
 
     @property
     def offset(self) -> int:

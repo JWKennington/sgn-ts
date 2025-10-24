@@ -213,4 +213,8 @@ class FakeSeriesSource(TSSource):
             buf.set_data(data)
             metadata.update(_metadata)
 
+        # Update the frame attrs post buffer editing
+        frame.validate_buffers()
+        frame.update_buffer_attrs()
+
         return frame
