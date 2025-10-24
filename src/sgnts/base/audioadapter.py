@@ -30,6 +30,13 @@ class AdapterConfig:
             segment
         backend:
             type[ArrayBackend], the ArrayBackend wrapper
+        align_to:
+            int or None, alignment boundary in offsets
+            When set, output offsets will be aligned to multiples of this value.
+            For example:
+            - Offset.fromsec(1) aligns to integer seconds
+            - Offset.fromsamples(1024, rate) aligns to 1024-sample boundaries
+            Default: None (no alignment)
     """
 
     overlap: tuple[int, int] = (0, 0)
@@ -37,6 +44,7 @@ class AdapterConfig:
     pad_zeros_startup: bool = False
     skip_gaps: bool = False
     backend: type[ArrayBackend] = NumpyBackend
+    align_to: Optional[int] = None
 
     def valid_buffer(self, buf, data: Optional[Union[int, Array]] = 0):
         """
