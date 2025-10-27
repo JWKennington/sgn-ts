@@ -147,9 +147,8 @@ class Resampler(TSTransform):
         c = kernel_length // 2
         x = np.arange(-c, c + 1)
         vecs = np.sinc(x / factor) * np.sinc(x / c)
-        norm = np.linalg.norm(vecs) * factor**0.5
+        norm=sum(vecs)
         vecs = vecs / norm
-
         return vecs.reshape(1, -1)
 
     def upkernel(self, factor: int) -> Array:
