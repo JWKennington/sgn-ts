@@ -147,7 +147,7 @@ class Resampler(TSTransform):
         c = kernel_length // 2
         x = np.arange(-c, c + 1)
         vecs = np.sinc(x / factor) * np.sinc(x / c)
-        norm=sum(vecs)
+        norm = sum(vecs)
         vecs = vecs / norm
         return vecs.reshape(1, -1)
 
