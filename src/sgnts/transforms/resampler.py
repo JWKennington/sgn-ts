@@ -149,6 +149,8 @@ class Resampler(TSTransform):
         vecs = np.sinc(x / factor) * np.sinc(x / c)
         norm = sum(vecs)
         vecs = vecs / norm
+        #vecs = np.sinc(x / factor) * np.sinc(x / c)
+        #norm = np.linalg.norm(vecs) * factor**0.5
         return vecs.reshape(1, -1)
 
     def upkernel(self, factor: int) -> Array:
