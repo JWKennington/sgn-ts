@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Callable, Optional
 
+import numpy as np
 from sgn.base import SourcePad
 
 from sgnts.base import SeriesBuffer, TSFrame, TSTransform
@@ -118,3 +119,20 @@ def _multiply(*arrays):
     for arr in arrays[1:]:
         output = output * arr
     return output
+
+
+@dataclass
+class Real(NaryTransform):
+    """Extract Real component of single input"""
+
+    def __post_init__(self):
+        """Post init"""
+        # Force the operator to be multiplication
+        self.op = _real
+        super().__post_init__()
+
+
+def _real(*arrays):
+    """Multiple op"""
+    assert len(arrays) == 1, f"Real operator only takes one input, got {len(arrays)}"
+    return np.real(arrays[0])

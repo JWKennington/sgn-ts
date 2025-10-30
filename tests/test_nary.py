@@ -2,13 +2,13 @@
 
 import numpy
 import pytest
-
 from sgn import Pipeline
+from test_correlate import IsGapCollectSink
+
 from sgnts.base import AdapterConfig, Offset, SeriesBuffer, TSFrame
 from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import nary
-from sgnts.transforms.nary import Multiply, NaryTransform
-from test_correlate import IsGapCollectSink
+from sgnts.transforms.nary import Multiply, NaryTransform, Real
 
 
 class TestNaryTransform:
@@ -229,4 +229,68 @@ class TestMultiply:
         data2 = numpy.array(snk.collects[snk.snks["I2"].name][0].buffers[0].data)
         data_res = numpy.array(snk.collects[snk.snks["IRes"].name][0].buffers[0].data)
         expected = data1 * data2
+        numpy.testing.assert_almost_equal(data_res, expected)
+
+
+class TestReal:
+    """Test real transform"""
+
+    def test_init(self):
+        """Test creating a binop"""
+        r = Real(
+            sink_pad_names=["R1", "R2"],
+            source_pad_names=["O1"],
+        )
+        assert isinstance(r, Real)
+
+    def test_real(self):
+        """Test real"""
+        data = [numpy.array([1 + 1j, 2 + 2j, 3 + 3j])]
+        expected = numpy.array([1, 2, 3])
+        res = nary._real(*data)
+        numpy.testing.assert_almost_equal(res, expected)
+
+    def test_pipeline_real(self):
+        """Test real transform in a pipeline"""
+        pipeline = Pipeline()
+        # Run pipeline
+        src = FakeSeriesSource(
+            name="ConstSrc",
+            source_pad_names=["O1"],
+            signal_type="const",
+            const=1 + 1j,
+            rate=4,
+            t0=0,
+            duration=1,
+            real_time=False,
+        )
+
+        r = Real(
+            name="real",
+            sink_pad_names=["I1"],
+            source_pad_names=["O1"],
+            adapter_config=AdapterConfig(
+                stride=Offset.fromsamples(4, sample_rate=4),
+            ),
+        )
+
+        snk = IsGapCollectSink(
+            name="snk1",
+            sink_pad_names=["I1", "IRes"],
+            extract_data=False,
+        )
+
+        links = {
+            # Set the links
+            r.snks["I1"]: src.srcs["O1"],
+            # Set the links for the snk
+            snk.snks["IRes"]: r.srcs["O1"],
+            snk.snks["I1"]: src.srcs["O1"],
+        }
+
+        pipeline.insert(src, r, snk, link_map=links)
+        pipeline.run()
+
+        data_res = numpy.array(snk.collects[snk.snks["IRes"].name][0].buffers[0].data)
+        expected = numpy.ones(4)
         numpy.testing.assert_almost_equal(data_res, expected)
