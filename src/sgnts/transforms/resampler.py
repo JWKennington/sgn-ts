@@ -46,7 +46,7 @@ class Resampler(TSTransform):
     inrate: int = -1
     outrate: int = -1
     backend: type[ArrayBackend] = NumpyBackend
-    gstlal_norm = True
+    gstlal_norm: bool = True
 
     def __post_init__(self):
         assert (
@@ -151,7 +151,7 @@ class Resampler(TSTransform):
         c = kernel_length // 2
         x = np.arange(-c, c + 1)
         vecs = np.sinc(x / factor) * np.sinc(x / c)
-        if gstlal_norm:
+        if self.gstlal_norm:
             norm = np.linalg.norm(vecs) * factor**0.5
         else :
             norm = sum(vecs)
