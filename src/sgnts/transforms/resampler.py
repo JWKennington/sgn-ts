@@ -38,11 +38,15 @@ class Resampler(TSTransform):
             int, sample rate of the output frames
         backend:
             type[ArrayBackend], default NumpyBackend, a wrapper around array operations
+        gstlal_norm:
+            boolean: If true it will normalize consistent with SGNL filter matching. If false it have a slightly more accurate normalization
+    
     """
 
     inrate: int = -1
     outrate: int = -1
     backend: type[ArrayBackend] = NumpyBackend
+    gstlal_norm = True
 
     def __post_init__(self):
         assert (
@@ -147,10 +151,11 @@ class Resampler(TSTransform):
         c = kernel_length // 2
         x = np.arange(-c, c + 1)
         vecs = np.sinc(x / factor) * np.sinc(x / c)
-        norm = sum(vecs)
+        if gstlal_norm:
+            norm = np.linalg.norm(vecs) * factor**0.5
+        else :
+            norm = sum(vecs)
         vecs = vecs / norm
-        #vecs = np.sinc(x / factor) * np.sinc(x / c)
-        #norm = np.linalg.norm(vecs) * factor**0.5
         return vecs.reshape(1, -1)
 
     def upkernel(self, factor: int) -> Array:
