@@ -39,8 +39,9 @@ class Resampler(TSTransform):
         backend:
             type[ArrayBackend], default NumpyBackend, a wrapper around array operations
         gstlal_norm:
-            boolean: If true it will normalize consistent with SGNL filter matching. If false it have a slightly more accurate normalization
-    
+            boolean: If true it will normalize consistent with SGNL
+            filter matching. If false it have a slightly more accurate normalization
+
     """
 
     inrate: int = -1
@@ -153,7 +154,7 @@ class Resampler(TSTransform):
         vecs = np.sinc(x / factor) * np.sinc(x / c)
         if self.gstlal_norm:
             norm = np.linalg.norm(vecs) * factor**0.5
-        else :
+        else:
             norm = sum(vecs)
         vecs = vecs / norm
         return vecs.reshape(1, -1)
