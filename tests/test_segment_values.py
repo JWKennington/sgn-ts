@@ -345,3 +345,200 @@ def test_segment_source_rounding_edge_cases():
             # Ensure all segments are aligned to sample boundaries
             assert seg_slice.start % offset_factor == 0
             assert seg_slice.stop % offset_factor == 0
+
+
+def test_segment_source_gaps_between_segments():
+    """Test that SegmentSource correctly creates gap buffers between segments."""
+    from sgnts.base import Offset
+
+    # Create source with clear gaps between segments
+    # Segments at 0.1-0.2s and 0.4-0.5s (gap from 0.2-0.4s)
+    segments = (
+        (int(0.1 * 1e9), int(0.2 * 1e9)),
+        (int(0.4 * 1e9), int(0.5 * 1e9)),
+    )
+    values = (10, 20)
+
+    src = SegmentSource(
+        name="test",
+        source_pad_names=("data",),
+        rate=64,  # Low rate for simpler numbers
+        t0=0.0,
+        duration=1.0,
+        segments=segments,
+        values=values,
+    )
+
+    pad = src.srcs["data"]
+
+    # Get frames until we cover the gap region
+    # Gap is from ~3277 to ~6553 in offsets
+    gap_start_offset = Offset.fromns(int(0.2 * 1e9))
+    gap_end_offset = Offset.fromns(int(0.4 * 1e9))
+
+    found_gap = False
+    found_data_before = False
+    found_data_after = False
+
+    for _ in range(20):
+        frame = src.new(pad)
+
+        for buf in frame:
+            # Check if buffer overlaps with the gap region
+            if buf.offset < gap_end_offset and buf.end_offset > gap_start_offset:
+                # If this buffer is entirely within the gap region, it must be a gap
+                if buf.offset >= gap_start_offset and buf.end_offset <= gap_end_offset:
+                    assert (
+                        buf.is_gap
+                    ), f"Buffer {buf.offset}-{buf.end_offset} should be gap but isn't"
+                    assert buf.data is None, "Gap buffer should have data=None"
+                    found_gap = True
+                # If buffer spans the gap region, check if it's a gap
+                elif buf.is_gap:
+                    found_gap = True
+
+            # Check data before gap (may overlap slightly)
+            if buf.offset < gap_start_offset and not buf.is_gap:
+                assert buf.data is not None
+                if all(buf.data == 10):  # All values should be from first segment
+                    found_data_before = True
+
+            # Check data after gap (may overlap slightly)
+            if buf.end_offset > gap_end_offset and not buf.is_gap:
+                assert buf.data is not None
+                if all(buf.data == 20):  # All values should be from second segment
+                    found_data_after = True
+
+        if frame.EOS:
+            break
+
+    assert found_gap, "Should have found gap buffer(s) between segments"
+    assert found_data_before, "Should have found data before gap"
+    assert found_data_after, "Should have found data after gap"
+
+
+def test_segment_source_boundary_gaps():
+    """Test gap buffers at exact segment boundaries."""
+    from sgnts.base import Offset
+
+    # Create segments that touch at boundaries
+    # This is where the bug was - boundary touches were treated as overlaps
+    segments = (
+        (0, int(0.3 * 1e9)),  # 0 to 0.3s
+        (int(0.3 * 1e9), int(0.6 * 1e9)),  # 0.3 to 0.6s (touches previous)
+        (int(0.8 * 1e9), int(1.0 * 1e9)),  # 0.8 to 1.0s (gap from 0.6-0.8s)
+    )
+    values = (100, 200, 300)
+
+    src = SegmentSource(
+        name="test",
+        source_pad_names=("data",),
+        rate=128,
+        t0=0.0,
+        duration=1.0,
+        segments=segments,
+        values=values,
+    )
+
+    pad = src.srcs["data"]
+
+    # Get all buffers in first frame
+    frame = src.new(pad)
+
+    # Track what we find
+    gap_offsets = []
+    data_values = {}
+
+    for buf in frame:
+        if buf.is_gap:
+            gap_offsets.append((buf.offset, buf.end_offset))
+        else:
+            # Record the value at this offset range
+            if buf.data is not None and len(buf.data) > 0:
+                data_values[(buf.offset, buf.end_offset)] = buf.data[0]
+
+    # There should be a gap from 0.6s to 0.8s
+    gap_start = Offset.fromns(int(0.6 * 1e9))
+    gap_end = Offset.fromns(int(0.8 * 1e9))
+
+    # Check that we have gap buffer(s) in the gap region
+    found_gap_in_region = False
+    for start, end in gap_offsets:
+        if start >= gap_start and end <= gap_end:
+            found_gap_in_region = True
+            break
+
+    assert (
+        found_gap_in_region
+    ), f"Should have gap between 0.6-0.8s, but gaps are at: {gap_offsets}"
+
+    # Verify no gaps where segments touch (at 0.3s boundary)
+    boundary_offset = Offset.fromns(int(0.3 * 1e9))
+    for start, end in gap_offsets:
+        # Make sure no gap spans across the boundary where segments touch
+        assert not (
+            start < boundary_offset < end
+        ), f"Should not have gap at segment boundary 0.3s, but found gap {start}-{end}"
+
+
+def test_segment_source_multiple_gaps():
+    """Test multiple gaps in various positions."""
+    from sgnts.base import Offset
+
+    # Multiple gaps: at start, middle, and end
+    segments = (
+        (int(0.2 * 1e9), int(0.3 * 1e9)),  # Gap before (0-0.2s)
+        (int(0.5 * 1e9), int(0.6 * 1e9)),  # Gap before and after (0.3-0.5s, 0.6-0.8s)
+        (int(0.8 * 1e9), int(0.9 * 1e9)),  # Gap after (0.9-1.0s)
+    )
+    values = (11, 22, 33)
+
+    src = SegmentSource(
+        name="test",
+        source_pad_names=("data",),
+        rate=256,
+        t0=0.0,
+        duration=1.0,
+        segments=segments,
+        values=values,
+    )
+
+    pad = src.srcs["data"]
+
+    # Collect all buffers
+    all_buffers = []
+    for _ in range(10):
+        frame = src.new(pad)
+        all_buffers.extend(list(frame.buffers))
+        if frame.EOS:
+            break
+
+    # Count gaps and data buffers
+    gap_count = sum(1 for buf in all_buffers if buf.is_gap)
+    data_count = sum(1 for buf in all_buffers if not buf.is_gap)
+
+    assert gap_count > 0, "Should have gap buffers"
+    assert data_count > 0, "Should have data buffers"
+
+    # Verify gap regions exist
+    gap_regions = [
+        (0, int(0.2 * 1e9)),  # Start gap
+        (int(0.3 * 1e9), int(0.5 * 1e9)),  # Middle gap 1
+        (int(0.6 * 1e9), int(0.8 * 1e9)),  # Middle gap 2
+        (int(0.9 * 1e9), int(1.0 * 1e9)),  # End gap
+    ]
+
+    for gap_start_ns, gap_end_ns in gap_regions:
+        gap_start = Offset.fromns(gap_start_ns)
+        gap_end = Offset.fromns(gap_end_ns)
+
+        # Find buffers in this gap region (may not be entirely within)
+        gap_found = any(
+            buf.is_gap and buf.offset < gap_end and buf.end_offset > gap_start
+            for buf in all_buffers
+        )
+
+        assert gap_found, (
+            f"Should have gap buffer(s) in region "
+            f"{gap_start_ns/1e9:.1f}-{gap_end_ns/1e9:.1f}s"
+        )
