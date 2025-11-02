@@ -922,7 +922,10 @@ class TSFrame(Frame):
                         bbuf.append(obuf)
                     else:
                         abuf.append(obuf)
-                inbuf.extend(buf.split(TSSlices([self.slice & buf.slice])))
+                # Only split if there's actual overlap (half-open semantics)
+                overlap = self.slice & buf.slice
+                if overlap.isfinite():
+                    inbuf.extend(buf.split(TSSlices([overlap])))
         return (
             None if not bbuf else TSFrame(buffers=bbuf),
             None if not inbuf else TSFrame(buffers=inbuf),
