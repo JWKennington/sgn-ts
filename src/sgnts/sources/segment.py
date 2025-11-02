@@ -120,7 +120,9 @@ class SegmentSource(TSSource):
                 for split_buf in split_bufs:
                     # Check if this buffer overlaps with any segment
                     for slice_obj, orig_idx in self.segment_data:
-                        if split_buf.slice & slice_obj:  # Has overlap
+                        overlap = split_buf.slice & slice_obj
+                        # Only consider finite overlaps (not just boundary touches)
+                        if overlap and overlap.isfinite():  # Has finite overlap
                             # Set the appropriate value for this non-gap buffer
                             if self.values is not None:
                                 split_buf.set_data(self.values[orig_idx])

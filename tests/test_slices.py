@@ -190,3 +190,14 @@ class TestTSSlices:
         res = slcs.search(slc, align=False)
         assert isinstance(res, TSSlices)
         assert res == TSSlices([TSSlice(1, 3)])
+
+    def test_intersection_of_multiple_edge_cases(self):
+        """Test intersection_of_multiple with edge cases for 100% coverage"""
+        # Test empty list (covers line 453)
+        result = TSSlices.intersection_of_multiple([])
+        assert result == TSSlices([])
+
+        # Test single element list (covers line 456)
+        single = TSSlices([TSSlice(10, 20)])
+        result = TSSlices.intersection_of_multiple([single])
+        assert result == single

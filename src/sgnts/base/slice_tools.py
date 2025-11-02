@@ -418,3 +418,59 @@ class TSSlices:
         if boundary_slice.stop > _slices[-1].stop:
             out.append(TSSlice(_slices[-1].stop, boundary_slice.stop))
         return TSSlices(out)
+
+    @classmethod
+    def intersection_of_multiple(cls, tsslices_list: list["TSSlices"]) -> "TSSlices":
+        """Find the intersection of multiple TSSlices objects.
+
+        This method computes regions that are present in ALL input TSSlices.
+        It's useful for finding common valid data regions across multiple streams.
+
+        Args:
+            tsslices_list: List of TSSlices objects to intersect
+
+        Returns:
+            TSSlices containing only regions present in all inputs
+
+        Examples:
+            >>> slices1 = TSSlices([TSSlice(0, 10), TSSlice(20, 30)])
+            >>> slices2 = TSSlices([TSSlice(5, 15), TSSlice(25, 35)])
+            >>> slices3 = TSSlices([TSSlice(7, 12), TSSlice(22, 28)])
+            >>> TSSlices.intersection_of_multiple([slices1, slices2, slices3])
+            TSSlices(slices=[TSSlice(start=7, stop=10), TSSlice(start=25, stop=28)])
+
+            >>> # Empty case
+            >>> TSSlices.intersection_of_multiple([])
+            TSSlices(slices=[])
+
+            >>> # No overlap case
+            >>> slices1 = TSSlices([TSSlice(0, 10)])
+            >>> slices2 = TSSlices([TSSlice(20, 30)])
+            >>> TSSlices.intersection_of_multiple([slices1, slices2])
+            TSSlices(slices=[])
+        """
+        if not tsslices_list:
+            return cls([])
+
+        if len(tsslices_list) == 1:
+            return tsslices_list[0]
+
+        # Start with first set of slices
+        intersection = tsslices_list[0]
+
+        # Intersect with each subsequent set
+        for slices in tsslices_list[1:]:
+            new_intersection = []
+            for int_slice in intersection.slices:
+                for curr_slice in slices.slices:
+                    overlap = int_slice & curr_slice
+                    if overlap and overlap.isfinite():
+                        new_intersection.append(overlap)
+            intersection = cls(new_intersection)
+
+            # Early exit if no intersection
+            if not intersection.slices:
+                return cls([])
+
+        # Optionally simplify to merge overlapping slices
+        return intersection.simplify() if intersection.slices else intersection
