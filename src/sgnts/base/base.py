@@ -123,6 +123,18 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
         if self.timeout(pad):
             raise ValueError("pad %s has timed out" % pad.name)
 
+    def _compute_aligned_offset(self, current_offset: int, align_to: int) -> int:
+        """Compute aligned offset based on alignment boundary.
+
+        Args:
+            current_offset: Current offset in offsets
+            align_to: Alignment boundary in offsets
+
+        Returns:
+            Aligned offset
+        """
+        return ((current_offset + align_to - 1) // align_to) * align_to
+
     def __adapter(self, pad: SinkPad, frame: list[SeriesBuffer]) -> list[SeriesBuffer]:
         """Use the audioadapter to handle streaming scenarios.
 
@@ -192,9 +204,33 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
         # figure out the offset for preparedframes and preparedoutoffsets
         offset = a.offset - self.pad_zeros_offset
         outoffset = offset + self.overlap[0]
+
+        # Determine if we're using alignment mode
+        use_alignment = (
+            self.adapter_config is not None and self.adapter_config.align_to is not None
+        )
+
+        # Apply alignment if configured
+        if use_alignment:
+            assert self.adapter_config is not None
+            assert self.adapter_config.align_to is not None
+            outoffset = self._compute_aligned_offset(
+                outoffset,
+                self.adapter_config.align_to,
+            )
+
         preparedbufs = []
 
-        if a.size < min_samples:
+        # Check if we have enough data
+        if use_alignment:
+            # For aligned mode, check if we have data up to aligned_offset + stride
+            aligned_end = outoffset + self.stride
+            has_enough_data = a.end_offset >= aligned_end
+        else:
+            # Original check based on size
+            has_enough_data = a.size >= min_samples
+
+        if not has_enough_data:
             # not enough samples to produce output yet
             # make a heartbeat buffer
             shape = buf0.shape[:-1] + (0,)
@@ -206,53 +242,97 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
             # prepare output frames, one buffer per frame
             self.preparedoutoffsets[pad] = [{"offset": outoffset, "noffset": 0}]
         else:
-            # We have enough samples, find out how many samples to copy
-            # out of the audioadapter
-            # copy all of the samples in the audioadapter
-            if self.stride == 0:
-                # provide all the data
-                num_copy_samples = a.size
-            else:
-                num_copy_samples = min_samples
-
+            # We have enough samples, retrieve data
             outoffsets = []
 
-            segment_has_gap, segment_has_nongap = a.segment_gaps_info(
-                (
-                    a.offset,
-                    a.offset + Offset.fromsamples(num_copy_samples, a.sample_rate),
+            if use_alignment:
+                # Retrieve data at exact aligned offset
+                aligned_end = outoffset + self.stride
+                stride_samples_actual = Offset.tosamples(self.stride, sample_rate)
+
+                # Check for gaps in the aligned segment
+                segment_has_gap, segment_has_nongap = a.segment_gaps_info(
+                    (outoffset, aligned_end)
                 )
-            )
 
-            if not segment_has_nongap or (self.skip_gaps and segment_has_gap):
-                # produce a gap buffer if
-                # 1. the whole segment is a gap or
-                # 2. there are gaps in the segment and we are skipping gaps
-                data = None
+                if not segment_has_nongap or (self.skip_gaps and segment_has_gap):
+                    # Gap in aligned segment
+                    data = None
+                else:
+                    # Retrieve data at the aligned offset using offset-based slicing
+                    data = a.copy_samples_by_offset_segment(
+                        (outoffset, aligned_end), pad_start=False
+                    )
+
+                # Create output buffer at aligned offset (no padding needed if aligned)
+                shape = buf0.shape[:-1] + (
+                    stride_samples_actual if data is not None else 0,
+                )
+                pbuf = SeriesBuffer(
+                    offset=outoffset,  # Use aligned offset
+                    sample_rate=sample_rate,
+                    data=data,
+                    shape=shape,
+                )
+                preparedbufs.append(pbuf)
+
+                # Flush data up to the END of the aligned segment (not the start)
+                # This ensures next iteration starts after this segment
+                a.flush_samples_by_end_offset(aligned_end)
+
+                # Output offset metadata
+                outnoffset = self.stride
+                outoffsets.append({"offset": outoffset, "noffset": outnoffset})
+
+                # No padding offset adjustment needed for aligned mode
+                self.pad_zeros_offset = 0
+
             else:
-                # copy out samples from head of audioadapter
-                data = a.copy_samples(num_copy_samples)
-                if self.pad_zeros_offset > 0 and self.adapter_config is not None:
-                    # pad zeros in front of buffer
-                    data = self.adapter_config.backend.pad(data, (pad_zeros_samples, 0))
+                # copy all of the samples in the audioadapter
+                if self.stride == 0:
+                    # provide all the data
+                    num_copy_samples = a.size
+                else:
+                    num_copy_samples = min_samples
 
-            # flush out samples from head of audioadapter
-            num_flush_samples = num_copy_samples - sum(overlap_samples)
-            if num_flush_samples > 0:
-                a.flush_samples(num_flush_samples)
+                segment_has_gap, segment_has_nongap = a.segment_gaps_info(
+                    (
+                        a.offset,
+                        a.offset + Offset.fromsamples(num_copy_samples, a.sample_rate),
+                    )
+                )
 
-            shape = buf0.shape[:-1] + (num_copy_samples + pad_zeros_samples,)
+                if not segment_has_nongap or (self.skip_gaps and segment_has_gap):
+                    # produce a gap buffer if
+                    # 1. the whole segment is a gap or
+                    # 2. there are gaps in the segment and we are skipping gaps
+                    data = None
+                else:
+                    # copy out samples from head of audioadapter
+                    data = a.copy_samples(num_copy_samples)
+                    if self.pad_zeros_offset > 0 and self.adapter_config is not None:
+                        # pad zeros in front of buffer
+                        data = self.adapter_config.backend.pad(
+                            data, (pad_zeros_samples, 0)
+                        )
 
-            # update next zeros padding
-            self.pad_zeros_offset = -min(
-                0, Offset.fromsamples(num_flush_samples, sample_rate)
-            )
-            pbuf = SeriesBuffer(
-                offset=offset, sample_rate=sample_rate, data=data, shape=shape
-            )
-            preparedbufs.append(pbuf)
-            outnoffset = pbuf.noffset - sum(self.overlap)
-            outoffsets.append({"offset": outoffset, "noffset": outnoffset})
+                # flush out samples from head of audioadapter
+                num_flush_samples = num_copy_samples - sum(overlap_samples)
+                if num_flush_samples > 0:
+                    a.flush_samples(num_flush_samples)
+
+                shape = buf0.shape[:-1] + (num_copy_samples + pad_zeros_samples,)
+
+                # update next zeros padding
+                self.pad_zeros_offset = -min(
+                    0, Offset.fromsamples(num_flush_samples, sample_rate)
+                )
+                pbuf = SeriesBuffer(
+                    offset=offset, sample_rate=sample_rate, data=data, shape=shape
+                )
+                preparedbufs.append(pbuf)
+                outnoffset = pbuf.noffset - sum(self.overlap)
+                outoffsets.append({"offset": outoffset, "noffset": outnoffset})
 
             self.preparedoutoffsets[pad] = outoffsets
 

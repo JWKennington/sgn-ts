@@ -6,6 +6,7 @@ import numpy
 import pytest
 
 from sgnts.base import Audioadapter, Offset, SeriesBuffer
+from sgnts.base.base import TSTransform
 
 
 class TestProperties:
@@ -888,3 +889,132 @@ class TestSegmentGapsInfo:
         a.push(b3)
         gaps = a.segment_gaps_info((Offset.fromsec(0.75), Offset.fromsec(3.75)))
         assert gaps == (True, False)
+
+
+class TestAlignedOffsets:
+    """Test group for alignment functionality"""
+
+    def test_compute_aligned_offset(self):
+        """Test _compute_aligned_offset (always rounds up to next boundary)"""
+
+        transform = TSTransform(sink_pad_names=["test"], source_pad_names=["test"])
+        # Use arbitrary alignment boundary value for testing the algorithm
+        align_boundary = 1_000_000_000
+
+        # Test alignment: always rounds up to next boundary
+        assert transform._compute_aligned_offset(0, align_boundary) == 0
+        assert transform._compute_aligned_offset(1, align_boundary) == align_boundary
+        assert transform._compute_aligned_offset(-250_000_000, align_boundary) == 0
+        assert (
+            transform._compute_aligned_offset(250_000_000, align_boundary)
+            == align_boundary
+        )
+        assert (
+            transform._compute_aligned_offset(750_000_000, align_boundary)
+            == align_boundary
+        )
+        assert transform._compute_aligned_offset(-750_000_000, align_boundary) == 0
+
+    def test_aligned_offset_subsecond_boundary(self):
+        """Test alignment with subsecond boundaries"""
+        from sgnts.base.base import TSTransform
+
+        transform = TSTransform(sink_pad_names=["test"], source_pad_names=["test"])
+        TENTH_SECOND = 100_000_000  # 0.1 seconds
+
+        # Test with 0.1 second boundaries (rounds up)
+        assert (
+            transform._compute_aligned_offset(250_000_000, TENTH_SECOND) == 300_000_000
+        )  # 0.25s -> 0.3s
+        assert (
+            transform._compute_aligned_offset(200_000_000, TENTH_SECOND) == 200_000_000
+        )  # 0.2s -> 0.2s (already aligned)
+        assert (
+            transform._compute_aligned_offset(201_000_000, TENTH_SECOND) == 300_000_000
+        )  # 0.201s -> 0.3s
+
+    def test_copy_samples_by_offset_segment_aligned(self):
+        """Test copy_samples_by_offset_segment with aligned offsets"""
+        a = Audioadapter()
+
+        sample_rate = 2048
+        # Push data starting at misaligned offset (-0.25s)
+        # -0.25s with 2048 samples per second = 1s duration
+        offset_start = Offset.fromsec(-0.25)
+        b1 = SeriesBuffer(
+            offset=offset_start, sample_rate=sample_rate, data=numpy.arange(2048)
+        )
+        b2 = SeriesBuffer(
+            offset=b1.end_offset, sample_rate=sample_rate, data=numpy.arange(2048, 4096)
+        )
+        b3 = SeriesBuffer(
+            offset=b2.end_offset, sample_rate=sample_rate, data=numpy.arange(4096, 6144)
+        )
+        a.push(b1)
+        a.push(b2)
+        a.push(b3)
+
+        # Request data at aligned offset (0s to 1s)
+        out = a.copy_samples_by_offset_segment((Offset.fromsec(0), Offset.fromsec(1)))
+
+        # Should get 2048 samples from 0s to 1s
+        assert out.shape == (2048,)
+        # The data should start from sample index 512 (0.25s worth at 2048 Hz)
+        assert numpy.all(out == numpy.arange(512, 2560))
+
+    def test_copy_samples_by_offset_segment_multiple_aligned(self):
+        """Test retrieving multiple aligned segments"""
+        a = Audioadapter()
+
+        sample_rate = 2048
+        # Push 3 seconds of data starting at -0.25s
+        data = numpy.arange(6144)
+        offset_start = Offset.fromsec(-0.25)
+        b1 = SeriesBuffer(
+            offset=offset_start, sample_rate=sample_rate, data=data[:2048]
+        )
+        b2 = SeriesBuffer(
+            offset=b1.end_offset, sample_rate=sample_rate, data=data[2048:4096]
+        )
+        b3 = SeriesBuffer(
+            offset=b2.end_offset, sample_rate=sample_rate, data=data[4096:]
+        )
+        a.push(b1)
+        a.push(b2)
+        a.push(b3)
+
+        # Get first aligned second (0s to 1s)
+        out1 = a.copy_samples_by_offset_segment((Offset.fromsec(0), Offset.fromsec(1)))
+        assert out1.shape == (2048,)
+        assert numpy.all(out1 == data[512:2560])
+
+        # Get second aligned second (1s to 2s)
+        out2 = a.copy_samples_by_offset_segment((Offset.fromsec(1), Offset.fromsec(2)))
+        assert out2.shape == (2048,)
+        assert numpy.all(out2 == data[2560:4608])
+
+    def test_flush_after_aligned_retrieval(self):
+        """Test flushing after retrieving aligned data"""
+        a = Audioadapter()
+
+        sample_rate = 2048
+        # Push data starting at misaligned offset (-0.25s to 1.75s = 2 seconds)
+        offset_start = Offset.fromsec(-0.25)
+        b1 = SeriesBuffer(
+            offset=offset_start, sample_rate=sample_rate, data=numpy.arange(2048)
+        )
+        b2 = SeriesBuffer(
+            offset=b1.end_offset, sample_rate=sample_rate, data=numpy.arange(2048, 4096)
+        )
+        a.push(b1)
+        a.push(b2)
+
+        # Retrieve aligned segment (0s to 1s)
+        _ = a.copy_samples_by_offset_segment((Offset.fromsec(0), Offset.fromsec(1)))
+
+        # Flush to end of aligned segment
+        a.flush_samples_by_end_offset(Offset.fromsec(1))
+
+        # Should have remaining data from 1s onward
+        assert a.offset == Offset.fromsec(1)
+        assert a.size == 1536  # 0.75s worth of samples at 2048 Hz (1.75s - 1s = 0.75s)

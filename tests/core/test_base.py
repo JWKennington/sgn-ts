@@ -30,6 +30,14 @@ class TestAdapterConfig:
         assert not ac.pad_zeros_startup
         assert not ac.skip_gaps
         assert ac.backend == NumpyBackend
+        assert ac.align_to is None
+
+    def test_init_with_alignment(self):
+        """Test creating an AdapterConfig with alignment parameters"""
+        align_boundary = Offset.fromsec(1)
+        ac = AdapterConfig(align_to=align_boundary)
+        assert isinstance(ac, AdapterConfig)
+        assert ac.align_to == align_boundary
 
     def test_valid_buffer_no_shape(self):
         """Test the valid_buffer method with no shape"""
@@ -153,6 +161,34 @@ class Test_TSTransSink:
         ts._align()
         assert ts.is_aligned
 
+    def test_pull_unaligned_pad(self):
+        """Test pull method with unaligned pad"""
+        ts = TSTransform(
+            sink_pad_names=["aligned", "unaligned"],
+            source_pad_names=["out"],
+            unaligned=["unaligned"],
+        )
+
+        # Create a frame for the unaligned pad
+        frame = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=0,
+                    sample_rate=1,
+                    shape=(10,),
+                    data=numpy.arange(10),
+                )
+            ]
+        )
+
+        # Pull to the unaligned pad - should store in unaligned_data
+        unaligned_pad = ts.snks["unaligned"]
+        ts.pull(pad=unaligned_pad, frame=frame)
+
+        # Verify the frame was stored
+        assert ts.unaligned_data[unaligned_pad] is not None
+        assert ts.unaligned_data[unaligned_pad] == frame
+
     def test_latest(self, ts):
         """Test the latest property"""
         assert ts.latest == -1
@@ -179,6 +215,42 @@ class TestTSTransform:
         )
         with pytest.raises(NotImplementedError):
             ts.new(pad=ts.srcs["O1"])
+
+    def test_init_with_adapter_config_alignment(self):
+        """Test TSTransform initialization with adapter_config that has alignment"""
+        one_second = Offset.fromsec(1)
+        config = AdapterConfig(
+            stride=one_second,
+            overlap=(0, 0),
+            align_to=one_second,
+        )
+
+        ts = TSTransform(
+            sink_pad_names=["test"],
+            source_pad_names=["test"],
+            adapter_config=config,
+        )
+
+        assert ts.adapter_config is not None
+        assert ts.adapter_config.align_to == one_second
+        assert ts.stride == one_second
+        assert ts.audioadapters is not None
+        assert len(ts.aligned_sink_pads) == 1
+        assert "test" in ts.aligned_sink_pads[0].name
+
+    def test_init_with_unaligned_pads(self):
+        """Test TSTransform initialization with unaligned pads"""
+        ts = TSTransform(
+            sink_pad_names=["aligned", "unaligned"],
+            source_pad_names=["out"],
+            unaligned=["unaligned"],
+        )
+
+        assert len(ts.unaligned_sink_pads) == 1
+        assert "unaligned" in ts.unaligned_sink_pads[0].name
+        assert len(ts.aligned_sink_pads) == 1
+        assert "aligned" in ts.aligned_sink_pads[0].name
+        assert ts.unaligned_sink_pads[0] in ts.unaligned_data
 
 
 class DummyTSSource(TSSource):
