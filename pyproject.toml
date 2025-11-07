@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 name = "sgn-ts"
 dynamic = ["version"]
 dependencies = [
-    "sgn",
+    "sgn >= 0.4",
     "numpy",
     "scipy",
 ]
