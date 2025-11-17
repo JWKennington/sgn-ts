@@ -1,13 +1,4 @@
-"""Utilities for working with intervals of time.
-
-TSSlice uses half-open interval semantics [start, stop) for operations:
-- start is INCLUDED in the interval
-- stop is EXCLUDED from the interval
-- Zero-width slices TSSlice(n, n) are allowed (represent empty buffers)
-  but are non-finite
-- Adjacent intervals like [1,2) and [2,3) do not intersect but merge
-  with +
-"""
+"""Utilities for working with intervals of time"""
 
 from __future__ import annotations
 
@@ -96,8 +87,7 @@ class TSSlice:
         if self.start is None or self.stop is None or o.start is None or o.stop is None:
             return TSSlice(None, None)
         _start, _stop = max(self.start, o.start), min(self.stop, o.stop)
-        # Use >= for half-open semantics: [1,2) and [2,3) don't intersect
-        if _start >= _stop:
+        if _start > _stop:
             return TSSlice(None, None)
         return TSSlice(_start, _stop)
 
@@ -167,7 +157,7 @@ class TSSlice:
 
     def __add__(self, o):
         """Add two TSSlices together producing a single TSSlice if they intersect
-        or are adjacent (half-open semantics), otherwise returning each in a list.
+        otherwise returning each in a list.
 
         Examples:
             >>> A = TSSlice(start=0, stop=3)
@@ -191,16 +181,10 @@ class TSSlice:
             >>> B+A
             [TSSlice(start=None, stop=None), TSSlice(start=0, stop=3)]
         """
-        # Merge if slices intersect OR are adjacent
-        # In half-open semantics [start, stop), adjacent means one's stop
-        # equals the other's start
         if self & o:
             return [self | o]
-        elif self.start is not None and o.start is not None:
-            # Check for adjacency: [a,b) and [b,c) are adjacent
-            if self.stop == o.start or o.stop == self.start:
-                return [self | o]
-        return sorted([self, o])
+        else:
+            return sorted([self, o])
 
     def __gt__(self, o):
         """Check if a slice is greater than another slice.
@@ -276,9 +260,6 @@ class TSSlice:
         return sorted(o for o in out if o.isfinite())
 
     def __contains__(self, o):
-        """Check if slice o is contained within self."""
-        if o.start is None or o.stop is None or self.start is None or self.stop is None:
-            return False
         return o.start >= self.start and o.stop <= self.stop
 
     def split(self, o: int):

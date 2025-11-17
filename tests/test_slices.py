@@ -102,14 +102,6 @@ class TestSlice:
         assert not TSSlice(None, None).isfinite()
         assert TSSlice(1, 2)
 
-    def test_contains_none(self):
-        """Test __contains__ with None slices (half-open semantics fix)"""
-        slc = TSSlice(1, 5)
-        empty = TSSlice(None, None)
-        # None slices should not be contained in any slice
-        assert not (empty in slc)
-        assert not (slc in empty)
-
     def test_index_numpy(self):
         """Test compatibility indexing numpy arrays with a TSSlice object"""
         data = numpy.array([1, 2, 3, 4, 5])
