@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import InitVar, dataclass
+from dataclasses import dataclass
 from typing import Deque, Optional
 
 import numpy
@@ -11,7 +11,9 @@ from sgn.base import SinkPad, SourcePad
 from sgnts.base import (
     AdapterConfig,
     Array,
+    Event,
     EventBuffer,
+    EventFrame,
     Offset,
     SeriesBuffer,
     TSFrame,
@@ -130,15 +132,8 @@ class AdaptiveCorrelate(Correlate):
     Args:
         filter_sink_name:
             str, the name of the sink pad to pull data from
-        init_filters:
-            EventBuffer, the filters to correlate over, with a t0,
-            effectively a slice (t0, t_max). This is passed as an EventBuffer
-            with the following types:
-
-                ts: int, the start time of the filter update
-                te: int = TIME_MAX, the end time of the filter update (always set to
-                    max time for now)
-                data: Array, the filters to correlate over
+        filters:
+            Array, the filter to correlate over
 
     Raises:
         ValueError:
@@ -146,48 +141,27 @@ class AdaptiveCorrelate(Correlate):
     """
 
     filter_sink_name: str = "filters"
-    init_filters: InitVar[Optional[EventBuffer]] = None
 
-    def __post_init__(self, init_filters: Optional[EventBuffer]):
+    def __post_init__(self) -> None:
         """Setup the adaptive FIR filter"""
         # Setup empty deque for storing filters
-        self.filter_deque: Deque = deque()
-
-        # Check that filters are provided for initial condition
-        assert (
-            init_filters is not None
-        ), "init_filters parameter must be provided to create AdaptiveCorrelate"
-
-        # Set the initial filters
-        self.filter_deque.append(init_filters)
+        self.filter_deque: Deque[EventFrame] = deque()
 
         # Argument validation
         self._validate_filters_pad()
-        self._validate_init_data()
 
         # Call the parent's post init, this will setup all the appropriate pads
         super().__post_init__()
 
-    def _validate_init_data(self):
-        """Validate arguments given to the adaptive filter"""
-        # Check that the filters attribute is not used
-        assert self.filters is None, (
-            "The 'filters' attribute should not be set for "
-            "AdaptiveCorrelate. Use 'init_filters' parameter instead"
+        # Set the initial filters
+        event = Event(offset=0, data=self.filters)
+        buf = EventBuffer(
+            offset=0,
+            noffset=TIME_MAX,
+            data=[event],
         )
-
-        # Check that the filters are properly formatted if given
-        assert self.filters_cur is not None, (
-            "Current filters are None - init_filters must provide valid " "EventBuffer"
-        )
-        if self.filters_cur is not None:
-            assert isinstance(
-                self.filters_cur, EventBuffer
-            ), f"Filters must be an EventBuffer, got {type(self.filters_cur)}"
-            assert self.filters_cur.te == TIME_MAX, "te must be TIME_MAX"
-
-        # Set filters to the initial filters
-        self.filters = self.filters_cur.data
+        frame = EventFrame(data=[buf])
+        self.filter_deque.append(frame)
 
     def _validate_filters_pad(self):
         """Validate the filter sink pad before initializing the filter"""
@@ -208,13 +182,22 @@ class AdaptiveCorrelate(Correlate):
         # Add the filter sink name to the sink pad names
         self.sink_pad_names = list(self.sink_pad_names) + [self.filter_sink_name]
 
+    @staticmethod
+    def _extract_filter(item: EventBuffer | EventFrame) -> Array:
+        """Extract the filter from an event buffer or frame."""
+        if len(item.events) > 1:
+            msg = "found more than one event in {item}, " "cannot extract filter."
+            raise ValueError(msg)
+        event = item.events[0]
+        return event.data
+
     @property
-    def filters_cur(self) -> EventBuffer:
+    def filters_cur(self) -> EventFrame:
         """Get the current filters"""
         return self.filter_deque[0]
 
     @property
-    def filters_new(self) -> Optional[EventBuffer]:
+    def filters_new(self) -> Optional[EventFrame]:
         """Get the new filters"""
         if len(self.filter_deque) > 1:
             return self.filter_deque[1]
@@ -251,12 +234,13 @@ class AdaptiveCorrelate(Correlate):
         # If the pad is the special filter sink pad, then update filter
         # metadata values
         if pad.name == self.snks[self.filter_sink_name].name:
-            # Assume frame is an EventFrame with only 1 EventBuffer in
-            # the "events" list
-            buf = self.unaligned_data[pad].events["events"][0]
+            # Assume frame is an EventFrame containing a single Event
+            event_frame = self.unaligned_data[pad]
+            assert isinstance(event_frame, EventFrame)
+            new_filter = self._extract_filter(event_frame)
 
             # If the buffer is null, then short circuit
-            if buf.data is None:
+            if new_filter is None:
                 return
 
             # Redundant check, but more generalizable?
@@ -266,14 +250,14 @@ class AdaptiveCorrelate(Correlate):
             # Check that the new filters have the same shape as the existing filters
             if (
                 self.filters_cur is not None
-                and not self.filters_cur.data.shape == buf.data.shape
+                and self._extract_filter(self.filters_cur).shape != new_filter.shape
             ):
                 raise ValueError(
                     "New filters must have the same shape as existing filters"
                 )
 
             # Set the new filters
-            self.filter_deque.append(buf)
+            self.filter_deque.append(event_frame)
 
     def new(self, pad: SourcePad) -> TSFrame:
         # Get a aligned buffer to see if overlaps with new filters
@@ -281,18 +265,14 @@ class AdaptiveCorrelate(Correlate):
 
         if self.can_adapt(frame):
             # Call the parent's new method for each set of filters
-            assert (
-                self.filters_cur is not None
-            ), "Current filters are None during adaptation"
-            self.filters = self.filters_cur.data
-            res_cur = super().new(pad)
+            assert self.filters_cur is not None
+            self.filters = self._extract_filter(self.filters_cur)
+            res_cur = super().new(pad)  # type: ignore  # not recognizing self
 
             # Change the state of filters
-            assert (
-                self.filters_new is not None
-            ), "New filters are None during adaptation"
-            self.filters = self.filters_new.data
-            res_new = super().new(pad)
+            assert self.filters_new is not None
+            self.filters = self._extract_filter(self.filters_new)
+            res_new = super().new(pad)  # type: ignore  # not recognizing self
 
             # Combine data with window functions
 

@@ -7,6 +7,7 @@ from sgnts.base.base import TSTransform
 from sgnts.base.base import TSSink
 from sgnts.base.base import TSSource
 from sgnts.base.base import TSResourceSource
+from sgnts.base.buffer import Event
 from sgnts.base.buffer import EventBuffer
 from sgnts.base.buffer import EventFrame
 from sgnts.base.buffer import SeriesBuffer

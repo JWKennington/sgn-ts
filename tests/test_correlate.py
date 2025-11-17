@@ -1,5 +1,7 @@
 """Unit test for correlate transforms"""
 
+from __future__ import annotations
+
 import numpy
 import pytest
 import scipy.signal.windows
@@ -15,7 +17,9 @@ from sgnts.base import (
     SeriesBuffer,
     TSFrame,
 )
+from sgnts.base.buffer import Event
 from sgnts.base.slice_tools import TIME_MAX
+from sgnts.base.time import Time
 from sgnts.sinks import DumpSeriesSink
 from sgnts.sources import FakeSeriesSource
 from sgnts.transforms import Correlate
@@ -146,11 +150,9 @@ class TestAdaptiveCorrelate:
 
     def test_init(self):
         """Create a Correlate transform element"""
-        init_filters = EventBuffer(
-            ts=0, te=int(TIME_MAX), data=numpy.array([[1, 2, 3]])
-        )
+        init_filters = numpy.array([[1, 2, 3]])
         crl = AdaptiveCorrelate(
-            init_filters=init_filters,
+            filters=init_filters,
             sample_rate=4096,
             source_pad_names=["O1"],
             sink_pad_names=["I1"],
@@ -160,11 +162,9 @@ class TestAdaptiveCorrelate:
 
     def test_init_unaligned(self):
         """Test creating without specifying filter_sink_name in the unaligned pads"""
-        init_filters = EventBuffer(
-            ts=0, te=int(TIME_MAX), data=numpy.array([[1, 2, 3]])
-        )
+        init_filters = numpy.array([[1, 2, 3]])
         crl = AdaptiveCorrelate(
-            init_filters=init_filters,
+            filters=init_filters,
             sample_rate=4096,
             source_pad_names=["O1"],
             sink_pad_names=["I1", "OtherUnaligned"],
@@ -177,11 +177,9 @@ class TestAdaptiveCorrelate:
     def test_corr_no_adapt(self):
         """Test the corr method"""
         # Create correlate element
-        init_filters = EventBuffer(
-            ts=0, te=int(TIME_MAX), data=numpy.array([[1, 2, 3]])
-        )
+        init_filters = numpy.array([[1, 2, 3]])
         crl = AdaptiveCorrelate(
-            init_filters=init_filters,
+            filters=init_filters,
             sample_rate=1,
             source_pad_names=["O1"],
             sink_pad_names=["I1"],
@@ -202,17 +200,13 @@ class TestAdaptiveCorrelate:
         )
 
         # Create EventFrame for new filters
-        f_nonew_filt = EventFrame(
-            events={
-                "events": [
-                    EventBuffer(
-                        ts=2,
-                        te=int(TIME_MAX),
-                        data=None,
-                    ),
-                ],
-            }
+        event = Event.from_time(time=2)
+        buf = EventBuffer.from_span(
+            start=2,
+            end=int(TIME_MAX),
+            data=[event],
         )
+        f_nonew_filt = EventFrame(data=[buf])
 
         # Pull onto sink pads (no new filters)
         crl.pull(pad=crl.snks["I1"], frame=frame)
@@ -236,11 +230,9 @@ class TestAdaptiveCorrelate:
     def test_corr_adapt(self):
         """Test the corr method"""
         # Create correlate element
-        init_filters = EventBuffer(
-            ts=0, te=int(TIME_MAX), data=numpy.array([[1, 2, 3]])
-        )
+        init_filters = numpy.array([[1, 2, 3]])
         crl = AdaptiveCorrelate(
-            init_filters=init_filters,
+            filters=init_filters,
             sample_rate=1,
             source_pad_names=["O1"],
             sink_pad_names=["I1"],
@@ -261,17 +253,13 @@ class TestAdaptiveCorrelate:
         )
 
         # Create EventFrame for new filters
-        f_new_filt = EventFrame(
-            events={
-                "events": [
-                    EventBuffer(
-                        ts=2,
-                        te=int(TIME_MAX),
-                        data=numpy.array([[4, 5, 6]]),
-                    ),
-                ],
-            }
+        event = Event.from_time(time=2, data=numpy.array([[4, 5, 6]]))
+        buf = EventBuffer.from_span(
+            start=2,
+            end=int(TIME_MAX),
+            data=[event],
         )
+        f_new_filt = EventFrame(data=[buf])
 
         # Pull onto sink pads (no new filters)
         crl.pull(pad=crl.snks["I1"], frame=frame)
@@ -318,22 +306,23 @@ class TestAdaptiveCorrelate:
             real_time=False,
         )
 
-        def make_filters_frame(EOS: bool, data: tuple):
+        def make_filters_frame(EOS: bool, data: tuple | None):
             # Handle case of no data left
             if data is None:
                 t0, arr = 0, None
+                filt = None
             else:
                 t0, arr = data
+                filt = None if arr is None else numpy.array([arr])
+            event = Event.from_time(time=t0, data=filt)
             return EventFrame(
-                events={
-                    "events": [
-                        EventBuffer(
-                            ts=t0,
-                            te=int(TIME_MAX),
-                            data=None if arr is None else numpy.array([arr]),
-                        ),
-                    ],
-                },
+                data=[
+                    EventBuffer.from_span(
+                        start=t0,
+                        end=int(TIME_MAX),
+                        data=[event],
+                    )
+                ],
                 EOS=EOS,
             )
 
@@ -364,10 +353,9 @@ class TestAdaptiveCorrelate:
             frame_factory=make_filters_frame,
         )
 
+        init_filters = numpy.array([[1, 2, 3]])
         afilter = AdaptiveCorrelate(
-            init_filters=EventBuffer(
-                ts=0, te=int(TIME_MAX), data=numpy.array([[1, 2, 3]])
-            ),
+            filters=init_filters,
             sample_rate=1,
             source_pad_names=["C1"],
             sink_pad_names=["C1"],
@@ -421,22 +409,23 @@ class TestAdaptiveCorrelate:
             real_time=False,
         )
 
-        def make_filters_frame(EOS: bool, data: tuple):
+        def make_filters_frame(EOS: bool, data: tuple | None):
             # Handle case of no data left
             if data is None:
                 t0, arr = 0, None
+                filt = None
             else:
                 t0, arr = data
+                filt = numpy.array([arr])
+            event = Event.from_time(time=t0, data=filt)
             return EventFrame(
-                events={
-                    "events": [
-                        EventBuffer(
-                            ts=t0,
-                            te=int(TIME_MAX),
-                            data=None if arr is None else numpy.array([arr]),
-                        ),
-                    ],
-                },
+                data=[
+                    EventBuffer.from_span(
+                        start=t0,
+                        end=int(TIME_MAX),
+                        data=[event],
+                    )
+                ],
                 EOS=EOS,
             )
 
@@ -453,10 +442,9 @@ class TestAdaptiveCorrelate:
             frame_factory=make_filters_frame,
         )
 
+        init_filters = numpy.array([[1, 2, 3]])
         afilter = AdaptiveCorrelate(
-            init_filters=EventBuffer(
-                ts=0, te=int(TIME_MAX), data=numpy.array([[1, 2, 3]])
-            ),
+            filters=init_filters,
             sample_rate=1,
             source_pad_names=["C1"],
             sink_pad_names=["C1"],
@@ -509,22 +497,23 @@ class TestAdaptiveCorrelate:
             source_pad_names=["C1"],
         )
 
-        def make_filters_frame(EOS: bool, data: tuple):
+        def make_filters_frame(EOS: bool, data: tuple | None):
             # Handle case of no data left
             if data is None:
                 t0, arr = 0, None
+                filt = None
             else:
                 t0, arr = data
+                filt = numpy.array([arr])
+            event = Event.from_time(time=t0, data=filt)
             return EventFrame(
-                events={
-                    "events": [
-                        EventBuffer(
-                            ts=t0,
-                            te=int(TIME_MAX),
-                            data=None if arr is None else numpy.array([arr]),
-                        ),
-                    ],
-                },
+                data=[
+                    EventBuffer.from_span(
+                        start=t0,
+                        end=int(TIME_MAX),
+                        data=[event],
+                    )
+                ],
                 EOS=EOS,
             )
 
@@ -533,23 +522,115 @@ class TestAdaptiveCorrelate:
             source_pad_names=["filters"],
             iters={
                 "FilterSrc:src:filters": [
+                    (0, None),
+                    (0, None),
+                    (0, None),
                     (0, [1, 2, 3]),
                     (0, None),
                     (0, None),
                     (0, None),
-                    (0, None),
-                    (0, None),
-                    (0, None),
-                    (0, [7, 8, 9, 10]),
+                    (5 * Time.SECONDS, [7, 8, 9, 10]),
                 ]
             },
             frame_factory=make_filters_frame,
         )
 
+        init_filters = numpy.array([[1, 2, 3]])
         afilter = AdaptiveCorrelate(
-            init_filters=EventBuffer(
-                ts=0, te=int(TIME_MAX), data=numpy.array([[1, 2, 3]])
+            filters=init_filters,
+            sample_rate=1,
+            source_pad_names=["C1"],
+            sink_pad_names=["C1"],
+            filter_sink_name="filters",
+            adapter_config=AdapterConfig(
+                stride=Offset.fromsamples(3, sample_rate=1),
             ),
+        )
+
+        csink = CollectSink(
+            name="CollectSink",
+            sink_pad_names=["C1"],
+            collects={
+                "CollectSink:snk:C1": [],
+            },
+            extract_data=False,
+        )
+
+        pipeline.insert(
+            data_source,
+            filter_source,
+            afilter,
+            csink,
+            link_map={
+                afilter.snks["C1"]: data_source.srcs["C1"],
+                afilter.snks["filters"]: filter_source.srcs["filters"],
+                csink.snks["C1"]: afilter.srcs["C1"],
+            },
+        )
+
+        with pytest.raises(ValueError):
+            pipeline.run()
+
+    def test_pipeline_simple_err_multiple_events(self):
+        """Test the AdaptiveCorrelate element in a white noise pipeline,
+        with periodic filter updates
+
+        Error case: uploading new filters as multiple events
+        """
+        pipeline = Pipeline()
+
+        # Run pipeline
+        data_source = FakeSeriesSource(
+            name="test",
+            rate=1,
+            signal_type="sin",
+            fsin=1,
+            t0=0,
+            duration=10,
+            source_pad_names=["C1"],
+        )
+
+        def make_filters_frame(EOS: bool, data: tuple | None):
+            # Handle case of no data left
+            if data is None:
+                t0, arr = 0, None
+                filt = None
+            else:
+                t0, arr = data
+                filt = numpy.array([arr])
+            event = Event.from_time(time=t0, data=filt)
+            return EventFrame(
+                data=[
+                    EventBuffer.from_span(
+                        start=t0,
+                        end=int(TIME_MAX),
+                        data=[event, event],
+                    )
+                ],
+                EOS=EOS,
+            )
+
+        filter_source = IterSource(
+            name="FilterSrc",
+            source_pad_names=["filters"],
+            iters={
+                "FilterSrc:src:filters": [
+                    (0, None),
+                    (0, None),
+                    (0, None),
+                    (0, [1, 2, 3]),
+                    (0, None),
+                    (0, None),
+                    (0, None),
+                    (5 * Time.SECONDS, [4, 5, 6]),
+                ]
+            },
+            frame_factory=make_filters_frame,
+        )
+
+        init_filters = numpy.array([[1, 2, 3]])
+        afilter = AdaptiveCorrelate(
+            filters=init_filters,
             sample_rate=1,
             source_pad_names=["C1"],
             sink_pad_names=["C1"],
@@ -617,7 +698,7 @@ class TestAdaptiveCorrelate:
             fsin=f_source,
         )
 
-        def make_filters_frame(EOS: bool, data: tuple):
+        def make_filters_frame(EOS: bool, data: tuple | None):
             # Handle case of no data left
             if data is None:
                 t0, params = 0, {"f_cutoff": f_cutoff1}
@@ -637,16 +718,15 @@ class TestAdaptiveCorrelate:
                         fix_size=321,
                     )
 
+            event = Event.from_time(time=t0, data=filt)
             return EventFrame(
-                events={
-                    "events": [
-                        EventBuffer(
-                            ts=t0,
-                            te=int(TIME_MAX),
-                            data=filt,
-                        ),
-                    ],
-                },
+                data=[
+                    EventBuffer.from_span(
+                        start=t0,
+                        end=int(TIME_MAX),
+                        data=[event],
+                    )
+                ],
                 EOS=EOS,
             )
 
@@ -679,7 +759,7 @@ class TestAdaptiveCorrelate:
 
         init_filter = make_filters_frame(False, (0, {"f_cutoff": f_cutoff1}))
         afilter = AdaptiveCorrelate(
-            init_filters=init_filter.events["events"][0],
+            filters=init_filter.events[0].data,
             sample_rate=f_sample,
             source_pad_names=["C1"],
             sink_pad_names=["C1"],
@@ -768,7 +848,7 @@ class TestAdaptiveCorrelate:
             fsin=f_source,
         )
 
-        def make_filters_frame(EOS: bool, data: tuple):
+        def make_filters_frame(EOS: bool, data: tuple | None):
             # Handle case of no data left
             if data is None:
                 t0, params = 0, {"f_cutoff": f_cutoff1}
@@ -788,16 +868,16 @@ class TestAdaptiveCorrelate:
                         fix_size=321,
                     )
 
+            t_start = int(TIME_MAX) - 100
+            event = Event.from_time(time=t_start, data=filt)
             return EventFrame(
-                events={
-                    "events": [
-                        EventBuffer(
-                            ts=int(TIME_MAX) - 100,
-                            te=int(TIME_MAX),
-                            data=filt,
-                        ),
-                    ],
-                },
+                data=[
+                    EventBuffer.from_span(
+                        start=t_start,
+                        end=int(TIME_MAX),
+                        data=[event],
+                    )
+                ],
                 EOS=EOS,
             )
 
@@ -828,7 +908,7 @@ class TestAdaptiveCorrelate:
 
         init_filter = make_filters_frame(False, (0, {"f_cutoff": f_cutoff1}))
         afilter = AdaptiveCorrelate(
-            init_filters=init_filter.events["events"][0],
+            filters=init_filter.events[0].data,
             sample_rate=f_sample,
             source_pad_names=["C1"],
             sink_pad_names=["C1"],

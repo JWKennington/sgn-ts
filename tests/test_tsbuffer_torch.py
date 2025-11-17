@@ -1,7 +1,7 @@
 import numpy
 import pytest
 
-from sgnts.base import SeriesBuffer, EventBuffer, TSSlice, EventFrame, TSFrame
+from sgnts.base import SeriesBuffer, Event, EventBuffer, TSSlice, EventFrame, TSFrame
 from sgnts.base.array_ops import TorchBackend
 from sgnts.base.time import Time
 
@@ -185,29 +185,28 @@ def test_bool_event_buffer():
 
 
 def test_misc_event_buffer():
-    ebuf = EventBuffer(1, 2)
+    ebuf = EventBuffer(offset=1, noffset=2)
     assert 1 in ebuf
     assert "a" not in ebuf
-    assert 0 < ebuf
     assert EventBuffer(0, 1) < ebuf
-    assert 1 <= ebuf
     assert EventBuffer(0, 2) <= ebuf
-    assert 3 > ebuf
     assert EventBuffer(2, 3) > ebuf
     assert EventBuffer(1, 3) >= ebuf
-    assert 2 >= ebuf
-    assert ebuf.slice == TSSlice(1, 2)
-    assert ebuf.duration == 1
+    assert ebuf.slice == TSSlice(1, 3)
+    assert ebuf.end_offset == 3
     assert ebuf.is_gap
-    ebuf = EventBuffer(1, 2, data={"a": {}})
+    event = Event(1, data={"a": "b"})
+    ebuf = EventBuffer(1, 2, data=[event])
     assert not ebuf.is_gap
 
 
 def test_event_frame():
-    eframe = EventFrame(events={"a": []})
-    assert eframe["a"] == []
-    for k in eframe:
-        assert k == "a"
+    event = Event(1, data={"k": "v"})
+    ebuf = EventBuffer(1, 2, data=[event])
+    eframe = EventFrame(data=[ebuf])
+    assert eframe.events[0].data["k"] == "v"
+    for e in eframe.events:
+        assert e.data["k"] == "v"
     repr(eframe)
 
 
