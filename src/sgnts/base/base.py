@@ -68,6 +68,8 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
         self._is_aligned = False
         self.inbufs = {p: Audioadapter() for p in self.aligned_sink_pads}
         self.preparedframes = {p: None for p in self.aligned_sink_pads}
+        self.outframes = {p: None for p in self.source_pads}
+        self.preparedoutoffsets = None
         self.at_EOS = False
         self._last_ts = {p: None for p in self.aligned_sink_pads}
         self._last_offset = {p: None for p in self.aligned_sink_pads}
@@ -91,7 +93,6 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                 # at startup, pad zeros in front of the first buffer to
                 # serve as history
                 self.pad_zeros_offset = self.overlap[0]
-            self.preparedoutoffsets = {p: None for p in self.aligned_sink_pads}
 
     def pull(self, pad: SinkPad, frame: TSFrameLike) -> None:
         """Pull data and queue for alignment.
@@ -240,11 +241,9 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                 )
             )
             # prepare output frames, one buffer per frame
-            self.preparedoutoffsets[pad] = [{"offset": outoffset, "noffset": 0}]
+            self.preparedoutoffsets = {"offset": outoffset, "noffset": 0}
         else:
             # We have enough samples, retrieve data
-            outoffsets = []
-
             if use_alignment:
                 # Retrieve data at exact aligned offset
                 aligned_end = outoffset + self.stride
@@ -282,7 +281,7 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
 
                 # Output offset metadata
                 outnoffset = self.stride
-                outoffsets.append({"offset": outoffset, "noffset": outnoffset})
+                self.preparedoutoffsets = {"offset": outoffset, "noffset": outnoffset}
 
                 # No padding offset adjustment needed for aligned mode
                 self.pad_zeros_offset = 0
@@ -332,9 +331,7 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                 )
                 preparedbufs.append(pbuf)
                 outnoffset = pbuf.noffset - sum(self.overlap)
-                outoffsets.append({"offset": outoffset, "noffset": outnoffset})
-
-            self.preparedoutoffsets[pad] = outoffsets
+                self.preparedoutoffsets = {"offset": outoffset, "noffset": outnoffset}
 
         return preparedbufs
 

@@ -306,22 +306,22 @@ class Resampler(TSTransform):
             f"Frame sample rate {frame.sample_rate} doesn't match "
             f"resampler input rate {self.inrate}"
         )
-        outoffsets = self.preparedoutoffsets[self.sink_pad]
+        outoffset = self.preparedoutoffsets
 
         outbufs = []
         if frame.shape[-1] == 0:
             outbufs.append(
                 SeriesBuffer(
-                    offset=outoffsets[0]["offset"],
+                    offset=outoffset["offset"],
                     sample_rate=self.outrate,
                     data=None,
                     shape=frame.shape,
                 )
             )
         else:
-            for i, buf in enumerate(frame):
+            for buf in frame:
                 shape = frame.shape[:-1] + (
-                    Offset.tosamples(outoffsets[i]["noffset"], self.outrate),
+                    Offset.tosamples(outoffset["noffset"], self.outrate),
                 )
                 if buf.is_gap:
                     data = None
@@ -329,7 +329,7 @@ class Resampler(TSTransform):
                     data = self.resample(buf.data, shape)
                 outbufs.append(
                     SeriesBuffer(
-                        offset=outoffsets[i]["offset"],
+                        offset=outoffset["offset"],
                         sample_rate=self.outrate,
                         data=data,
                         shape=shape,

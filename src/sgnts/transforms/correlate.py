@@ -82,9 +82,9 @@ class Correlate(TSTransform):
 
     def new(self, pad: SourcePad) -> TSFrame:
         outbufs = []
-        outoffsets = self.preparedoutoffsets[self.sink_pads[0]]
+        outoffset = self.preparedoutoffsets
         frames = self.preparedframes[self.sink_pads[0]]
-        for i, buf in enumerate(frames):
+        for buf in frames:
             assert buf.sample_rate == self.sample_rate, (
                 f"Buffer sample rate {buf.sample_rate} doesn't match "
                 f"correlator sample rate {self.sample_rate}"
@@ -95,7 +95,6 @@ class Correlate(TSTransform):
                 # FIXME: Are there multi-channel correlation in numpy or scipy?
                 # FIXME: consider multi-dimensional filters
                 data = self.corr(buf.data)
-            outoffset = outoffsets[i]
             outbufs.append(
                 SeriesBuffer(
                     offset=outoffset["offset"]

@@ -296,12 +296,8 @@ def test_empty_buffer_handling():
     # Set up the resampler's prepared data (normally done by the framework)
     resampler.preparedframes = {resampler.sink_pad: frame}
     resampler.preparedoutoffsets = {
-        resampler.sink_pad: [
-            {
-                "offset": Offset.fromsamples(0, outrate),
-                "noffset": Offset.fromsamples(0, outrate),
-            }
-        ]
+        "offset": Offset.fromsamples(0, outrate),
+        "noffset": Offset.fromsamples(0, outrate),
     }
 
     # Call the new method directly - this will execute line 299

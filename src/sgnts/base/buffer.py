@@ -1007,3 +1007,20 @@ class TSFrame(Frame, TimeSpanLike):
             shape=self.shape,
             data=data,
         )
+
+
+@dataclass(eq=False)
+class TSEmptyFrame(TimeSpanLike):
+    """An sgn Frame object that holds no buffers but can be promoted to a
+    TSFrame when set_buffers is called"""
+
+    offset: int
+    noffset: int
+
+    def __call__(self, buffers):
+        print(buffers)
+        frame = TSFrame(buffers=buffers)
+        assert (
+            frame.slice == self.slice
+        ), "The buffers provided to not span the same offsets as this empty frame"
+        return frame
