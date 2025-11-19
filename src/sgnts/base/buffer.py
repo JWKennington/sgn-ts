@@ -365,6 +365,58 @@ class SeriesBuffer(TimeSpanLike):
     def isfinite(self):
         return self.slice.isfinite()
 
+    def replace(
+        self,
+        offset: int | None = None,
+        sample_rate: int | None = None,
+        data: int | Array | None = None,
+        is_gap: bool | None = None,
+        shape: tuple | None = None,
+        backend: type[ArrayBackend] | None = None,
+    ) -> SeriesBuffer:
+        """Returns a new TSFrame with the new attributes replaced.
+
+        Args:
+            offset:
+                int, optional, the offset of the buffer. See Offset class for
+                definitions.
+            sample_rate:
+                int, optional, the sample rate belonging to the set of
+                Offset.ALLOWED_RATES
+            data:
+                int | Array, optional, the timeseries data.
+            is_gap:
+                bool, optional, set the buffer as a gap (or non-gap).
+            shape:
+                tuple, optional, the shape of the data regardless of gaps.
+                Required if data is None or int, and represents the shape of
+                the absent data.
+            backend:
+                type[ArrayBackend], optional, the wrapper around array
+                operations
+        """
+        offset = self.offset if offset is None else offset
+        sample_rate = self.sample_rate if sample_rate is None else sample_rate
+        shape = self.shape if shape is None else shape
+        backend = self.backend if backend is None else backend
+
+        # using data=None as a case to decide whether to replace the buffer's
+        # data with user-replaced data needs extra care due to data=None also
+        # being used to define the presence of a gap, so instead we enumerate
+        # the possible cases based on whether is_gap is set and what the value
+        # is if it is set.
+        # NOTE: this can be simplified but is written as such to be explicit
+        if is_gap is None:  # inherit buffer's gap status
+            buf_data = self.data if data is None else data
+        elif is_gap:  # change to gap
+            buf_data = self.data
+        else:  # change to non-gap
+            buf_data = data
+
+        return SeriesBuffer(
+            offset=offset, sample_rate=sample_rate, data=buf_data, shape=shape
+        )
+
     @staticmethod
     def fromoffsetslice(
         offslice: TSSlice,
@@ -598,7 +650,7 @@ class SeriesBuffer(TimeSpanLike):
         else:
             return None
 
-    def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
+    def __add__(self, item: SeriesBuffer) -> SeriesBuffer:
         """Add two `SeriesBuffer`s, padding as necessary.
 
         Args:
