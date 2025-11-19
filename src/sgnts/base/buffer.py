@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import total_ordering
-from typing import Any, Optional, Protocol, Union, runtime_checkable
+from typing import Any, Iterable, Optional, Protocol, Union, runtime_checkable
 
 import numpy
 from sgn.frames import DataSpec, Frame
@@ -1069,15 +1069,43 @@ class TSFrame(Frame, TimeSpanLike):
 
 @dataclass(eq=False)
 class TSEmptyFrame(TimeSpanLike):
-    """An sgn Frame object that holds no buffers but can be promoted to a
-    TSFrame when set_buffers is called"""
+    """A TSFrame-like object that initially holds no buffers.
+
+    This container accepts SeriesBuffers and can be promoted to a TSFrame.
+
+    Args:
+        offset:
+            int, the offset of the frame. See Offset class for definitions.
+        noffset:
+            int, the end offset of the frame. Used to validate the span the set
+            of buffers this frame contains once it's promoted to a TSFrame.
+        EOS:
+            bool, default False, Whether this frame indicates end of stream (EOS)
+        is_gap:
+            bool, default False, Whether this frame is marked as a gap
+    """
 
     offset: int
     noffset: int
+    EOS: bool = False
+    is_gap: bool = False
+    buffers: list[SeriesBuffer] = field(default_factory=list)
 
-    def __call__(self, buffers):
-        print(buffers)
-        frame = TSFrame(buffers=buffers)
+    def append(self, item: SeriesBuffer) -> None:
+        self.buffers.append(item)
+
+    def extend(self, items: Iterable[SeriesBuffer]) -> None:
+        self.buffers.extend(items)
+
+    def __iadd__(self, item: SeriesBuffer) -> TSEmptyFrame:
+        self.append(item)
+        return self
+
+    def __len__(self) -> int:
+        return len(self.buffers)
+
+    def promote(self) -> TSFrame:
+        frame = TSFrame(buffers=self.buffers)
         assert (
             frame.slice == self.slice
         ), "The buffers provided to not span the same offsets as this empty frame"
