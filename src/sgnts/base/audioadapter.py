@@ -37,6 +37,11 @@ class AdapterConfig:
             - Offset.fromsec(1) aligns to integer seconds
             - Offset.fromsamples(1024, rate) aligns to 1024-sample boundaries
             Default: None (no alignment)
+        align_buffers:
+            bool, when True, aligns buffer slices to the minimum sampling rate
+            across all pads. This expands gaps and shrinks data slices to ensure
+            all buffers align to integer sample boundaries at the lowest rate.
+            Default: False
     """
 
     overlap: tuple[int, int] = (0, 0)
@@ -45,6 +50,7 @@ class AdapterConfig:
     skip_gaps: bool = False
     backend: type[ArrayBackend] = NumpyBackend
     align_to: Optional[int] = None
+    align_buffers: bool = False
 
     def valid_buffer(self, buf, data: Optional[Union[int, Array]] = 0):
         """

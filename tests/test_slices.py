@@ -212,3 +212,113 @@ class TestTSSlices:
         """Test .slice property to cover line 332"""
         slcs = TSSlices([TSSlice(1, 2), TSSlice(3, 4), TSSlice(5, 6)])
         assert slcs.slice == TSSlice(1, 6)
+
+    def test_align_to_rate_basic(self):
+        """Test align_to_rate with basic downsampling from 4Hz to 2Hz"""
+        # Setup: MAX_RATE = 16384
+        # At 4 Hz: offset_per_sample = 16384 / 4 = 4096
+        # At 2 Hz: offset_per_sample = 16384 / 2 = 8192
+
+        # Create slices at 4Hz boundaries
+        # (0, 4096) = 1 sample at 4Hz = [0, 0.5) samples at 2Hz
+        # -> rounds to empty
+        # (8192, 16384) = 2 samples at 4Hz = [1, 2) samples at 2Hz
+        # -> keeps as is
+        slices = TSSlices([TSSlice(0, 4096), TSSlice(8192, 16384)])
+        result = slices.align_to_rate(2)
+
+        # First slice should be eliminated, second should remain
+        assert result == TSSlices([TSSlice(8192, 16384)])
+
+    def test_align_to_rate_gap_expansion(self):
+        """Test that gaps expand when downsampling"""
+        # At 8 Hz: offset_per_sample = 16384 / 8 = 2048
+        # Slice (2048, 6144) = samples [1, 3) at 8Hz = 2 samples
+        # At 4 Hz: offset_per_sample = 16384 / 4 = 4096
+        # In 4Hz samples: [0.5, 1.5)
+        # -> ceil(0.5)=1, floor(1.5)=1 -> becomes (4096, 4096) = empty
+
+        slices = TSSlices([TSSlice(2048, 6144)])
+        result = slices.align_to_rate(4)
+
+        # Slice should be eliminated due to gap expansion
+        assert result == TSSlices([])
+
+    def test_align_to_rate_multiple_slices(self):
+        """Test align_to_rate with multiple slices"""
+        # At 4 Hz: offset_per_sample = 4096
+        # Create several slices:
+        # (0, 8192) = 2 samples at 4Hz = [0, 2) at 2Hz -> stays
+        # (16384, 24576) = 2 samples at 4Hz = [2, 3) at 2Hz -> stays
+        # (32768, 36864) = 1 sample at 4Hz = [4, 4.5) at 2Hz -> eliminated
+
+        slices = TSSlices(
+            [
+                TSSlice(0, 8192),  # [0, 2) at 2Hz -> stays
+                TSSlice(16384, 24576),  # [2, 3) at 2Hz -> stays
+                TSSlice(32768, 36864),  # [4, 4.5) at 2Hz -> eliminated
+            ]
+        )
+        result = slices.align_to_rate(2)
+
+        expected = TSSlices([TSSlice(0, 8192), TSSlice(16384, 24576)])
+        assert result == expected
+
+    def test_align_to_rate_already_aligned(self):
+        """Test align_to_rate when slices are already aligned"""
+        # Slices at 2Hz boundaries stay the same when aligning to 2Hz
+        slices = TSSlices([TSSlice(0, 8192), TSSlice(16384, 24576)])
+        result = slices.align_to_rate(2)
+
+        assert result == slices
+
+    def test_align_to_rate_empty(self):
+        """Test align_to_rate with empty TSSlices"""
+        slices = TSSlices([])
+        result = slices.align_to_rate(4)
+
+        assert result == TSSlices([])
+
+    def test_align_to_rate_null_slice(self):
+        """Test align_to_rate with null slices"""
+        slices = TSSlices([TSSlice(None, None)])
+        result = slices.align_to_rate(4)
+
+        assert result == TSSlices([])
+
+    def test_align_to_rate_invalid_rate(self):
+        """Test align_to_rate with invalid target rate"""
+        slices = TSSlices([TSSlice(0, 4096)])
+
+        # Should raise assertion error for rate not in ALLOWED_RATES
+        with pytest.raises(AssertionError):
+            slices.align_to_rate(3)  # Not a power of 2
+
+    def test_align_to_rate_boundary_rounding(self):
+        """Test that boundaries round correctly (start up, stop down)"""
+        # At 16 Hz: offset_per_sample = 16384 / 16 = 1024
+        # Create slice (1024, 7168) = samples [1, 7) at 16Hz
+        # At 4 Hz: offset_per_sample = 4096
+        # In 4Hz samples: [0.25, 1.75)
+        # -> ceil(0.25)=1, floor(1.75)=1
+        # Should become (4096, 4096) = empty
+
+        slices = TSSlices([TSSlice(1024, 7168)])
+        result = slices.align_to_rate(4)
+
+        # Should be eliminated
+        assert result == TSSlices([])
+
+    def test_align_to_rate_large_slice(self):
+        """Test align_to_rate with a large slice spanning many samples"""
+        # At 8 Hz: offset_per_sample = 2048
+        # Create slice spanning 0 to 20480 (10 samples at 8Hz)
+        # At 2 Hz: offset_per_sample = 8192
+        # In 2Hz samples: [0, 2.5) -> ceil(0)=0, floor(2.5)=2
+        # Should become (0, 16384)
+
+        slices = TSSlices([TSSlice(0, 20480)])
+        result = slices.align_to_rate(2)
+
+        expected = TSSlices([TSSlice(0, 16384)])
+        assert result == expected
