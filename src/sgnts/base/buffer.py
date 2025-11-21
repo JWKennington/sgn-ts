@@ -863,6 +863,15 @@ class TSFrame(Frame, TimeSpanLike):
         return self.buffers[0].shape[:-1] + (sum(b.samples for b in self.buffers),)
 
     @property
+    def samples(self) -> int:
+        """The number of samples in the Frame.
+
+        Return:
+            int, the number of samples
+        """
+        return sum(buf.samples for buf in self.buffers)
+
+    @property
     def sample_shape(self) -> tuple:
         """return the sample shape"""
         return self.buffers[0].sample_shape

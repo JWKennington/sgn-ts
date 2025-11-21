@@ -194,6 +194,7 @@ class TestTSFrame:
         data = frame.filleddata()
         assert data.shape == (20,)
         assert all(data == numpy.ones(20))
+        assert frame.samples == 20
 
     def test_search(self):
         """Test search method for TSFrame"""
