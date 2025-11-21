@@ -201,3 +201,14 @@ class TestTSSlices:
         single = TSSlices([TSSlice(10, 20)])
         result = TSSlices.intersection_of_multiple([single])
         assert result == single
+
+    def test_iter(self):
+        """Test iterating over TSSlices to cover __iter__ method"""
+        slcs = TSSlices([TSSlice(1, 2), TSSlice(3, 4), TSSlice(5, 6)])
+        result = list(slcs)
+        assert result == [TSSlice(1, 2), TSSlice(3, 4), TSSlice(5, 6)]
+
+    def test_slice_property(self):
+        """Test .slice property to cover line 332"""
+        slcs = TSSlices([TSSlice(1, 2), TSSlice(3, 4), TSSlice(5, 6)])
+        assert slcs.slice == TSSlice(1, 6)

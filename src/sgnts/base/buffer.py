@@ -355,6 +355,16 @@ class SeriesBuffer(TimeSpanLike):
             sample_rate=self.sample_rate, data_type=self.backend.DTYPE
         )
 
+    def __and__(self, other):
+        sl = self.slice & other.slice
+        if sl:
+            return self.sub_buffer(sl)
+        else:
+            return None
+
+    def isfinite(self):
+        return self.slice.isfinite()
+
     @staticmethod
     def fromoffsetslice(
         offslice: TSSlice,
@@ -1007,6 +1017,32 @@ class TSFrame(Frame, TimeSpanLike):
             shape=self.shape,
             data=data,
         )
+
+    def search(self, buf):
+        out = []
+        for b in self:
+            intersects = b & buf
+            if intersects is not None and intersects.isfinite():
+                out.append(intersects)
+        return out
+
+    def align(self, tsslices) -> "TSFrame":
+        "Align buffers according to the TSSlices provided"
+        assert (
+            self.slice == tsslices.slice
+        ), "The boundaries provided are not aligned with the frame boundaries"
+        bufs = []
+        for aligned_buf in [self[0].new(offslice) for offslice in tsslices]:
+            searched_bufs = self.search(aligned_buf)
+            # promote any gaps
+            if any([b.is_gap for b in searched_bufs]):
+                bufs.append(aligned_buf)
+                continue
+            # otherwise add the data from the found sub buffers
+            for sb in searched_bufs:
+                aligned_buf = aligned_buf + sb
+            bufs.append(aligned_buf)
+        return TSFrame(buffers=bufs)
 
 
 @dataclass(eq=False)

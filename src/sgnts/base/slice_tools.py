@@ -298,6 +298,9 @@ class TSSlices:
         """Inplace add (a new instance is made though)"""
         return TSSlices(self.slices + other.slices)
 
+    def __iter__(self):
+        return iter(self.slices)
+
     def simplify(self):
         """Merge overlapping slices and return a new instance of TSSlices.
 
@@ -322,6 +325,11 @@ class TSSlices:
             else:
                 out[-1] = this[0]
         return TSSlices(out)
+
+    @property
+    def slice(self):
+        "Provide a slice that corresponds to the start and end offset"
+        return TSSlice(self.slices[0].start, self.slices[-1].stop)
 
     def intersection(self):
         """Find the intersection of all slices. Might be empty.
