@@ -3,7 +3,15 @@
 import pytest
 
 from sgnts.base import NumpyBackend, Offset
-from sgnts.base.buffer import SeriesBuffer, TSFrame, Event, EventBuffer, EventFrame
+from sgnts.base.buffer import (
+    SeriesBuffer,
+    TSFrame,
+    Event,
+    EventBuffer,
+    EventFrame,
+    TSEmptyFrame,
+)
+from sgnts.base.slice_tools import TSSlice, TSSlices
 
 
 class TestSeriesBuffer:
@@ -67,6 +75,56 @@ class TestSeriesBuffer:
             shape=(10, 2),
         )
         assert buf1 in buf2
+
+    def test_and_operator(self):
+        """Test __and__ operator for SeriesBuffer intersection"""
+        # Create two overlapping buffers - buf2 starts at sample 1 (offset 16)
+        # buf1 goes from offset 0 to offset 32 (2 samples at rate 1024)
+        # buf2 goes from offset 16 to offset 48 (2 samples at rate 1024,
+        # starting at sample 1)
+        # They should overlap from offset 16 to 32
+        buf1 = SeriesBuffer(
+            offset=Offset.fromsamples(0, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(2, 2),
+        )
+        buf2 = SeriesBuffer(
+            offset=Offset.fromsamples(1, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(2, 2),
+        )
+        result = buf1 & buf2
+        assert result is not None
+        assert isinstance(result, SeriesBuffer)
+
+    def test_and_operator_no_intersection(self):
+        """Test __and__ operator when buffers don't intersect"""
+        buf1 = SeriesBuffer(
+            offset=Offset.fromsamples(0, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(10, 2),
+        )
+        buf2 = SeriesBuffer(
+            offset=Offset.fromsamples(20, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(10, 2),
+        )
+        result = buf1 & buf2
+        assert result is None
+
+    def test_isfinite(self):
+        """Test isfinite method for SeriesBuffer"""
+        buf = SeriesBuffer(
+            offset=0,
+            sample_rate=1024,
+            data=1,
+            shape=(10, 2),
+        )
+        assert buf.isfinite()
 
 
 class TestTSFrame:
@@ -135,6 +193,115 @@ class TestTSFrame:
         assert isinstance(frame2, TSFrame)
         assert len(frame2.buffers) == 1
         assert frame2.buffers[0].shape == (20,)
+
+    def test_search(self):
+        """Test search method for TSFrame"""
+        buf1 = SeriesBuffer(
+            offset=Offset.fromsamples(0, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(10,),
+        )
+        buf2 = SeriesBuffer(
+            offset=Offset.fromsamples(10, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(10,),
+        )
+        frame = TSFrame(buffers=[buf1, buf2])
+
+        search_buf = SeriesBuffer(
+            offset=Offset.fromsamples(0, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(15,),
+        )
+        result = frame.search(search_buf)
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+    def test_align(self):
+        """Test align method for TSFrame with data buffers"""
+        buf1 = SeriesBuffer(
+            offset=Offset.fromsamples(0, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(10,),
+        )
+        buf2 = SeriesBuffer(
+            offset=Offset.fromsamples(10, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(10,),
+        )
+        frame = TSFrame(buffers=[buf1, buf2])
+
+        tsslices = TSSlices(
+            [
+                TSSlice(
+                    Offset.fromsamples(0, sample_rate=1024),
+                    Offset.fromsamples(5, sample_rate=1024),
+                ),
+                TSSlice(
+                    Offset.fromsamples(5, sample_rate=1024),
+                    Offset.fromsamples(20, sample_rate=1024),
+                ),
+            ]
+        )
+        result = frame.align(tsslices)
+        assert isinstance(result, TSFrame)
+        assert len(result.buffers) == 2
+
+    def test_align_with_gaps(self):
+        """Test align method for TSFrame with gap buffers"""
+        # Create a frame with a gap buffer
+        buf1 = SeriesBuffer(
+            offset=Offset.fromsamples(0, sample_rate=1024),
+            sample_rate=1024,
+            data=None,  # This makes it a gap
+            shape=(10,),
+        )
+        buf2 = SeriesBuffer(
+            offset=Offset.fromsamples(10, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(10,),
+        )
+        frame = TSFrame(buffers=[buf1, buf2])
+
+        tsslices = TSSlices(
+            [
+                TSSlice(
+                    Offset.fromsamples(0, sample_rate=1024),
+                    Offset.fromsamples(5, sample_rate=1024),
+                ),
+                TSSlice(
+                    Offset.fromsamples(5, sample_rate=1024),
+                    Offset.fromsamples(20, sample_rate=1024),
+                ),
+            ]
+        )
+        result = frame.align(tsslices)
+        assert isinstance(result, TSFrame)
+
+
+class TestTSEmptyFrame:
+    """Test group for TSEmptyFrame class"""
+
+    def test_init_and_call(self):
+        """Test TSEmptyFrame initialization and promotion to TSFrame"""
+        empty_frame = TSEmptyFrame(
+            offset=0, noffset=Offset.fromsamples(20, sample_rate=1024)
+        )
+
+        buf = SeriesBuffer(
+            offset=0,
+            sample_rate=1024,
+            data=1,
+            shape=(20,),
+        )
+        result = empty_frame([buf])
+        assert isinstance(result, TSFrame)
 
 
 class TestEventBuffer:

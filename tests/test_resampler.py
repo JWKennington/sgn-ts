@@ -379,3 +379,24 @@ def test_module_import_without_torch():
         # Restore the original sys.modules
         sys.modules.clear()
         sys.modules.update(backup_modules)
+
+
+def test_gstlal_norm_false():
+    """Test for line 158 - downkernel normalization when gstlal_norm=False"""
+    inrate = 256
+    outrate = 64
+
+    # Create a resampler with gstlal_norm=False
+    resampler = Resampler(
+        name="norm_test",
+        source_pad_names=("H1",),
+        sink_pad_names=("H1",),
+        inrate=inrate,
+        outrate=outrate,
+        gstlal_norm=False,
+    )
+
+    # The kernel should be created during __post_init__
+    # Verify that the kernel was created (line 158 uses sum(vecs) for norm)
+    assert resampler.thiskernel is not None
+    assert resampler.thiskernel.shape[0] > 0
