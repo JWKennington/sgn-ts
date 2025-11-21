@@ -494,8 +494,7 @@ class SeriesBuffer(TimeSpanLike):
 
     @property
     def noffset(self) -> int:
-        """The number of offsets the buffer spans, which is the buffer's duration in
-        terms of offsets.
+        """The number of offsets spanned by this buffer.
 
         Returns:
             int, the offset duration
@@ -832,10 +831,10 @@ class TSFrame(Frame, TimeSpanLike):
 
     @property
     def noffset(self) -> int:
-        """The end offset of the TSFrame, which is the end offset of the last buffer.
+        """The number of offsets spanned by this frame.
 
         Returns:
-            int, the end offset of the TSFrame
+            int, the offset duration
         """
         return self.buffers[-1].end_offset - self.offset
 
