@@ -174,8 +174,8 @@ class TestTSFrame:
         )
         assert frame.backend == NumpyBackend
 
-    def test_filleddata(self):
-        """Test filleddata method"""
+    def test_filleddata_tarr(self):
+        """Test filleddata tarr methods"""
         buf1 = SeriesBuffer(
             offset=0,
             sample_rate=1024,
@@ -195,6 +195,10 @@ class TestTSFrame:
         assert data.shape == (20,)
         assert all(data == numpy.ones(20))
         assert frame.samples == 20
+        tarr = frame.tarr
+        assert len(tarr) == 20
+        expected = numpy.arange(0, 20) / 1024
+        assert all(tarr == expected)
 
     def test_search(self):
         """Test search method for TSFrame"""

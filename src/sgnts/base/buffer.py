@@ -1010,6 +1010,19 @@ class TSFrame(Frame, TimeSpanLike):
             None if not abuf else TSFrame(buffers=abuf),
         )
 
+    @property
+    def tarr(self) -> Array:
+        """An array of time stamps for each sample of the data in the buffer, in
+        seconds.
+
+        Returns:
+            Array, the time array
+        """
+        return (
+            self.backend.arange(self.samples) / self.sample_rate
+            + self.t0 / Time.SECONDS
+        )
+
     def filleddata(self, zeros_func=None) -> Array:
         """Combined buffer data for the entire frame with zeros filled
         in for buffer gaps.
