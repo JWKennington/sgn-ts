@@ -1001,21 +1001,22 @@ class TSFrame(Frame, TimeSpanLike):
             None if not abuf else TSFrame(buffers=abuf),
         )
 
-    def filleddata(self) -> "TSFrame":
-        """Combine the buffers of the frame into a single buffer,
-        analogous to itertools.chain.
+    def filleddata(self, zeros_func=None) -> Array:
+        """Combined buffer data for the entire frame with zeros filled
+        in for buffer gaps.
+
+        Basically SeriesBuffer.filleddata() for the entire frame.
+
+        Args:
+            zeros_func:
+                the function to produce a zeros array
 
         Returns:
-            TSFrame, the frame with a single buffer
+            Array, the filled data
+
         """
-        arrays = [buf.filleddata() for buf in self.buffers]
-        data = self.backend.cat(arrays, axis=-1)
-        return TSFrame.from_buffer_kwargs(
-            offset=self.offset,
-            sample_rate=self.sample_rate,
-            shape=self.shape,
-            data=data,
-        )
+        arrays = [buf.filleddata(zeros_func) for buf in self.buffers]
+        return self.backend.cat(arrays, axis=-1)
 
     def search(self, buf):
         out = []

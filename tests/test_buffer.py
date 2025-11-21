@@ -1,5 +1,7 @@
 """Unit tests for the buffer module"""
 
+import numpy
+
 import pytest
 
 from sgnts.base import NumpyBackend, Offset
@@ -189,10 +191,9 @@ class TestTSFrame:
         frame = TSFrame(
             buffers=[buf1, buf2],
         )
-        frame2 = frame.filleddata()
-        assert isinstance(frame2, TSFrame)
-        assert len(frame2.buffers) == 1
-        assert frame2.buffers[0].shape == (20,)
+        data = frame.filleddata()
+        assert data.shape == (20,)
+        assert all(data == numpy.ones(20))
 
     def test_search(self):
         """Test search method for TSFrame"""
