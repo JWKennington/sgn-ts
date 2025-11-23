@@ -158,10 +158,9 @@ class TestNaryTransform:
         pipeline.run()
 
         data_inputs = [
-            numpy.array(snk.collects[snk.snks[f"I{k}"].name][0].buffers[0].data)
-            for k in range(n)
+            numpy.array(snk.collects[f"I{k}"][0].buffers[0].data) for k in range(n)
         ]
-        data_res = numpy.array(snk.collects[snk.snks["IRes"].name][0].buffers[0].data)
+        data_res = numpy.array(snk.collects["IRes"][0].buffers[0].data)
         expected = sum(data_inputs)
         numpy.testing.assert_almost_equal(data_res, expected)
 
@@ -225,9 +224,9 @@ class TestMultiply:
         pipeline.insert(src, nt, snk, link_map=links)
         pipeline.run()
 
-        data1 = numpy.array(snk.collects[snk.snks["I1"].name][0].buffers[0].data)
-        data2 = numpy.array(snk.collects[snk.snks["I2"].name][0].buffers[0].data)
-        data_res = numpy.array(snk.collects[snk.snks["IRes"].name][0].buffers[0].data)
+        data1 = numpy.array(snk.collects["I1"][0].buffers[0].data)
+        data2 = numpy.array(snk.collects["I2"][0].buffers[0].data)
+        data_res = numpy.array(snk.collects["IRes"][0].buffers[0].data)
         expected = data1 * data2
         numpy.testing.assert_almost_equal(data_res, expected)
 
@@ -291,6 +290,6 @@ class TestReal:
         pipeline.insert(src, r, snk, link_map=links)
         pipeline.run()
 
-        data_res = numpy.array(snk.collects[snk.snks["IRes"].name][0].buffers[0].data)
+        data_res = numpy.array(snk.collects["IRes"][0].buffers[0].data)
         expected = numpy.ones(4)
         numpy.testing.assert_almost_equal(data_res, expected)

@@ -7,7 +7,7 @@ import pytest
 import scipy.signal.windows
 
 from sgn import CollectSink, IterSource, Pipeline
-from sgn import Frame
+from sgn import Frame, SinkPad
 from sgnts import filtertools
 from sgnts.base import (
     AdapterConfig,
@@ -27,30 +27,16 @@ from sgnts.transforms.correlate import AdaptiveCorrelate
 
 
 class IsGapCollectSink(CollectSink):
-    """Stupid subclass to fix out-of-repo bug in CollectSink.
-    Decisions are still being made on how to handle frame aliases
-    for the .data attribute in the sgnts library.
-    """
+    """Like CollectSink but the collection ignores gap frames."""
 
-    def internal(self) -> None:
-        """Internal action is to append all most recent frames to the associated
-        collections, then empty the inputs dict.
+    def __post_init__(self):
+        self.skip_empty = False
+        super().__post_init__()
 
-        Args:
-            pad:
-
-        Returns:
-        """
-        self.inputs: dict[str, Frame]
-
-        for pad_name, frame in self.inputs.items():
-
-            if not frame.is_gap:
-                self.collects[pad_name].append(
-                    frame.data if self.extract_data else frame
-                )
-
-        self.inputs = {}
+    def pull(self, pad: SinkPad, frame: Frame) -> None:
+        if frame.is_gap:
+            return
+        super().pull(pad, frame)
 
 
 class TestCorrelate:
@@ -330,7 +316,7 @@ class TestAdaptiveCorrelate:
             name="FilterSrc",
             source_pad_names=["filters"],
             iters={
-                "FilterSrc:src:filters": [
+                "filters": [
                     (7, None),
                     (8, None),
                     (9, None),
@@ -368,9 +354,6 @@ class TestAdaptiveCorrelate:
         csink = IsGapCollectSink(
             name="CollectSink",
             sink_pad_names=["C1"],
-            collects={
-                "CollectSink:snk:C1": [],
-            },
             extract_data=False,
         )
 
@@ -387,7 +370,7 @@ class TestAdaptiveCorrelate:
         )
         pipeline.run()
 
-        assert len(csink.collects["CollectSink:snk:C1"]) > 0
+        assert len(csink.collects["C1"]) > 0
 
     def test_pipeline_simple_err_too_many_updates(self):
         """Test the AdaptiveCorrelate element in a white noise pipeline,
@@ -433,7 +416,7 @@ class TestAdaptiveCorrelate:
             name="FilterSrc",
             source_pad_names=["filters"],
             iters={
-                "FilterSrc:src:filters": [
+                "filters": [
                     (1, [1, 2, 3]),
                     (3, [7, 8, 9]),
                     (6, [4, 5, 6]),
@@ -457,9 +440,6 @@ class TestAdaptiveCorrelate:
         csink = CollectSink(
             name="CollectSink",
             sink_pad_names=["C1"],
-            collects={
-                "CollectSink:snk:C1": [],
-            },
             extract_data=False,
         )
 
@@ -521,7 +501,7 @@ class TestAdaptiveCorrelate:
             name="FilterSrc",
             source_pad_names=["filters"],
             iters={
-                "FilterSrc:src:filters": [
+                "filters": [
                     (0, None),
                     (0, None),
                     (0, None),
@@ -550,9 +530,6 @@ class TestAdaptiveCorrelate:
         csink = CollectSink(
             name="CollectSink",
             sink_pad_names=["C1"],
-            collects={
-                "CollectSink:snk:C1": [],
-            },
             extract_data=False,
         )
 
@@ -614,7 +591,7 @@ class TestAdaptiveCorrelate:
             name="FilterSrc",
             source_pad_names=["filters"],
             iters={
-                "FilterSrc:src:filters": [
+                "filters": [
                     (0, None),
                     (0, None),
                     (0, None),
@@ -643,9 +620,6 @@ class TestAdaptiveCorrelate:
         csink = CollectSink(
             name="CollectSink",
             sink_pad_names=["C1"],
-            collects={
-                "CollectSink:snk:C1": [],
-            },
             extract_data=False,
         )
 
@@ -734,7 +708,7 @@ class TestAdaptiveCorrelate:
             name="FilterSrc",
             source_pad_names=["filters"],
             iters={
-                "FilterSrc:src:filters": [
+                "filters": [
                     (0, {"f_cutoff": f_cutoff1}),
                     (0, None),
                     (0, None),
@@ -772,9 +746,6 @@ class TestAdaptiveCorrelate:
         csink = CollectSink(
             name="CollectSink",
             sink_pad_names=["C1"],
-            collects={
-                "CollectSink:snk:C1": [],
-            },
             extract_data=False,
         )
 
@@ -885,7 +856,7 @@ class TestAdaptiveCorrelate:
             name="FilterSrc",
             source_pad_names=["filters"],
             iters={
-                "FilterSrc:src:filters": [
+                "filters": [
                     (0, {"f_cutoff": f_cutoff1}),
                     (0, None),
                     (0, None),
@@ -921,9 +892,6 @@ class TestAdaptiveCorrelate:
         csink = CollectSink(
             name="CollectSink",
             sink_pad_names=["C1"],
-            collects={
-                "CollectSink:snk:C1": [],
-            },
             extract_data=False,
         )
 
