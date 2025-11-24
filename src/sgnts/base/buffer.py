@@ -863,6 +863,15 @@ class TSFrame(Frame, TimeSpanLike):
         return self.buffers[0].shape[:-1] + (sum(b.samples for b in self.buffers),)
 
     @property
+    def samples(self) -> int:
+        """The number of samples in the Frame.
+
+        Return:
+            int, the number of samples
+        """
+        return sum(buf.samples for buf in self.buffers)
+
+    @property
     def sample_shape(self) -> tuple:
         """return the sample shape"""
         return self.buffers[0].sample_shape
@@ -1001,21 +1010,35 @@ class TSFrame(Frame, TimeSpanLike):
             None if not abuf else TSFrame(buffers=abuf),
         )
 
-    def filleddata(self) -> "TSFrame":
-        """Combine the buffers of the frame into a single buffer,
-        analogous to itertools.chain.
+    @property
+    def tarr(self) -> Array:
+        """An array of time stamps for each sample of the data in the buffer, in
+        seconds.
 
         Returns:
-            TSFrame, the frame with a single buffer
+            Array, the time array
         """
-        arrays = [buf.filleddata() for buf in self.buffers]
-        data = self.backend.cat(arrays, axis=-1)
-        return TSFrame.from_buffer_kwargs(
-            offset=self.offset,
-            sample_rate=self.sample_rate,
-            shape=self.shape,
-            data=data,
+        return (
+            self.backend.arange(self.samples) / self.sample_rate
+            + self.t0 / Time.SECONDS
         )
+
+    def filleddata(self, zeros_func=None) -> Array:
+        """Combined buffer data for the entire frame with zeros filled
+        in for buffer gaps.
+
+        Basically SeriesBuffer.filleddata() for the entire frame.
+
+        Args:
+            zeros_func:
+                the function to produce a zeros array
+
+        Returns:
+            Array, the filled data
+
+        """
+        arrays = [buf.filleddata(zeros_func) for buf in self.buffers]
+        return self.backend.cat(arrays, axis=-1)
 
     def search(self, buf):
         out = []
