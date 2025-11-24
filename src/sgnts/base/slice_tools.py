@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import bisect
+import math
 from dataclasses import dataclass
 
 import numpy
+
+from sgnts.base.offset import Offset
 
 # Define beginning / end of time as min / max int 64
 TIME_MIN = int(numpy.int64(numpy.iinfo(numpy.int64).min))
@@ -482,3 +485,64 @@ class TSSlices:
 
         # Optionally simplify to merge overlapping slices
         return intersection.simplify() if intersection.slices else intersection
+
+    def align_to_rate(self, target_rate: int) -> TSSlices:
+        """Align TSSlices to integer sample boundaries at a target sample rate.
+
+        This method is useful for downsampling representations by expanding gaps
+        and shrinking data slices to align with integer sample boundaries at a
+        lower sampling rate.
+
+        For each slice:
+        - The start boundary is rounded UP to the next integer sample
+        - The stop boundary is rounded DOWN to the previous integer sample
+        - This effectively expands gaps and shrinks data slices
+        - Slices that become zero-length or sub-sample are eliminated
+
+        Args:
+            target_rate: The target sample rate to align to. Must be in ALLOWED_RATES.
+
+        Returns:
+            New TSSlices with boundaries aligned to integer samples at target_rate.
+            Slices that become sub-sample at the target rate are eliminated.
+
+        Examples:
+            >>> from sgnts.base.offset import Offset
+            >>> Offset.set_max_rate(16384)
+            >>> # At 4 Hz, offsets are at multiples of 16384/4 = 4096
+            >>> # (0, 4096) = 1 sample at 4Hz, (8192, 16384) = 2 samples at 4Hz
+            >>> slices = TSSlices([TSSlice(0, 4096), TSSlice(8192, 16384)])
+            >>> # Downsample to 2 Hz (offsets at multiples of 8192)
+            >>> result = slices.align_to_rate(2)
+            >>> # First slice (0, 4096) becomes (0, 0) - eliminated
+            >>> # Second slice (8192, 16384) stays as (8192, 16384) - 1 sample at 2Hz
+            >>> result
+            TSSlices(slices=[TSSlice(start=8192, stop=16384)])
+        """
+        assert (
+            target_rate in Offset.ALLOWED_RATES
+        ), f"Target rate {target_rate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
+
+        # Calculate the offset stride per sample at target rate
+        offset_per_sample = Offset.MAX_RATE // target_rate
+
+        aligned_slices = []
+        for slc in self.slices:
+            if not slc or not slc.isfinite():
+                continue
+
+            # Convert to samples at target rate (may be fractional)
+            start_samples = slc.start / offset_per_sample
+            stop_samples = slc.stop / offset_per_sample
+
+            # Round start UP (expand gap before) and stop DOWN (expand gap after)
+            aligned_start_samples = math.ceil(start_samples)
+            aligned_stop_samples = math.floor(stop_samples)
+
+            # Only keep if the slice spans at least one full sample
+            if aligned_start_samples < aligned_stop_samples:
+                aligned_start = aligned_start_samples * offset_per_sample
+                aligned_stop = aligned_stop_samples * offset_per_sample
+                aligned_slices.append(TSSlice(aligned_start, aligned_stop))
+
+        return TSSlices(aligned_slices)

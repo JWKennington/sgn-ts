@@ -4,6 +4,7 @@ import queue
 import time as stime
 from collections import deque
 from dataclasses import dataclass, field
+from itertools import chain
 from typing import Any, Generic, Optional, Sequence, Type, TypeVar, Union
 
 import numpy
@@ -68,6 +69,7 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
         self._is_aligned = False
         self.inbufs = {p: Audioadapter() for p in self.aligned_sink_pads}
         self.preparedframes = {p: None for p in self.aligned_sink_pads}
+        self.aligned_slices = {p: None for p in self.aligned_sink_pads}
         self.outframes = {p: None for p in self.source_pads}
         self.preparedoutoffsets = None
         self.at_EOS = False
@@ -301,11 +303,58 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                     )
                 )
 
-                if not segment_has_nongap or (self.skip_gaps and segment_has_gap):
+                # Check if we should preserve buffer boundaries (align_buffers mode)
+                preserve_boundaries = (
+                    self.adapter_config is not None
+                    and self.adapter_config.align_buffers
+                )
+
+                if preserve_boundaries:
+                    # Return sliced buffers without merging, preserving gaps
+                    end_offset = a.offset + Offset.fromsamples(
+                        num_copy_samples, a.sample_rate
+                    )
+                    preparedbufs = a.get_sliced_buffers(
+                        (a.offset, end_offset), pad_start=False
+                    )
+                    outnoffset = end_offset - a.offset
+                    self.preparedoutoffsets = {
+                        "offset": a.offset,
+                        "noffset": outnoffset,
+                    }
+
+                    # flush out samples from head of audioadapter
+                    num_flush_samples = num_copy_samples - sum(overlap_samples)
+                    if num_flush_samples > 0:
+                        a.flush_samples(num_flush_samples)
+
+                elif not segment_has_nongap or (self.skip_gaps and segment_has_gap):
                     # produce a gap buffer if
                     # 1. the whole segment is a gap or
                     # 2. there are gaps in the segment and we are skipping gaps
                     data = None
+
+                    # flush out samples from head of audioadapter
+                    num_flush_samples = num_copy_samples - sum(overlap_samples)
+                    if num_flush_samples > 0:
+                        a.flush_samples(num_flush_samples)
+
+                    shape = buf0.shape[:-1] + (num_copy_samples + pad_zeros_samples,)
+
+                    # update next zeros padding
+                    self.pad_zeros_offset = -min(
+                        0, Offset.fromsamples(num_flush_samples, sample_rate)
+                    )
+                    pbuf = SeriesBuffer(
+                        offset=offset, sample_rate=sample_rate, data=data, shape=shape
+                    )
+                    preparedbufs.append(pbuf)
+                    outnoffset = pbuf.noffset - sum(self.overlap)
+                    self.preparedoutoffsets = {
+                        "offset": outoffset,
+                        "noffset": outnoffset,
+                    }
+
                 else:
                     # copy out samples from head of audioadapter
                     data = a.copy_samples(num_copy_samples)
@@ -315,23 +364,26 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                             data, (pad_zeros_samples, 0)
                         )
 
-                # flush out samples from head of audioadapter
-                num_flush_samples = num_copy_samples - sum(overlap_samples)
-                if num_flush_samples > 0:
-                    a.flush_samples(num_flush_samples)
+                    # flush out samples from head of audioadapter
+                    num_flush_samples = num_copy_samples - sum(overlap_samples)
+                    if num_flush_samples > 0:
+                        a.flush_samples(num_flush_samples)
 
-                shape = buf0.shape[:-1] + (num_copy_samples + pad_zeros_samples,)
+                    shape = buf0.shape[:-1] + (num_copy_samples + pad_zeros_samples,)
 
-                # update next zeros padding
-                self.pad_zeros_offset = -min(
-                    0, Offset.fromsamples(num_flush_samples, sample_rate)
-                )
-                pbuf = SeriesBuffer(
-                    offset=offset, sample_rate=sample_rate, data=data, shape=shape
-                )
-                preparedbufs.append(pbuf)
-                outnoffset = pbuf.noffset - sum(self.overlap)
-                self.preparedoutoffsets = {"offset": outoffset, "noffset": outnoffset}
+                    # update next zeros padding
+                    self.pad_zeros_offset = -min(
+                        0, Offset.fromsamples(num_flush_samples, sample_rate)
+                    )
+                    pbuf = SeriesBuffer(
+                        offset=offset, sample_rate=sample_rate, data=data, shape=shape
+                    )
+                    preparedbufs.append(pbuf)
+                    outnoffset = pbuf.noffset - sum(self.overlap)
+                    self.preparedoutoffsets = {
+                        "offset": outoffset,
+                        "noffset": outnoffset,
+                    }
 
         return preparedbufs
 
@@ -393,6 +445,69 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                     buffers=out,
                     metadata=self.metadata[sink_pad],
                 )
+
+            # Apply buffer alignment if requested
+            if self.adapter_config is not None and self.adapter_config.align_buffers:
+                self.aligned_slices = self._compute_aligned_slices()
+
+                for pad in self.aligned_sink_pads:
+                    aligned_slice = self.aligned_slices[pad]
+                    self.preparedframes[pad] = self.preparedframes[pad].align(
+                        aligned_slice
+                    )
+
+    def _compute_aligned_slices(self) -> dict[SinkPad, TSSlices]:
+        """Compute aligned slices for all pads based on minimum sampling rate.
+
+        Extracts slices from prepared frames, finds the minimum
+        sampling rate across all pads, and aligns all slices to that rate.
+        """
+        # Find minimum sampling rate across all aligned pads
+        nongap_slices: dict[SinkPad, TSSlices] = {}
+        min_rate = min(
+            self.preparedframes[pad].sample_rate for pad in self.aligned_sink_pads
+        )
+
+        # For each pad, extract slices corresponding to non-gaps and align to
+        # minimum rate
+        for pad in self.aligned_sink_pads:
+            # Extract non-gap buffer slices from the prepared frame
+            buffer_slices = [
+                buf.slice for buf in self.preparedframes[pad].buffers if not buf.is_gap
+            ]
+
+            if not buffer_slices:
+                # No non-gap buffers, no slices to align
+                nongap_slices[pad] = TSSlices([])
+                continue
+
+            # align slices to minimum rate
+            slices = TSSlices(buffer_slices)
+            aligned = slices.align_to_rate(min_rate)
+            nongap_slices[pad] = aligned
+
+        all_nongap_slices = TSSlices.intersection_of_multiple(
+            list(nongap_slices.values())
+        )
+        start = self.preparedoutoffsets["offset"]
+        end = start + self.preparedoutoffsets["noffset"]
+        boundaries = sorted(
+            set(
+                [
+                    start,
+                    *list(chain(*[[s.start, s.stop] for s in all_nongap_slices])),
+                    end,
+                ]
+            )
+        )
+        slice_boundaries = TSSlices(
+            [
+                TSSlice(b_start, b_stop)
+                for b_start, b_stop in zip(boundaries[:-1], boundaries[1:])
+            ]
+        )
+
+        return {pad: slice_boundaries for pad in self.aligned_sink_pads}
 
     def _align(self) -> None:
         """Align the buffers in self.inbufs."""
