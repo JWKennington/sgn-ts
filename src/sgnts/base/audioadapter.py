@@ -17,6 +17,9 @@ class AdapterConfig:
     """Config to hold parameters used for the audioadapter in _TSTransSink.
 
     Args:
+        disable:
+            bool, if True, adapter processing is disabled.
+            Default: False
         overlap:
             tuple[int, int], the overlap before and after the data segment to process,
             in offsets
@@ -42,8 +45,18 @@ class AdapterConfig:
             across all pads. This expands gaps and shrinks data slices to ensure
             all buffers align to integer sample boundaries at the lowest rate.
             Default: False
+        offset_shift:
+            int, offset shift to apply to output buffers, in offsets This is
+            used for transforms that introduce latency or phase shifts. The
+            output offset will be shifted by this amount: offset +
+            offset_shift. Positive values shift forward in time, negative
+            values shift backward. For example, a filter with latency=2 samples
+            at rate=1 Hz would use offset_shift=-Offset.fromsamples(2, 1) to
+            shift output backward by 2 samples.
+            Default: 0 (no shift)
     """
 
+    disable: bool = False
     overlap: tuple[int, int] = (0, 0)
     stride: int = 0
     pad_zeros_startup: bool = False
@@ -51,6 +64,61 @@ class AdapterConfig:
     backend: type[ArrayBackend] = NumpyBackend
     align_to: Optional[int] = None
     align_buffers: bool = False
+    offset_shift: int = 0
+
+    def alignment(
+        self,
+        overlap: Optional[tuple[int, int]] = None,
+        stride: Optional[int] = None,
+        align_to: Optional[int] = None,
+        shift: Optional[int] = None,
+    ) -> AdapterConfig:
+        """Configure alignment and buffering parameters.
+
+        Args:
+            overlap: tuple[int, int], the overlap before and after the data segment
+            stride: int, the stride to produce, in offsets
+            align_to: int, alignment boundary in offsets
+            shift: int, offset shift to apply to output buffers
+
+        Returns:
+            AdapterConfig, self for method chaining
+        """
+        if overlap is not None:
+            self.overlap = overlap
+        if stride is not None:
+            self.stride = stride
+        if align_to is not None:
+            self.align_to = align_to
+        if shift is not None:
+            self.offset_shift = shift
+        return self
+
+    def on_gap(self, skip: Optional[bool] = None) -> AdapterConfig:
+        """Configure gap handling.
+
+        Args:
+            skip: bool, produce a whole gap buffer if there are any gaps
+
+        Returns:
+            AdapterConfig, self for method chaining
+        """
+        if skip is not None:
+            self.skip_gaps = skip
+        return self
+
+    def on_startup(self, pad_zeros: Optional[bool] = None) -> AdapterConfig:
+        """Configure startup behavior.
+
+        Args:
+            pad_zeros: bool, whether to pad zeros in front of the first buffer
+
+        Returns:
+            AdapterConfig, self for method chaining
+        """
+        if pad_zeros is not None:
+            self.pad_zeros_startup = pad_zeros
+        return self
 
     def valid_buffer(self, buf, data: Optional[Union[int, Array]] = 0):
         """
