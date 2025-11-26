@@ -2,9 +2,10 @@ from dataclasses import dataclass
 
 import numpy as np
 from scipy.signal import correlate
+from sgn import validator
 from sgn.base import SourcePad
 
-from sgnts.base import AdapterConfig, Offset, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import Offset, SeriesBuffer, TSFrame, TSTransform
 
 # Try to import torch, but don't fail if it's not available
 try:
@@ -49,14 +50,9 @@ class Resampler(TSTransform):
     backend: type[ArrayBackend] = NumpyBackend
     gstlal_norm: bool = True
 
-    def __post_init__(self):
-        assert (
-            self.inrate in Offset.ALLOWED_RATES
-        ), f"Input rate {self.inrate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
-        assert (
-            self.outrate in Offset.ALLOWED_RATES
-        ), f"Output rate {self.outrate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
+    def configure(self) -> None:
         self.next_out_offset = None
+        self.sink_pad = self.sink_pads[0]
 
         if self.outrate < self.inrate:
             # downsample parameters
@@ -98,26 +94,23 @@ class Resampler(TSTransform):
         else:
             self.resample = self.resample_numpy
 
-        if self.adapter_config is None:
-            self.adapter_config = AdapterConfig(backend=self.backend)
-        else:
-            assert self.adapter_config.backend == self.backend, (
-                f"Adapter backend {self.adapter_config.backend} must match "
-                f"resampler backend {self.backend}"
-            )
-        self.adapter_config.overlap = (
+        self.config.backend = self.backend
+        self.config.overlap = (
             Offset.fromsamples(self.half_length, self.inrate),
             Offset.fromsamples(self.half_length, self.inrate),
         )
-        self.adapter_config.pad_zeros_startup = True
-
-        super().__post_init__()
+        self.config.on_startup(pad_zeros=True)
 
         self.pad_length = self.half_length
 
-        assert len(self.sink_pads) == 1, "only one sink_pad"
-        assert len(self.source_pads) == 1, "only one source_pad"
-        self.sink_pad = self.sink_pads[0]
+    @validator.one_to_one
+    def validate(self) -> None:
+        assert (
+            self.inrate in Offset.ALLOWED_RATES
+        ), f"Input rate {self.inrate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
+        assert (
+            self.outrate in Offset.ALLOWED_RATES
+        ), f"Output rate {self.outrate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
 
     def downkernel(self, factor: int) -> Array:
         """Compute the kernel for downsampling. Modified from gstlal_interpolator.c
@@ -264,7 +257,7 @@ class Resampler(TSTransform):
         return out.reshape(outshape)
 
     def resample_torch(
-        self, data0: TorchArray, output_shape: tuple[int, ...]
+        self, data0: TorchArray, outshape: tuple[int, ...]
     ) -> TorchArray:
         """Correlate the data with the kernel.
 
@@ -298,10 +291,11 @@ class Resampler(TSTransform):
             out = Fconv1d(data, thiskernel, stride=self.inrate // self.outrate)
             out = out.squeeze(1)
 
-        return out.view(output_shape)
+        return out.view(outshape)
 
     def new(self, pad: SourcePad) -> TSFrame:
-        frame = self.preparedframes[self.sink_pad]
+        sink_pad = self.sink_pads[0]
+        frame = self.preparedframes[sink_pad]
         assert frame.sample_rate == self.inrate, (
             f"Frame sample rate {frame.sample_rate} doesn't match "
             f"resampler input rate {self.inrate}"

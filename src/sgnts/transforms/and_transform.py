@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
+from sgn import validator
 from sgn.base import SourcePad
 
 from sgnts.base import (
@@ -44,14 +44,17 @@ class ANDTransform(TSTransform):
     """
 
     backend: type[ArrayBackend] = NumpyBackend
-    output_shape: Optional[tuple[int, ...]] = None
+    output_shape: tuple[int, ...] | None = None
 
-    def __post_init__(self):
-        # Explicitly set adapter_config to None to prevent gap filling
-        self.adapter_config = None
-        super().__post_init__()
+    def configure(self) -> None:
+        # Explicitly disable adapter to prevent gap filling
+        self.config.disable = True
         if self.output_shape is None:
             self.output_shape = ()
+
+    @validator.many_to_one
+    def validate(self) -> None:
+        pass
 
     def new(self, pad: SourcePad) -> TSFrame:
         """Generate output frame with AND logic across all inputs.

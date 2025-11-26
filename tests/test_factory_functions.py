@@ -47,9 +47,9 @@ def test_make_ts_element_default_config():
     element = TSElement(name="test", sink_pad_names=["input"])
 
     # Should have basic default adapter config
-    assert element.adapter_config is not None
-    assert element.adapter_config.stride == 0  # Default AdapterConfig
-    assert element.adapter_config.overlap == (0, 0)  # Default AdapterConfig
+    assert element.config is not None
+    assert element.config.stride == 0  # Default AdapterConfig
+    assert element.config.overlap == (0, 0)  # Default AdapterConfig
 
 
 def test_make_ts_element_config_override():
@@ -58,13 +58,11 @@ def test_make_ts_element_config_override():
 
     # Can override the default config at instantiation
     override_config = AdapterConfig(stride=1024, skip_gaps=True)
-    element = TSElement(
-        name="test", sink_pad_names=["input"], adapter_config=override_config
-    )
+    element = TSElement(name="test", sink_pad_names=["input"], config=override_config)
 
-    assert element.adapter_config == override_config
-    assert element.adapter_config.stride == 1024
-    assert element.adapter_config.skip_gaps
+    assert element.config == override_config
+    assert element.config.stride == 1024
+    assert element.config.skip_gaps
 
 
 def test_make_ts_element_sink_and_transform():

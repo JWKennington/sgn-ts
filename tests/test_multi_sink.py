@@ -95,7 +95,7 @@ def test_invalid_fake_series():
 
 
 def test_invalid_dump_series_pads():
-    with pytest.raises(ValueError):
+    with pytest.raises(AssertionError):
         DumpSeriesSink(
             sink_pad_names=("H1", "L1"),
         )

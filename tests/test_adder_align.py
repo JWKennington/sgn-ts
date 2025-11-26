@@ -81,5 +81,46 @@ def test_adder():
     pipeline.run()
 
 
+def test_adder_multiple_buffers():
+    """Test adder when frames have multiple buffers."""
+    pipeline = Pipeline()
+    max_age = 1000000000000
+
+    # Use ngap=2 with align_buffers=True to preserve buffer boundaries
+    # This creates frames with multiple buffers (gap and non-gap)
+    pipeline.insert(
+        FakeSeriesSource(
+            name="src1",
+            source_pad_names=("H1",),
+            end=10,
+            rate=2048,
+            signal_type="sin",
+            ngap=2,
+        ),
+        FakeSeriesSource(
+            name="src2",
+            source_pad_names=("H1",),
+            end=10,
+            rate=2048,
+            ngap=3,
+            signal_type="sin",
+        ),
+        Adder(
+            name="add",
+            source_pad_names=("A",),
+            sink_pad_names=("A", "B"),
+            max_age=max_age,
+            config=AdapterConfig(stride=Offset.fromsec(2), align_buffers=True),
+        ),
+        NullSeriesSink(name="snk1", sink_pad_names=("H1",)),
+        link_map={
+            "add:snk:A": "src1:src:H1",
+            "add:snk:B": "src2:src:H1",
+            "snk1:snk:H1": "add:src:A",
+        },
+    )
+    pipeline.run()
+
+
 if __name__ == "__main__":
     test_adder()

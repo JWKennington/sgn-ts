@@ -121,7 +121,7 @@ def test_broken_converter_2():
             "snk1:snk:H1": "trans2:src:H1",
         },
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(AttributeError):
         pipeline.run()
 
 
@@ -168,7 +168,7 @@ def test_broken_converter_1():
             "snk1:snk:H1": "trans2:src:H1",
         },
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(AttributeError):
         pipeline.run()
 
 
@@ -224,6 +224,62 @@ def test_converter():
     )
 
     pipeline.run()
+
+
+@pytest.mark.parametrize("backend", ["numpy", "torch"])
+def test_converter_unsupported_data_type(backend):
+    """Test that converter raises ValueError for unsupported data types"""
+
+    class FakeArray:
+        """An object that looks like an array but isn't numpy or torch"""
+
+        def __init__(self, shape):
+            self.shape = shape
+            self.ndim = len(shape)
+
+    class BreakData(TSTransform):
+        def new(self, pad):
+            frame = self.preparedframes[self.sink_pads[0]]
+            for buf in frame:
+                if not buf.is_gap:
+                    fake = FakeArray(buf.shape)
+                    buf.data = fake
+            return frame
+
+    pipeline = Pipeline()
+
+    pipeline.insert(
+        FakeSeriesSource(
+            name="src1",
+            source_pad_names=("H1",),
+            rate=256,
+            signal_type="sin",
+            ngap=0,  # No gaps so we get data
+            end=2,
+        ),
+        BreakData(
+            name="trans1",
+            source_pad_names=("H1",),
+            sink_pad_names=("H1",),
+        ),
+        Converter(
+            name="trans2",
+            source_pad_names=("H1",),
+            sink_pad_names=("H1",),
+            backend=backend,
+        ),
+        NullSink(
+            name="snk1",
+            sink_pad_names=("H1",),
+        ),
+        link_map={
+            "trans1:snk:H1": "src1:src:H1",
+            "trans2:snk:H1": "trans1:src:H1",
+            "snk1:snk:H1": "trans2:src:H1",
+        },
+    )
+    with pytest.raises(ValueError, match="Unsupported data type"):
+        pipeline.run()
 
 
 if __name__ == "__main__":

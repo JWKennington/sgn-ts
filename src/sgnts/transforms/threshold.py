@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import numpy
+from sgn import validator
 from sgn.base import SourcePad
 
 from sgnts.base import Offset, SeriesBuffer, TSFrame, TSSlice, TSSlices, TSTransform
@@ -29,16 +30,13 @@ class Threshold(TSTransform):
     startwn: int = 0
     stopwn: int = 0
 
-    def __post_init__(self):
-        super().__post_init__()
-        assert (
-            len(self.sink_pads) == 1
-        ), f"Threshold requires exactly 1 sink pad, got {len(self.sink_pads)}"
-        assert (
-            len(self.source_pads) == 1
-        ), f"Threshold requires exactly 1 source pad, got {len(self.source_pads)}"
+    def configure(self) -> None:
         self.sinkpad = self.sink_pads[0]
         self.nongap_slices = TSSlices([])
+
+    @validator.one_to_one
+    def validate(self) -> None:
+        pass
 
     # Modified from: https://stackoverflow.com/questions/43258896/
     # extract-subarrays-of-numpy-array-whose-values-are-above-a-threshold
