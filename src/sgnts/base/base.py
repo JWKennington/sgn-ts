@@ -452,9 +452,11 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
 
                 for pad in self.aligned_sink_pads:
                     aligned_slice = self.aligned_slices[pad]
-                    self.preparedframes[pad] = self.preparedframes[pad].align(
-                        aligned_slice
-                    )
+                    # Only align if there are slices (skip if all gaps)
+                    if aligned_slice.slices:
+                        self.preparedframes[pad] = self.preparedframes[pad].align(
+                            aligned_slice
+                        )
 
     def _compute_aligned_slices(self) -> dict[SinkPad, TSSlices]:
         """Compute aligned slices for all pads based on minimum sampling rate.
