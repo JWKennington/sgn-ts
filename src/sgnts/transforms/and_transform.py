@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sgn import validator
 
@@ -42,13 +42,11 @@ class ANDTransform(TSTransform):
     """
 
     backend: type[ArrayBackend] = NumpyBackend
-    output_shape: tuple[int, ...] | None = None
+    output_shape: tuple[int, ...] = field(default_factory=tuple)
 
     def configure(self) -> None:
         # Explicitly disable adapter to prevent gap filling
         self.adapter_config.enable = False
-        if self.output_shape is None:
-            self.output_shape = ()
 
     @validator.many_to_one
     def validate(self) -> None:

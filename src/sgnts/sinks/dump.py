@@ -6,7 +6,7 @@ from sgn import validator
 from sgnts.base import Time, TSSink
 
 
-@dataclass
+@dataclass(kw_only=True)
 class DumpSeriesSink(TSSink):
     """A sink element that dumps time series data to a txt file.
 
@@ -17,7 +17,7 @@ class DumpSeriesSink(TSSink):
             bool, be verbose
     """
 
-    fname: str = "out.txt"
+    fname: str
     verbose: bool = False
 
     def configure(self) -> None:

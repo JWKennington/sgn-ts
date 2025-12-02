@@ -22,24 +22,25 @@ from sgnts.base import (
 from sgnts.base.slice_tools import TIME_MAX
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Correlate(TSTransform):
     """Correlates input data with filters
 
     Args:
+        sample_rate:
+            int, the sample rate of the input data
         filters:
             Array, the filter to correlate over
         latency:
             int, the latency of the filter in samples
     """
 
-    sample_rate: int = -1
-    filters: Array | None = None
+    sample_rate: int
+    filters: Array
     latency: int = 0
 
     def configure(self) -> None:
         # FIXME: read sample_rate from data
-        assert self.filters is not None
         self.shape = self.filters.shape
 
         # apply latency offset shift: negative shift moves output backward in time
@@ -54,10 +55,7 @@ class Correlate(TSTransform):
 
     @validator.one_to_one
     def validate(self) -> None:
-        assert (
-            self.filters is not None
-        ), "Filters must be provided during initialization"
-        assert self.sample_rate != -1, "Sample rate must be specified (not -1)"
+        pass
 
     def corr(self, data: Array) -> Array:
         """Correlate an array of data with an array of filters.
@@ -69,7 +67,6 @@ class Correlate(TSTransform):
         Returns:
             Array, the result of the correlation
         """
-        assert self.filters is not None, "Filters must not be None during correlation"
         if len(self.filters.shape) == 1:
             return scipy.signal.correlate(data, self.filters, mode="valid")
 

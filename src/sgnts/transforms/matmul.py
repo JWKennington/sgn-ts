@@ -12,27 +12,26 @@ from sgnts.base import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Matmul(TSTransform):
     """Performs matrix multiplication with provided matrix.
 
     Args:
         matrix:
-            Array | None, the matrix to multiply the data with, out = matrix x data
+            Array, the matrix to multiply the data with, out = matrix x data
         backend:
             type[ArrayBackend], the array backend for array operations
     """
 
-    matrix: Array | None = None
+    matrix: Array
     backend: type[ArrayBackend] = NumpyBackend
 
     def configure(self) -> None:
-        assert self.matrix is not None
         self.shape = self.matrix.shape
 
     @validator.one_to_one
     def validate(self) -> None:
-        assert self.matrix is not None, "Matrix must be provided for MatMul operation"
+        pass
 
     def internal(self) -> None:
         """Perform matrix multiplication on non-gap data."""

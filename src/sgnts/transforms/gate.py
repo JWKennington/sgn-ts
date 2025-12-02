@@ -5,7 +5,7 @@ from sgn import validator
 from sgnts.base import TSSlices, TSTransform
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Gate(TSTransform):
     """Uses one sink pad's buffers to control the state of anothers. The control buffer
     state is defined by either being gap or not. The actual content of the data is
@@ -16,7 +16,7 @@ class Gate(TSTransform):
             str, the name of the pad to use as a control signal
     """
 
-    control: str = ""
+    control: str
 
     def configure(self) -> None:
         self.controlpad = self.snks[self.control]

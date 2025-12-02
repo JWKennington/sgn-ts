@@ -27,7 +27,7 @@ UP_HALF_LENGTH = 8
 DOWN_HALF_LENGTH = 32
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Resampler(TSTransform):
     """Up/down samples time-series data
 
@@ -44,8 +44,8 @@ class Resampler(TSTransform):
 
     """
 
-    inrate: int = -1
-    outrate: int = -1
+    inrate: int
+    outrate: int
     backend: type[ArrayBackend] = NumpyBackend
     gstlal_norm: bool = True
 

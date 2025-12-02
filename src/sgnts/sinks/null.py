@@ -23,7 +23,7 @@ class NullSeriesSink(TSSink):
         for sink_pad, frame in self.next_inputs().items():
             if frame.EOS:
                 self.mark_eos(sink_pad)
-            if self.verbose is True:
+            if self.verbose:
                 print(f"{sink_pad.name}:")
                 print(f"  {frame}")
                 latency = gpsnow() - Offset.tosec(
