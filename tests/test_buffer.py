@@ -11,7 +11,6 @@ from sgnts.base.buffer import (
     Event,
     EventBuffer,
     EventFrame,
-    TSEmptyFrame,
 )
 from sgnts.base.slice_tools import TSSlice, TSSlices
 
@@ -145,21 +144,19 @@ class TestTSFrame:
         )
         assert isinstance(frame, TSFrame)
 
-    def test_set_offsets(self):
-        """Test read-only attributes"""
+    def test_set_offsets_with_data(self):
+        """Test that offset/noffset cannot be set when providing buffers"""
         buf = SeriesBuffer(
             offset=0,
             sample_rate=1024,
             data=None,
             shape=(10, 2),
         )
-        frame = TSFrame(
-            buffers=[buf],
-        )
-        with pytest.raises(AttributeError):
-            frame.offset = 10
-        with pytest.raises(AttributeError):
-            frame.noffset = 10
+        # Offset/noffset are mutable fields but cannot be specified when buffers exist
+        with pytest.raises(
+            ValueError, match="Cannot specify offset/noffset when providing buffers"
+        ):
+            TSFrame(buffers=[buf], offset=10, noffset=20)
 
     def test_backend_prop(self):
         """Test backend property"""
@@ -290,24 +287,164 @@ class TestTSFrame:
         result = frame.align(tsslices)
         assert isinstance(result, TSFrame)
 
+    def test_empty_frame_creation(self):
+        """Test creating empty TSFrame with explicit offset/noffset"""
+        offset = Offset.fromsamples(0, sample_rate=1024)
+        noffset = Offset.fromsamples(20, sample_rate=1024)
+        frame = TSFrame(offset=offset, noffset=noffset)
+        assert frame.offset == offset
+        assert frame.noffset == noffset
+        assert frame.end_offset == offset + noffset
+        assert len(frame.buffers) == 0
 
-class TestTSEmptyFrame:
-    """Test group for TSEmptyFrame class"""
+    def test_empty_frame_zero_offsets(self):
+        """Test that offset=0, noffset=0 is valid for empty frame"""
+        frame = TSFrame(offset=0, noffset=0)
+        assert frame.offset == 0
+        assert frame.noffset == 0
+        assert len(frame.buffers) == 0
 
-    def test_init_and_call(self):
-        """Test TSEmptyFrame initialization and promotion to TSFrame"""
-        empty_frame = TSEmptyFrame(
-            offset=0, noffset=Offset.fromsamples(20, sample_rate=1024)
+    def test_append_to_empty_frame(self):
+        """Test appending buffers to empty TSFrame"""
+        offset = Offset.fromsamples(0, sample_rate=1024)
+        noffset = Offset.fromsamples(20, sample_rate=1024)
+        frame = TSFrame(offset=offset, noffset=noffset)
+
+        # Append buffer that spans part of the frame
+        buf1 = SeriesBuffer(offset=offset, sample_rate=1024, data=1, shape=(10,))
+        frame.append(buf1)
+        assert len(frame.buffers) == 1
+        assert frame.buffers[0] == buf1
+
+        # Append contiguous buffer
+        buf2 = SeriesBuffer(
+            offset=buf1.end_offset, sample_rate=1024, data=1, shape=(10,)
         )
+        frame.append(buf2)
+        assert len(frame.buffers) == 2
 
-        buf = SeriesBuffer(
-            offset=0,
+    def test_append_validation_bounds(self):
+        """Test that append validates buffer falls within frame bounds"""
+        offset = Offset.fromsamples(10, sample_rate=1024)
+        noffset = Offset.fromsamples(20, sample_rate=1024)
+        frame = TSFrame(offset=offset, noffset=noffset)
+
+        # Buffer starts before frame
+        buf_before = SeriesBuffer(
+            offset=Offset.fromsamples(5, sample_rate=1024),
             sample_rate=1024,
             data=1,
-            shape=(20,),
+            shape=(10,),
         )
-        result = empty_frame([buf])
-        assert isinstance(result, TSFrame)
+        with pytest.raises(AssertionError, match="starts before frame offset"):
+            frame.append(buf_before)
+
+        # Buffer extends beyond frame
+        buf_after = SeriesBuffer(offset=offset, sample_rate=1024, data=1, shape=(25,))
+        with pytest.raises(AssertionError, match="extends beyond frame"):
+            frame.append(buf_after)
+
+    def test_append_validation_contiguity(self):
+        """Test that append validates buffer is contiguous with previous"""
+        offset = Offset.fromsamples(0, sample_rate=1024)
+        noffset = Offset.fromsamples(20, sample_rate=1024)
+        frame = TSFrame(offset=offset, noffset=noffset)
+
+        # Add first buffer
+        buf1 = SeriesBuffer(offset=offset, sample_rate=1024, data=1, shape=(5,))
+        frame.append(buf1)
+
+        # Try to add non-contiguous buffer (gap)
+        buf2_gap = SeriesBuffer(
+            offset=Offset.fromsamples(10, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(5,),
+        )
+        with pytest.raises(AssertionError, match="not contiguous"):
+            frame.append(buf2_gap)
+
+        # Try to add overlapping buffer
+        buf2_overlap = SeriesBuffer(
+            offset=Offset.fromsamples(3, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(5,),
+        )
+        with pytest.raises(AssertionError, match="not contiguous"):
+            frame.append(buf2_overlap)
+
+    def test_validate_span_complete(self):
+        """Test validate_span with complete data"""
+        offset = Offset.fromsamples(0, sample_rate=1024)
+        noffset = Offset.fromsamples(20, sample_rate=1024)
+        frame = TSFrame(offset=offset, noffset=noffset)
+
+        # Add buffers that fully span the frame
+        buf1 = SeriesBuffer(offset=offset, sample_rate=1024, data=1, shape=(10,))
+        buf2 = SeriesBuffer(
+            offset=buf1.end_offset, sample_rate=1024, data=1, shape=(10,)
+        )
+        frame.append(buf1)
+        frame.append(buf2)
+
+        # Should pass validation
+        frame.validate_span()
+
+    def test_validate_span_incomplete_start(self):
+        """Test validate_span fails when first buffer doesn't start at frame offset"""
+        offset = Offset.fromsamples(0, sample_rate=1024)
+        noffset = Offset.fromsamples(20, sample_rate=1024)
+        frame = TSFrame(offset=offset, noffset=noffset)
+
+        # Add buffer that doesn't start at frame offset (bypass append validation)
+        buf = SeriesBuffer(
+            offset=Offset.fromsamples(5, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(15,),
+        )
+        frame.buffers.append(buf)
+
+        with pytest.raises(
+            AssertionError, match="First buffer offset.*!= frame offset"
+        ):
+            frame.validate_span()
+
+    def test_validate_span_incomplete_end(self):
+        """Test validate_span fails when last buffer doesn't reach frame end"""
+        offset = Offset.fromsamples(0, sample_rate=1024)
+        noffset = Offset.fromsamples(20, sample_rate=1024)
+        frame = TSFrame(offset=offset, noffset=noffset)
+
+        # Add buffer that doesn't reach the end
+        buf = SeriesBuffer(offset=offset, sample_rate=1024, data=1, shape=(10,))
+        frame.append(buf)
+
+        with pytest.raises(
+            AssertionError, match="Last buffer end_offset.*!= frame end_offset"
+        ):
+            frame.validate_span()
+
+    def test_validate_span_gap(self):
+        """Test validate_span fails when there's a gap between buffers"""
+        offset = Offset.fromsamples(0, sample_rate=1024)
+        noffset = Offset.fromsamples(20, sample_rate=1024)
+        frame = TSFrame(offset=offset, noffset=noffset)
+
+        # Add two buffers with a gap (bypass append validation)
+        buf1 = SeriesBuffer(offset=offset, sample_rate=1024, data=1, shape=(5,))
+        buf2 = SeriesBuffer(
+            offset=Offset.fromsamples(10, sample_rate=1024),
+            sample_rate=1024,
+            data=1,
+            shape=(10,),
+        )
+        frame.buffers.append(buf1)
+        frame.buffers.append(buf2)
+
+        with pytest.raises(AssertionError, match="Buffer offset.*must match"):
+            frame.validate_span()
 
 
 class TestEventBuffer:
@@ -355,14 +492,14 @@ class TestEventFrame:
         with pytest.raises(ValueError):
             EventFrame(data=[buf2, buf1])
 
-    def test_set_offsets(self):
-        """Test set read-only attributes"""
+    def test_set_offsets_with_data(self):
+        """Test that offset/noffset cannot be set when providing data"""
         buf = EventBuffer(0, 10)
-        frame = EventFrame(data=[buf])
-        with pytest.raises(AttributeError):
-            frame.offset = 5
-        with pytest.raises(AttributeError):
-            frame.noffset = 5
+        # Offset/noffset are mutable fields but cannot be specified when data exists
+        with pytest.raises(
+            ValueError, match="Cannot specify offset/noffset when providing data"
+        ):
+            EventFrame(data=[buf], offset=5, noffset=10)
 
     def test_compare(self):
         """Test equality and comparison ops"""
@@ -382,3 +519,152 @@ class TestEventFrame:
         assert frame[0] == buf
         for thisbuf in frame:
             assert thisbuf == buf
+
+    def test_empty_frame_creation(self):
+        """Test creating empty EventFrame with explicit offset/noffset"""
+        frame = EventFrame(offset=100, noffset=200)
+        assert frame.offset == 100
+        assert frame.noffset == 200
+        assert frame.end_offset == 300
+        assert len(frame.data) == 0
+
+    def test_empty_frame_zero_offsets(self):
+        """Test that offset=0, noffset=0 is valid for empty frame"""
+        frame = EventFrame(offset=0, noffset=0)
+        assert frame.offset == 0
+        assert frame.noffset == 0
+        assert len(frame.data) == 0
+
+    def test_append_to_empty_frame(self):
+        """Test appending buffers to empty EventFrame"""
+        frame = EventFrame(offset=100, noffset=200)
+
+        # Append buffer that spans part of the frame
+        buf1 = EventBuffer(offset=100, noffset=50)
+        frame.append(buf1)
+        assert len(frame.data) == 1
+        assert frame.data[0] == buf1
+
+        # Append contiguous buffer
+        buf2 = EventBuffer(offset=150, noffset=150)
+        frame.append(buf2)
+        assert len(frame.data) == 2
+
+    def test_append_validation_bounds(self):
+        """Test that append validates buffer falls within frame bounds"""
+        frame = EventFrame(offset=100, noffset=200)
+
+        # Buffer starts before frame
+        buf_before = EventBuffer(offset=50, noffset=10)
+        with pytest.raises(AssertionError, match="starts before frame offset"):
+            frame.append(buf_before)
+
+        # Buffer extends beyond frame
+        buf_after = EventBuffer(offset=100, noffset=250)
+        with pytest.raises(AssertionError, match="extends beyond frame"):
+            frame.append(buf_after)
+
+    def test_append_validation_contiguity(self):
+        """Test that append validates buffer is contiguous with previous"""
+        frame = EventFrame(offset=100, noffset=200)
+
+        # Add first buffer
+        buf1 = EventBuffer(offset=100, noffset=50)
+        frame.append(buf1)
+
+        # Try to add non-contiguous buffer (gap)
+        buf2_gap = EventBuffer(offset=160, noffset=50)
+        with pytest.raises(AssertionError, match="not contiguous"):
+            frame.append(buf2_gap)
+
+        # Try to add overlapping buffer
+        buf2_overlap = EventBuffer(offset=140, noffset=50)
+        with pytest.raises(AssertionError, match="not contiguous"):
+            frame.append(buf2_overlap)
+
+    def test_validate_span_complete(self):
+        """Test validate_span with complete data"""
+        frame = EventFrame(offset=100, noffset=200)
+
+        # Add buffers that fully span the frame
+        buf1 = EventBuffer(offset=100, noffset=100)
+        buf2 = EventBuffer(offset=200, noffset=100)
+        frame.append(buf1)
+        frame.append(buf2)
+
+        # Should pass validation
+        frame.validate_span()
+
+    def test_validate_span_incomplete_start(self):
+        """Test validate_span fails when first buffer doesn't start at
+        frame offset"""
+        frame = EventFrame(offset=100, noffset=200)
+
+        # Add buffer that doesn't start at frame offset
+        # (impossible through append, but test anyway)
+        buf = EventBuffer(offset=150, noffset=150)
+        frame.data.append(buf)  # Bypass append validation
+
+        with pytest.raises(
+            AssertionError, match="First buffer offset.*!= frame offset"
+        ):
+            frame.validate_span()
+
+    def test_validate_span_incomplete_end(self):
+        """Test validate_span fails when last buffer doesn't reach frame end"""
+        frame = EventFrame(offset=100, noffset=200)
+
+        # Add buffer that doesn't reach the end
+        buf = EventBuffer(offset=100, noffset=100)
+        frame.append(buf)
+
+        with pytest.raises(
+            AssertionError, match="Last buffer end_offset.*!= frame end_offset"
+        ):
+            frame.validate_span()
+
+    def test_validate_span_gap(self):
+        """Test validate_span fails when there's a gap between buffers"""
+        frame = EventFrame(offset=100, noffset=200)
+
+        # Add two buffers with a gap (impossible through append, but test anyway)
+        buf1 = EventBuffer(offset=100, noffset=50)
+        buf2 = EventBuffer(offset=160, noffset=140)
+        frame.data.append(buf1)  # Bypass append validation
+        frame.data.append(buf2)
+
+        with pytest.raises(AssertionError, match="Gap between buffer"):
+            frame.validate_span()
+
+    def test_series_buffer_replace_is_gap_true(self):
+        """Test SeriesBuffer.replace() with is_gap=True parameter"""
+        # Create a non-gap buffer
+        buffer = SeriesBuffer(
+            offset=0,
+            sample_rate=256,
+            data=numpy.arange(256),
+            shape=(256,),
+        )
+        assert not buffer.is_gap
+
+        # Replace with is_gap=True should create a gap buffer (data=None)
+        new_buffer = buffer.replace(is_gap=True)
+        assert new_buffer.is_gap
+        assert new_buffer.data is None
+
+    def test_series_buffer_replace_is_gap_false(self):
+        """Test SeriesBuffer.replace() with is_gap=False parameter"""
+        # Create a gap buffer
+        gap_buffer = SeriesBuffer(
+            offset=0,
+            sample_rate=256,
+            data=None,
+            shape=(256,),
+        )
+        assert gap_buffer.is_gap
+
+        # Replace with is_gap=False and new data
+        new_data = numpy.zeros(256)
+        new_buffer = gap_buffer.replace(is_gap=False, data=new_data)
+        assert not new_buffer.is_gap
+        assert new_buffer.data is new_data

@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from sgn import validator
-from sgn.base import SourcePad
 
-from sgnts.base import SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import TSTransform
 
 # Try to import torch, but don't fail if it's not available
 try:
@@ -76,53 +75,53 @@ class Converter(TSTransform):
     def validate(self) -> None:
         pass
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        frame = self.preparedframes[self.pad_map[pad]]
-        self.preparedframes[self.pad_map[pad]] = None
+    def internal(self) -> None:
+        """Convert data type and device."""
+        super().internal()
 
-        outbufs = []
-        out: None | np.ndarray | torch.Tensor
-        for buf in frame:
-            if buf.is_gap:
-                out = None
-            else:
-                data = buf.data
-                if self.backend == "numpy":
-                    if isinstance(data, np.ndarray):
-                        # numpy to numpy
-                        out = data.astype(self.dtype, copy=False)
-                    elif isinstance(data, torch.Tensor):
-                        # torch to numpy
-                        out = data.detach().cpu().numpy().astype(self.dtype, copy=False)
-                    else:
-                        raise ValueError("Unsupported data type")
+        input_frames = self.next_inputs()
+        output_frames = self.next_outputs()
+
+        # process each source pad's corresponding sink pad
+        for pad in self.source_pads:
+            frame = input_frames[self.pad_map[pad]]
+            out: None | np.ndarray | torch.Tensor
+            for buf in frame:
+                if buf.is_gap:
+                    out = None
                 else:
-                    if not TORCH_AVAILABLE:
-                        raise ImportError(
-                            "PyTorch is not installed. Install it with 'pip "
-                            "install sgn-ts[torch]'"
-                        )
-
-                    if isinstance(data, np.ndarray):
-                        # numpy to torch
-                        out = torch.from_numpy(data).to(self.dtype).to(self.device)
-                    elif hasattr(torch, "Tensor") and isinstance(data, torch.Tensor):
-                        # torch to torch
-                        out = data.to(self.dtype).to(self.device)
+                    data = buf.data
+                    if self.backend == "numpy":
+                        if isinstance(data, np.ndarray):
+                            # numpy to numpy
+                            out = data.astype(self.dtype, copy=False)
+                        elif isinstance(data, torch.Tensor):
+                            # torch to numpy
+                            out = (
+                                data.detach()
+                                .cpu()
+                                .numpy()
+                                .astype(self.dtype, copy=False)
+                            )
+                        else:
+                            raise ValueError("Unsupported data type")
                     else:
-                        raise ValueError("Unsupported data type")
+                        if not TORCH_AVAILABLE:
+                            raise ImportError(
+                                "PyTorch is not installed. Install it with 'pip "
+                                "install sgn-ts[torch]'"
+                            )
 
-            outbufs.append(
-                SeriesBuffer(
-                    offset=buf.offset,
-                    sample_rate=buf.sample_rate,
-                    data=out,
-                    shape=buf.shape,
-                )
-            )
+                        if isinstance(data, np.ndarray):
+                            # numpy to torch
+                            out = torch.from_numpy(data).to(self.dtype).to(self.device)
+                        elif hasattr(torch, "Tensor") and isinstance(
+                            data, torch.Tensor
+                        ):
+                            # torch to torch
+                            out = data.to(self.dtype).to(self.device)
+                        else:
+                            raise ValueError("Unsupported data type")
 
-        return TSFrame(
-            buffers=outbufs,
-            metadata=frame.metadata,
-            EOS=frame.EOS,
-        )
+                buf = buf.replace(data=out)
+                output_frames[pad].append(buf)

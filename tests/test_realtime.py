@@ -13,12 +13,17 @@ def test_realtime(capsys):
         def __post_init__(self):
             super().__post_init__()
             self.slowcounter = 0
+            self.sink_pad = self.sink_pads[0]
+            self.source_pad = self.source_pads[0]
 
-        def new(self, pad):
+        def internal(self) -> None:
+            super().internal()
             if self.slowcounter == 1:
                 time.sleep(2)
             self.slowcounter += 1
-            return self.preparedframes[self.sink_pads[0]]
+            _, input_frame = self.next_input()
+            _, output_frame = self.next_output()
+            output_frame.extend(input_frame.buffers)
 
     pipeline = Pipeline()
 

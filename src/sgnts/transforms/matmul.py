@@ -3,14 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sgn import validator
-from sgn.base import SourcePad
 
 from sgnts.base import (
     Array,
     ArrayBackend,
     NumpyBackend,
-    SeriesBuffer,
-    TSFrame,
     TSTransform,
 )
 
@@ -37,24 +34,20 @@ class Matmul(TSTransform):
     def validate(self) -> None:
         assert self.matrix is not None, "Matrix must be provided for MatMul operation"
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        outbufs = []
-        # loop over the input data, only perform matmul on non-gaps
-        frame = self.preparedframes[self.sink_pads[0]]
-        for inbuf in frame:
-            is_gap = inbuf.is_gap
+    def internal(self) -> None:
+        """Perform matrix multiplication on non-gap data."""
+        super().internal()
 
-            if is_gap:
+        _, input_frame = self.next_input()
+        _, output_frame = self.next_output()
+
+        for buf in input_frame:
+            if buf.is_gap:
                 data = None
+                shape = self.shape[:-1] + (buf.samples,)
             else:
-                data = self.backend.matmul(self.matrix, inbuf.data)
+                data = self.backend.matmul(self.matrix, buf.data)
+                shape = data.shape
 
-            outbuf = SeriesBuffer(
-                offset=inbuf.offset,
-                sample_rate=inbuf.sample_rate,
-                data=data,
-                shape=self.shape[:-1] + (inbuf.samples,),
-            )
-            outbufs.append(outbuf)
-
-        return TSFrame(buffers=outbufs, EOS=frame.EOS, metadata=frame.metadata)
+            buf = buf.replace(data=data, shape=shape)
+            output_frame.append(buf)

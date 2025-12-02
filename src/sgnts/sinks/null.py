@@ -19,8 +19,8 @@ class NullSeriesSink(TSSink):
     def internal(self) -> None:
         """Print frames if verbose."""
         super().internal()
-        for sink_pad in self.sink_pads:
-            frame = self.preparedframes[sink_pad]
+
+        for sink_pad, frame in self.next_inputs().items():
             if frame.EOS:
                 self.mark_eos(sink_pad)
             if self.verbose is True:

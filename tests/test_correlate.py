@@ -935,3 +935,33 @@ class TestAdaptiveCorrelate:
         # df = pandas.DataFrame(res, columns=["time", "data"])
         # fig = express.line(df, x="time", y="data", title="No Overlap")
         # fig.show()
+
+    def test_can_adapt_when_not_adapting(self):
+        """Test can_adapt() returns False when is_adapting is False"""
+        # Create an AdaptiveCorrelate that's not adapting
+        init_filters = numpy.ones((1, 256))
+        correlator = AdaptiveCorrelate(
+            filters=init_filters,
+            sample_rate=256,
+            sink_pad_names=["input"],
+            source_pad_names=["output"],
+        )
+
+        # Ensure filter_deque has only one element (is_adapting will be False)
+        assert len(correlator.filter_deque) == 1
+        assert not correlator.is_adapting
+
+        # Create a dummy frame
+        frame = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=0,
+                    sample_rate=256,
+                    data=numpy.zeros(256),
+                    shape=(256,),
+                )
+            ]
+        )
+
+        # can_adapt should return False when not adapting
+        assert not correlator.can_adapt(frame)

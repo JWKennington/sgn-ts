@@ -3,9 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.signal import correlate
 from sgn import validator
-from sgn.base import SourcePad
 
-from sgnts.base import Offset, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import Offset, SeriesBuffer, TSTransform
 
 # Try to import torch, but don't fail if it's not available
 try:
@@ -52,7 +51,6 @@ class Resampler(TSTransform):
 
     def configure(self) -> None:
         self.next_out_offset = None
-        self.sink_pad = self.sink_pads[0]
 
         if self.outrate < self.inrate:
             # downsample parameters
@@ -293,41 +291,39 @@ class Resampler(TSTransform):
 
         return out.view(outshape)
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        sink_pad = self.sink_pads[0]
-        frame = self.preparedframes[sink_pad]
-        assert frame.sample_rate == self.inrate, (
-            f"Frame sample rate {frame.sample_rate} doesn't match "
+    def internal(self) -> None:
+        """Resample input frame to output sample rate."""
+        super().internal()
+
+        _, input_frame = self.next_input()
+        _, output_frame = self.next_output()
+
+        assert input_frame.sample_rate == self.inrate, (
+            f"Frame sample rate {input_frame.sample_rate} doesn't match "
             f"resampler input rate {self.inrate}"
         )
-        outoffset = self.preparedoutoffsets
 
-        outbufs = []
-        if frame.shape[-1] == 0:
-            outbufs.append(
-                SeriesBuffer(
-                    offset=outoffset["offset"],
-                    sample_rate=self.outrate,
-                    data=None,
-                    shape=frame.shape,
-                )
+        if input_frame.shape[-1] == 0:
+            buf = SeriesBuffer(
+                offset=output_frame.offset,
+                sample_rate=self.outrate,
+                data=None,
+                shape=input_frame.shape,
             )
+            output_frame.append(buf)
         else:
-            for buf in frame:
-                shape = frame.shape[:-1] + (
-                    Offset.tosamples(outoffset["noffset"], self.outrate),
+            for buf in input_frame:
+                shape = input_frame.shape[:-1] + (
+                    Offset.tosamples(output_frame.noffset, self.outrate),
                 )
                 if buf.is_gap:
                     data = None
                 else:
                     data = self.resample(buf.data, shape)
-                outbufs.append(
-                    SeriesBuffer(
-                        offset=outoffset["offset"],
-                        sample_rate=self.outrate,
-                        data=data,
-                        shape=shape,
-                    )
+                buf = buf.replace(
+                    offset=output_frame.offset,
+                    sample_rate=self.outrate,
+                    data=data,
+                    shape=shape,
                 )
-
-        return TSFrame(buffers=outbufs, EOS=frame.EOS, metadata=frame.metadata)
+                output_frame.append(buf)

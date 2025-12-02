@@ -3,13 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sgn import validator
-from sgn.base import SourcePad
 
 from sgnts.base import (
     ArrayBackend,
     NumpyBackend,
     SeriesBuffer,
-    TSFrame,
     TSSlice,
     TSSlices,
     TSTransform,
@@ -56,30 +54,31 @@ class ANDTransform(TSTransform):
     def validate(self) -> None:
         pass
 
-    def new(self, pad: SourcePad) -> TSFrame:
+    def internal(self) -> None:
         """Generate output frame with AND logic across all inputs.
 
-        Returns:
-            TSFrame containing buffers with 1s where all inputs have data,
-            and gap buffers where any input has gaps.
+        Output contains buffers with 1s where all inputs have data,
+        and gap buffers where any input has gaps.
         """
-        # Get all input frames
-        frames = [self.preparedframes[sink_pad] for sink_pad in self.aligned_sink_pads]
+        super().internal()
+
+        input_frames = list(self.next_inputs().values())
+        _, output_frame = self.next_output()
 
         # Use the maximum sample rate among all inputs for output
-        max_rate = max(f.sample_rate for f in frames)
+        max_rate = max(f.sample_rate for f in input_frames)
 
         # Collect non-gap slices from each input
         all_nongap_slices = [
-            TSSlices([buf.slice for buf in frame if not buf.is_gap]) for frame in frames
+            TSSlices([buf.slice for buf in frame if not buf.is_gap])
+            for frame in input_frames
         ]
 
         # Find intersection of all non-gap regions (where ALL inputs have data)
         intersection_slices = TSSlices.intersection_of_multiple(all_nongap_slices)
 
         # Create initial buffer spanning entire frame with 1s
-        frame_slice = TSSlice(frames[0].offset, frames[0].end_offset)
-        assert self.output_shape is not None  # Set in __post_init__
+        frame_slice = TSSlice(input_frames[0].offset, input_frames[0].end_offset)
         full_buffer = SeriesBuffer.fromoffsetslice(
             frame_slice,
             sample_rate=max_rate,
@@ -97,4 +96,4 @@ class ANDTransform(TSTransform):
             else [full_buffer.new()]  # new() with no data creates a gap buffer
         )
 
-        return TSFrame(buffers=output_buffers, EOS=self.at_EOS, metadata={})
+        output_frame.extend(output_buffers)

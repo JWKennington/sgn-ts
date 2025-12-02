@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 
 from sgn import validator
-from sgn.base import SourcePad
 
-from sgnts.base import TSFrame, TSSlices, TSTransform
+from sgnts.base import TSSlices, TSTransform
 
 
 @dataclass
@@ -32,18 +31,22 @@ class Gate(TSTransform):
             f"in sink_pad_names: {self.sink_pad_names}"
         )
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        nongap_slices = TSSlices(
-            [b.slice for b in self.preparedframes[self.controlpad] if b]
-        )
-        out = sorted(
+    def internal(self) -> None:
+        """Gate input based on control pad."""
+        super().internal()
+
+        input_frames = self.next_inputs()
+        _, output_frame = self.next_output()
+
+        nongap_slices = TSSlices([b.slice for b in input_frames[self.controlpad] if b])
+        bufs = sorted(
             [
                 b
                 for bs in [
                     buf.split(nongap_slices.search(buf.slice), contiguous=True)
-                    for buf in self.preparedframes[self.sinkpad]
+                    for buf in input_frames[self.sinkpad]
                 ]
                 for b in bs
             ]
         )
-        return TSFrame(buffers=out, EOS=self.at_EOS)
+        output_frame.extend(bufs)

@@ -4,6 +4,8 @@ import pytest
 import sys
 from unittest import mock
 
+from sgnts.base import AdapterConfig, Offset
+
 # Store original import
 original_import = __import__
 
@@ -110,28 +112,37 @@ def test_converter_torch_real_module():
                     backend="torch", source_pad_names=["test"], sink_pad_names=["test"]
                 )
 
-            # Test condition in new()
+            # Test condition in internal()
+            # Disable adapter to avoid needing to populate inbufs
             converter = Converter(
-                backend="numpy", source_pad_names=["test"], sink_pad_names=["test"]
+                backend="numpy",
+                source_pad_names=["test"],
+                sink_pad_names=["test"],
+                adapter_config=AdapterConfig(),
             )
             converter.backend = "torch"  # Force torch backend
 
-            # Setup for testing new()
-            mock_pad = mock.MagicMock()
-            mock_pad_map = {mock_pad: "test"}
-            converter.pad_map = mock_pad_map
-
-            mock_frame = mock.MagicMock()
+            # Setup for testing internal()
             mock_buffer = mock.MagicMock()
             mock_buffer.is_gap = False
-            mock_buffer.data = mock.MagicMock()  # Mock data
-            mock_frame.__iter__.return_value = [mock_buffer]
+            mock_buffer.data = mock.MagicMock()  # Mock numpy array data
+            mock_buffer.offset = Offset.fromsamples(0, 256)
+            mock_buffer.sample_rate = 256
+            mock_buffer.samples = 256
+            mock_buffer.end_offset = Offset.fromsamples(256, 256)
 
-            converter.preparedframes = {"test": mock_frame}
+            # Push buffer to audioadapter so internal() can process it
+            converter.inbufs[converter.sink_pads[0]].push(mock_buffer)
 
-            # This should raise ImportError on line 98
+            # Set up output offsets
+            converter.preparedoutoffsets = {
+                "offset": Offset.fromsamples(0, 256),
+                "noffset": Offset.fromsamples(256, 256),
+            }
+
+            # This should raise ImportError when trying to convert with torch backend
             with pytest.raises(ImportError, match="PyTorch is not installed"):
-                converter.new(mock_pad)
+                converter.internal()
     finally:
         # Restore modules
         for name, module in saved_modules.items():

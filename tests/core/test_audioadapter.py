@@ -9,6 +9,11 @@ from sgnts.base import Audioadapter, Offset, SeriesBuffer
 from sgnts.base.base import TSTransform
 
 
+class DummyTSTransform(TSTransform):
+    def process(self, inframe, outframe):
+        raise NotImplementedError
+
+
 class TestProperties:
     """Test group for audioadapter properties"""
 
@@ -897,7 +902,7 @@ class TestAlignedOffsets:
     def test_compute_aligned_offset(self):
         """Test _compute_aligned_offset (always rounds up to next boundary)"""
 
-        transform = TSTransform(sink_pad_names=["test"], source_pad_names=["test"])
+        transform = DummyTSTransform(sink_pad_names=["test"], source_pad_names=["test"])
         # Use arbitrary alignment boundary value for testing the algorithm
         align_boundary = 1_000_000_000
 
@@ -917,9 +922,7 @@ class TestAlignedOffsets:
 
     def test_aligned_offset_subsecond_boundary(self):
         """Test alignment with subsecond boundaries"""
-        from sgnts.base.base import TSTransform
-
-        transform = TSTransform(sink_pad_names=["test"], source_pad_names=["test"])
+        transform = DummyTSTransform(sink_pad_names=["test"], source_pad_names=["test"])
         TENTH_SECOND = 100_000_000  # 0.1 seconds
 
         # Test with 0.1 second boundaries (rounds up)

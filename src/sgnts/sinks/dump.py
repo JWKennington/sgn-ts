@@ -21,8 +21,6 @@ class DumpSeriesSink(TSSink):
     verbose: bool = False
 
     def configure(self) -> None:
-        self.sink_pad = self.sink_pads[0]
-
         # overwrite existing file
         with open(self.fname, "w"):
             pass
@@ -56,12 +54,12 @@ class DumpSeriesSink(TSSink):
     def internal(self) -> None:
         """Write out time-series data."""
         super().internal()
-        sink_pad = self.sink_pad
-        frame = self.preparedframes[sink_pad]
-        if frame.EOS:
-            self.mark_eos(sink_pad)
+
+        input_pad, input_frame = self.next_input()
+        if input_frame.EOS:
+            self.mark_eos(input_pad)
         if self.verbose is True:
-            print(frame)
-        for buf in frame:
+            print(input_frame)
+        for buf in input_frame:
             if not buf.is_gap:
                 self.write_to_file(buf)

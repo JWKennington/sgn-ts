@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sgn import validator
-from sgn.base import SourcePad
 
-from sgnts.base import ArrayBackend, NumpyBackend, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import ArrayBackend, NumpyBackend, TSTransform
 
 
 @dataclass
@@ -30,15 +29,23 @@ class SumIndex(TSTransform):
         for sl in self.sl:
             assert isinstance(sl, slice)
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        frame = self.preparedframes[self.sink_pads[0]]
+    def internal(self) -> None:
+        """Sum array values over slices."""
+        super().internal()
 
-        outbufs = []
-        for buf in frame:
+        _, input_frame = self.next_input()
+        _, output_frame = self.next_output()
+
+        for buf in input_frame:
             if buf.is_gap:
-                out = None
+                data = None
+                # NOTE mypy complains about None not being iterable but None should
+                # actually be impossible at this point.
+                assert (
+                    self.sl is not None
+                ), "Slice list (sl) should not be None when creating output shape"
+                shape = (len(self.sl),) + buf.shape[-2:]
             else:
-                data = buf.data
                 data_all = []
                 # NOTE mypy complains about None not being iterable but None
                 # should actually be impossible at this point.
@@ -47,23 +54,12 @@ class SumIndex(TSTransform):
                 ), "Slice list (sl) should not be None during processing"
                 for sl in self.sl:
                     if sl.stop - sl.start == 1:
-                        data_all.append((data[sl.start, :, :]))
+                        data_all.append((buf.data[sl.start, :, :]))
                     else:
-                        data_all.append(self.backend.sum(data[sl, :, :], axis=0))
+                        data_all.append(self.backend.sum(buf.data[sl, :, :], axis=0))
 
-                out = self.backend.stack(data_all)
+                data = self.backend.stack(data_all)
+                shape = data.shape
 
-            # NOTE mypy complains about None not being iterable but None should
-            # actually be impossible at this point.
-            assert (
-                self.sl is not None
-            ), "Slice list (sl) should not be None when creating output buffer"
-            outbuf = SeriesBuffer(
-                offset=buf.offset,
-                sample_rate=buf.sample_rate,
-                data=out,
-                shape=(len(self.sl),) + buf.shape[-2:],
-            )
-        outbufs.append(outbuf)
-
-        return TSFrame(buffers=outbufs, EOS=frame.EOS, metadata=frame.metadata)
+            buf = buf.replace(data=data, shape=shape)
+            output_frame.append(buf)

@@ -91,3 +91,37 @@ def test_factory_created_class_names():
 
     assert TSSink.__name__ == "TSSimpleSGNSink"
     assert TSTransform.__name__ == "TSSimpleSGNTransform"
+
+
+def test_factory_element_new_method():
+    """Test the new() method implementation for factory-created elements."""
+    TSTransform = make_ts_element(SimpleSGNTransform)
+    transform = TSTransform(
+        name="test", sink_pad_names=["input"], source_pad_names=["output"]
+    )
+
+    # The new() method should return frames from outframes dict
+    output_pad = transform.srcs["output"]
+
+    # Initially should return None when no frame is in outframes
+    result = transform.new(output_pad)
+    assert result is None
+
+    # After adding a frame to outframes, new() should return it
+    from sgnts.base import TSFrame
+    from sgnts.base.buffer import SeriesBuffer
+
+    test_frame = TSFrame(
+        buffers=[
+            SeriesBuffer(
+                offset=0,
+                sample_rate=256,
+                shape=(256,),
+                data=None,
+            )
+        ]
+    )
+    transform.outframes[output_pad] = test_frame
+
+    result = transform.new(output_pad)
+    assert result is test_frame

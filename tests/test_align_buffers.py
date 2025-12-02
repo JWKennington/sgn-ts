@@ -377,3 +377,165 @@ class TestAlignBuffersIntegration:
 
         # Number of buffers should match number of aligned slices
         assert len(prepared_high.buffers) == len(aligned_high.slices)
+
+
+@dataclass(kw_only=True)
+class SimpleAdder(TSTransform):
+    """Simple two-input adder for testing align_buffers."""
+
+    def configure(self) -> None:
+        self.adapter_config.align_buffers = True
+        self.adapter_config.skip_gaps = True
+
+    @validator.num_pads(sink_pads=2, source_pads=1)
+    def validate(self) -> None:
+        pass
+
+    def internal(self) -> None:
+        """Add two input frames buffer by buffer."""
+        super().internal()
+
+        input_frames = self.next_inputs()
+        _, output_frame = self.next_output()
+
+        # Get the two input frames
+        frame1, frame2 = input_frames.values()
+
+        # Check that frames have same number of buffers
+        assert len(frame1.buffers) == len(frame2.buffers), (
+            f"Input frames have different number of buffers: "
+            f"{len(frame1.buffers)} vs {len(frame2.buffers)}"
+        )
+
+        # Add corresponding buffers
+        for buf1, buf2 in zip(frame1.buffers, frame2.buffers):
+            # Check alignment
+            assert (
+                buf1.offset == buf2.offset
+            ), f"Buffers not aligned: {buf1.offset} vs {buf2.offset}"
+            assert (
+                buf1.samples == buf2.samples
+            ), f"Buffers have different samples: {buf1.samples} vs {buf2.samples}"
+
+            # Handle gaps
+            if buf1.is_gap or buf2.is_gap:
+                data = None
+            else:
+                assert buf1.data is not None and buf2.data is not None
+                data = buf1.data + buf2.data
+
+            output_buf = SeriesBuffer(
+                data=data,
+                offset=buf1.offset,
+                sample_rate=buf1.sample_rate,
+                shape=buf1.shape,
+            )
+            output_frame.append(output_buf)
+
+
+class TestAlignBuffersPipeline:
+    """Pipeline-based integration tests for align_buffers"""
+
+    def test_align_buffers_with_multi_buffer_frames(self):
+        """Test that align_buffers correctly aligns multi-buffer frames.
+
+        This test creates two sources with different buffer boundaries:
+        - Pad 1: data [0-150 samples), gap [150-200 samples), data [200-384 samples)
+        - Pad 2: data [0-128 samples), gap [128-256 samples), data [256-384 samples)
+
+        With skip_gaps=True, the intersection of non-gap regions creates boundaries at:
+        0, 8192, 16384, 24576 (in offset units) = 0, 128, 256, 384 samples
+
+        After alignment, both pads should have 3 buffers:
+        - Buffer 0: [0-8192) = 128 samples - data
+        - Buffer 1: [8192-16384) = 128 samples - gap
+        - Buffer 2: [16384-24576) = 128 samples - data
+        """
+        sample_rate = 256
+
+        # Pad 1: data [0-150), gap [150-200), data [200-384)
+        buffers1 = [
+            SeriesBuffer(
+                offset=Offset.fromsamples(0, sample_rate),
+                sample_rate=sample_rate,
+                data=numpy.ones(150),
+                shape=(150,),
+            ),
+            SeriesBuffer(
+                offset=Offset.fromsamples(150, sample_rate),
+                sample_rate=sample_rate,
+                data=None,  # Gap
+                shape=(50,),
+            ),
+            SeriesBuffer(
+                offset=Offset.fromsamples(200, sample_rate),
+                sample_rate=sample_rate,
+                data=numpy.ones(184) * 2,
+                shape=(184,),
+            ),
+        ]
+
+        # Pad 2: data [0-128), gap [128-256), data [256-384)
+        buffers2 = [
+            SeriesBuffer(
+                offset=Offset.fromsamples(0, sample_rate),
+                sample_rate=sample_rate,
+                data=numpy.ones(128) * 10,
+                shape=(128,),
+            ),
+            SeriesBuffer(
+                offset=Offset.fromsamples(128, sample_rate),
+                sample_rate=sample_rate,
+                data=None,  # Gap
+                shape=(128,),
+            ),
+            SeriesBuffer(
+                offset=Offset.fromsamples(256, sample_rate),
+                sample_rate=sample_rate,
+                data=numpy.ones(128) * 20,
+                shape=(128,),
+            ),
+        ]
+
+        frame1 = TSFrame(buffers=buffers1)
+        frame2 = TSFrame(buffers=buffers2)
+
+        source1 = TSIterSource(
+            name="src1",
+            source_pad_names=["in1"],
+            frames=[frame1],
+            t0=0,
+        )
+        source2 = TSIterSource(
+            name="src2",
+            source_pad_names=["in2"],
+            frames=[frame2],
+            t0=0,
+        )
+
+        # Create adder with align_buffers enabled
+        adder = SimpleAdder(
+            name="adder",
+            sink_pad_names=["in1", "in2"],
+            source_pad_names=["out"],
+        )
+
+        sink = NullSeriesSink(
+            name="snk",
+            sink_pad_names=["out"],
+            verbose=True,
+            adapter_config=AdapterConfig(disable=True),
+        )
+
+        # Connect sources to adder
+        pipeline = Pipeline()
+        pipeline.connect(source1, adder)
+        pipeline.connect(source2, adder)
+        pipeline.connect(adder, sink)
+
+        # Run the pipeline
+        pipeline.run()
+
+        # The adder should have processed the frames
+        # With align_buffers=True, the buffers should be aligned to match
+        # We expect the assertion in internal() to pass, confirming alignment
