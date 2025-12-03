@@ -2,7 +2,8 @@ from dataclasses import dataclass
 
 from sgn import validator
 
-from sgnts.base import TSTransform
+from sgnts.base import TSFrame, TSTransform
+from sgnts.decorators import transform
 
 
 @dataclass
@@ -20,13 +21,9 @@ class Amplify(TSTransform):
     def validate(self) -> None:
         pass
 
-    def internal(self) -> None:
+    @transform.one_to_one
+    def process(self, input_frame: TSFrame, output_frame: TSFrame) -> None:
         """Amplify non-gap data by the factor."""
-        super().internal()
-
-        _, input_frame = self.next_input()
-        _, output_frame = self.next_output()
-
         for buf in input_frame:
             if not buf.is_gap:
                 assert buf.data is not None

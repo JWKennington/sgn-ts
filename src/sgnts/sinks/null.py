@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
-from sgnts.base import Offset, TSSink
+from sgn.base import SinkPad
+
+from sgnts.base import Offset, TSFrame, TSSink
 from sgnts.utils import gpsnow
 
 
@@ -16,11 +18,9 @@ class NullSeriesSink(TSSink):
 
     verbose: bool = False
 
-    def internal(self) -> None:
+    def process(self, input_frames: dict[SinkPad, TSFrame]) -> None:
         """Print frames if verbose."""
-        super().internal()
-
-        for sink_pad, frame in self.next_inputs().items():
+        for sink_pad, frame in input_frames.items():
             if frame.EOS:
                 self.mark_eos(sink_pad)
             if self.verbose:

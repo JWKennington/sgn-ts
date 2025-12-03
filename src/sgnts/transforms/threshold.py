@@ -6,10 +6,12 @@ from sgn import validator
 from sgnts.base import (
     Offset,
     SeriesBuffer,
+    TSFrame,
     TSSlice,
     TSSlices,
     TSTransform,
 )
+from sgnts.decorators import transform
 
 
 # FIXME: only supports numpy and not pytorch
@@ -85,12 +87,9 @@ class Threshold(TSTransform):
             for i in range(0, len(idx), 2)
         ]
 
-    def internal(self) -> None:
+    @transform.one_to_one
+    def process(self, input_frame: TSFrame, output_frame: TSFrame) -> None:
         """Process frame to threshold data based on absolute value."""
-        super().internal()
-
-        _, input_frame = self.next_input()
-        _, output_frame = self.next_output()
 
         boundary_offsets = TSSlice(
             input_frame[0].offset,

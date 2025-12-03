@@ -3,7 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 from sgn import validator
 
-from sgnts.base import Time, TSSink
+from sgnts.base import Time, TSFrame, TSSink
+from sgnts.decorators import sink
 
 
 @dataclass(kw_only=True)
@@ -51,13 +52,11 @@ class DumpSeriesSink(TSSink):
         with open(self.fname, "ab") as f:
             np.savetxt(f, out)
 
-    def internal(self) -> None:
+    @sink.single_pad
+    def process(self, input_frame: TSFrame) -> None:
         """Write out time-series data."""
-        super().internal()
-
-        input_pad, input_frame = self.next_input()
         if input_frame.EOS:
-            self.mark_eos(input_pad)
+            self.mark_eos(self.sink_pads[0])
         if self.verbose is True:
             print(input_frame)
         for buf in input_frame:

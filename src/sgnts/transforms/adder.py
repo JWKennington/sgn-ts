@@ -3,13 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sgn import validator
+from sgn.base import SinkPad
 
 from sgnts.base import (
     ArrayBackend,
     NumpyBackend,
     SeriesBuffer,
+    TSFrame,
     TSTransform,
 )
+from sgnts.decorators import transform
 
 
 @dataclass
@@ -38,45 +41,45 @@ class Adder(TSTransform):
     def validate(self) -> None:
         pass
 
-    def internal(self) -> None:
+    @transform.many_to_one
+    def process(
+        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSFrame
+    ) -> None:
         """Add up all the frames from all the sink pads."""
-        super().internal()
-
-        input_frames = list(self.next_inputs().values())
-        _, output_frame = self.next_output()
+        frames = list(input_frames.values())
 
         # Sanity check frames
         assert (
-            len({f.sample_rate for f in input_frames}) == 1
+            len({f.sample_rate for f in frames}) == 1
         ), "Sample rate of frames must be the same"
-        assert len({f.offset for f in input_frames}) == 1, "Frames must be aligned"
-        assert len({f.end_offset for f in input_frames}) == 1, "Frames must be aligned"
+        assert len({f.offset for f in frames}) == 1, "Frames must be aligned"
+        assert len({f.end_offset for f in frames}) == 1, "Frames must be aligned"
 
         if self.addslices_map is None:
             assert (
-                len({f.shape for f in input_frames}) == 1
+                len({f.shape for f in frames}) == 1
             ), "Shape of frames must be the same"
         else:
             assert (
-                len({f.shape[-1] for f in input_frames}) == 1
+                len({f.shape[-1] for f in frames}) == 1
             ), "Size of last dimension must be the same"
 
-        if all(frame.is_gap for frame in input_frames):
+        if all(frame.is_gap for frame in frames):
             # Return a gap buffer if all frames are gaps
             out = None
-            shape = input_frames[0].shape
+            shape = frames[0].shape
         else:
             # use the first frame as basis
-            if len(input_frames[0]) == 1:
-                out = input_frames[0][0].filleddata(self.backend.zeros)
+            if len(frames[0]) == 1:
+                out = frames[0][0].filleddata(self.backend.zeros)
             else:
                 out = self.backend.cat(
-                    [buf.filleddata(self.backend.zeros) for buf in input_frames[0]],
+                    [buf.filleddata(self.backend.zeros) for buf in frames[0]],
                     axis=-1,
                 )
             shape = out.shape
             # add to the first frame
-            for i, f in enumerate(input_frames[1:]):
+            for i, f in enumerate(frames[1:]):
                 i0 = 0
                 for buf in f:
                     if not buf.is_gap:
@@ -92,8 +95,8 @@ class Adder(TSTransform):
 
         output_frame.append(
             SeriesBuffer(
-                offset=input_frames[0].offset,
-                sample_rate=input_frames[0].sample_rate,
+                offset=frames[0].offset,
+                sample_rate=frames[0].sample_rate,
                 data=out,
                 shape=shape,
             )

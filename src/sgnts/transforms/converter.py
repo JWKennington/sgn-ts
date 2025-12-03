@@ -4,8 +4,9 @@ from dataclasses import dataclass
 
 import numpy as np
 from sgn import validator
+from sgn.base import SinkPad, SourcePad
 
-from sgnts.base import TSTransform
+from sgnts.base import TSFrame, TSTransform
 
 # Try to import torch, but don't fail if it's not available
 try:
@@ -75,13 +76,12 @@ class Converter(TSTransform):
     def validate(self) -> None:
         pass
 
-    def internal(self) -> None:
+    def process(
+        self,
+        input_frames: dict[SinkPad, TSFrame],
+        output_frames: dict[SourcePad, TSFrame],
+    ) -> None:
         """Convert data type and device."""
-        super().internal()
-
-        input_frames = self.next_inputs()
-        output_frames = self.next_outputs()
-
         # process each source pad's corresponding sink pad
         for pad in self.source_pads:
             frame = input_frames[self.pad_map[pad]]

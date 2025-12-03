@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
 from sgn import validator
+from sgn.base import SinkPad, SourcePad
 
-from sgnts.base import TSTransform
+from sgnts.base import TSFrame, TSTransform
 
 
 @dataclass
@@ -18,13 +19,12 @@ class Align(TSTransform):
     def validate(self) -> None:
         pass
 
-    def internal(self) -> None:
+    def process(
+        self,
+        input_frames: dict[SinkPad, TSFrame],
+        output_frames: dict[SourcePad, TSFrame],
+    ) -> None:
         """Pass through frames from sink to source."""
-        super().internal()
-
-        input_frames = self.next_inputs()
-        output_frames = self.next_outputs()
-
         # just pass through frames from sink to source
         for src_pad, sink_pad in self.pad_map.items():
             output_frames[src_pad].extend(input_frames[sink_pad])

@@ -8,8 +8,10 @@ from typing import Callable
 
 import numpy as np
 from sgn import validator
+from sgn.base import SinkPad
 
-from sgnts.base import SeriesBuffer, TSTransform
+from sgnts.base import SeriesBuffer, TSFrame, TSTransform
+from sgnts.decorators import transform
 
 
 @dataclass
@@ -47,12 +49,12 @@ class NaryTransform(TSTransform):
             shape=buffers[0].shape,
         )
 
-    def internal(self) -> None:
+    @transform.many_to_one
+    def process(
+        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSFrame
+    ) -> None:
         """Process multiple input frames to single output."""
-        super().internal()
-
-        input_buffers = [frame.buffers for frame in self.next_inputs().values()]
-        _, output_frame = self.next_output()
+        input_buffers = [frame.buffers for frame in input_frames.values()]
 
         # Check all prepared frames have same number of buffers, this
         # is to make sure that zip doesn't silently drop any buffers

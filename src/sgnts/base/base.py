@@ -886,7 +886,28 @@ class TSTransform(TimeSeriesMixin[TSFrame], TransformElement[TimeSpanFrame]):
     """A time-series transform element."""
 
     def internal(self) -> None:
+        """Process frames by calling child class implementation.
+
+        If the child class defines a process() method, it will be called with
+        input and output frame dictionaries. Otherwise, child classes should
+        override internal() directly.
+        """
         super().internal()
+
+        # Check if the element defines a process() method
+        if hasattr(self, "process"):
+            # Collect all input frames (both TSFrame and EventFrame)
+            inframes: dict[SinkPad, TimeSpanFrame] = {}
+            inframes.update(self.next_ts_inputs())
+            inframes.update(self.next_event_inputs())
+
+            # Collect all output frames (both TSFrame and EventFrame)
+            outframes: dict[SourcePad, TimeSpanFrame] = {}
+            outframes.update(self.next_ts_outputs())
+            outframes.update(self.next_event_outputs())
+
+            # Call the process method
+            self.process(inframes, outframes)  # type: ignore[attr-defined]
 
     def new(self, pad: SourcePad) -> TimeSpanFrame:
         """Return the output frame for the given pad.
@@ -912,7 +933,23 @@ class TSSink(TimeSeriesMixin[TSFrame], SinkElement[TimeSpanFrame]):
     """A time-series sink element."""
 
     def internal(self) -> None:
+        """Process frames by calling child class implementation.
+
+        If the child class defines a process() method, it will be called with
+        input frame dictionaries. Otherwise, child classes should override
+        internal() directly.
+        """
         super().internal()
+
+        # Check if the element defines a process() method
+        if hasattr(self, "process"):
+            # Collect all input frames (both TSFrame and EventFrame)
+            inframes: dict[SinkPad, TimeSpanFrame] = {}
+            inframes.update(self.next_ts_inputs())
+            inframes.update(self.next_event_inputs())
+
+            # Call the process method
+            self.process(inframes)  # type: ignore[attr-defined]
 
 
 @dataclass

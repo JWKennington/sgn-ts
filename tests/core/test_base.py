@@ -157,8 +157,7 @@ class TestAdapterConfig:
 
 
 class DummyTSTransform(TSTransform):
-    def process(self, inframe: dict, outframe: dict) -> None:
-        raise NotImplementedError
+    pass
 
 
 class Test_TSTransSink:
