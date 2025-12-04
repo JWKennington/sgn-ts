@@ -28,5 +28,5 @@ class Amplify(TSTransform):
             if not buf.is_gap:
                 assert buf.data is not None
                 data = buf.data * self.factor
-                buf = buf.replace(data=data)
+                buf = buf.copy(data=data)
             output_frame.append(buf)

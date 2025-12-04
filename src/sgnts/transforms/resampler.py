@@ -317,7 +317,7 @@ class Resampler(TSTransform):
                     data = None
                 else:
                     data = self.resample(buf.data, shape)
-                buf = buf.replace(
+                buf = buf.copy(
                     offset=output_frame.offset,
                     sample_rate=self.outrate,
                     data=data,

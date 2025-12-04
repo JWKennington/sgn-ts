@@ -123,5 +123,5 @@ class Converter(TSTransform):
                         else:
                             raise ValueError("Unsupported data type")
 
-                buf = buf.replace(data=out)
+                buf = buf.copy(data=out)
                 output_frames[pad].append(buf)

@@ -636,8 +636,8 @@ class TestEventFrame:
         with pytest.raises(AssertionError, match="Gap between buffer"):
             frame.validate_span()
 
-    def test_series_buffer_replace_is_gap_true(self):
-        """Test SeriesBuffer.replace() with is_gap=True parameter"""
+    def test_series_buffer_copy_is_gap_true(self):
+        """Test SeriesBuffer.copy() with is_gap=True parameter"""
         # Create a non-gap buffer
         buffer = SeriesBuffer(
             offset=0,
@@ -648,12 +648,12 @@ class TestEventFrame:
         assert not buffer.is_gap
 
         # Replace with is_gap=True should create a gap buffer (data=None)
-        new_buffer = buffer.replace(is_gap=True)
+        new_buffer = buffer.copy(is_gap=True)
         assert new_buffer.is_gap
         assert new_buffer.data is None
 
-    def test_series_buffer_replace_is_gap_false(self):
-        """Test SeriesBuffer.replace() with is_gap=False parameter"""
+    def test_series_buffer_copy_is_gap_false(self):
+        """Test SeriesBuffer.copy() with is_gap=False parameter"""
         # Create a gap buffer
         gap_buffer = SeriesBuffer(
             offset=0,
@@ -665,6 +665,6 @@ class TestEventFrame:
 
         # Replace with is_gap=False and new data
         new_data = numpy.zeros(256)
-        new_buffer = gap_buffer.replace(is_gap=False, data=new_data)
+        new_buffer = gap_buffer.copy(is_gap=False, data=new_data)
         assert not new_buffer.is_gap
         assert new_buffer.data is new_data

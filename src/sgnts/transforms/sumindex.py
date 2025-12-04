@@ -45,5 +45,5 @@ class SumIndex(TSTransform):
                 data = self.backend.stack(data_all)
                 shape = data.shape
 
-            buf = buf.replace(data=data, shape=shape)
+            buf = buf.copy(data=data, shape=shape)
             output_frame.append(buf)

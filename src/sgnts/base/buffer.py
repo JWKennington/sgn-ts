@@ -432,7 +432,7 @@ class SeriesBuffer(TimeSpanLike):
     def isfinite(self):
         return self.slice.isfinite()
 
-    def replace(
+    def copy(
         self,
         offset: int | None = None,
         sample_rate: int | None = None,
@@ -441,7 +441,10 @@ class SeriesBuffer(TimeSpanLike):
         shape: tuple | None = None,
         backend: type[ArrayBackend] | None = None,
     ) -> SeriesBuffer:
-        """Returns a new TSFrame with the new attributes replaced.
+        """Returns a copy of the TSFrame with requested modifications.
+
+        Any attributes not being changed will inherit from the original
+        TSFrame.
 
         Args:
             offset:
@@ -467,8 +470,8 @@ class SeriesBuffer(TimeSpanLike):
         shape = self.shape if shape is None else shape
         backend = self.backend if backend is None else backend
 
-        # using data=None as a case to decide whether to replace the buffer's
-        # data with user-replaced data needs extra care due to data=None also
+        # using data=None as a case to decide whether to modify the buffer's
+        # data with user-specified data needs extra care due to data=None also
         # being used to define the presence of a gap, so instead we enumerate
         # the possible cases based on whether is_gap is set and what the value
         # is if it is set.

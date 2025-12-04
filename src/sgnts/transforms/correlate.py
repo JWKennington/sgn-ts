@@ -100,7 +100,7 @@ class Correlate(TSTransform):
                 data = self.corr(buf.data)
                 shape = data.shape
 
-            buf = buf.replace(offset=output_frame.offset, data=data, shape=shape)
+            buf = buf.copy(offset=output_frame.offset, data=data, shape=shape)
             output_frame.append(buf)
 
     def internal(self) -> None:
@@ -299,7 +299,7 @@ class AdaptiveCorrelate(Correlate):
                 data = win_cur * data_cur + win_new * data_new
                 shape = data.shape
 
-                buf = buf.replace(offset=output_frame.offset, data=data, shape=shape)
+                buf = buf.copy(offset=output_frame.offset, data=data, shape=shape)
                 output_frame.append(buf)
 
             # Remove the new filters to indicate adaptation is complete

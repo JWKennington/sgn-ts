@@ -46,5 +46,5 @@ class Matmul(TSTransform):
                 data = self.backend.matmul(self.matrix, buf.data)
                 shape = data.shape
 
-            buf = buf.replace(data=data, shape=shape)
+            buf = buf.copy(data=data, shape=shape)
             output_frame.append(buf)
