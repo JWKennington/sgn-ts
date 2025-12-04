@@ -34,6 +34,7 @@ from sgnts.base.buffer import (
     EventFrame,
     SeriesBuffer,
     TimeSpanFrame,
+    TSCollectFrame,
     TSFrame,
 )
 from sgnts.base.offset import Offset
@@ -183,13 +184,16 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
         """
         return self.next_ts_input()
 
-    def next_output(self) -> tuple[SourcePad, TSFrame]:
-        """Convenience method - get single TSFrame output.
+    def next_output(self) -> tuple[SourcePad, TSCollectFrame]:
+        """Convenience method - get single TSCollectFrame output.
 
         Equivalent to next_ts_output(). For transforms that only work with TSFrames.
 
+        Note: Elements using this method must call `.close()` on the collector
+        when done populating buffers.
+
         Returns:
-            TSFrame, empty output frame ready to be populated
+            tuple[SourcePad, TSCollectFrame], pad and collector for output frame
         """
         return self.next_ts_output()
 
@@ -203,13 +207,16 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
         """
         return self.next_ts_inputs()
 
-    def next_outputs(self) -> dict[SourcePad, TSFrame]:
-        """Convenience method - get all TSFrame outputs.
+    def next_outputs(self) -> dict[SourcePad, TSCollectFrame]:
+        """Convenience method - get all TSCollectFrame outputs.
 
         Equivalent to next_ts_outputs(). For transforms that only work with TSFrames.
 
+        Note: Elements using this method must call `.close()` on each collector
+        when done populating buffers.
+
         Returns:
-            dict[SourcePad, TSFrame], dictionary of empty output frames
+            dict[SourcePad, TSCollectFrame], dictionary of collectors for output frames
         """
         return self.next_ts_outputs()
 
@@ -288,11 +295,15 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
                 result[pad] = frame
         return result
 
-    def next_ts_output(self) -> tuple[SourcePad, TSFrame]:
-        """Get single TSFrame for output with offset/noffset from preparedoutoffsets.
+    def next_ts_output(self) -> tuple[SourcePad, TSCollectFrame]:
+        """Get single TSCollectFrame for output with offsets from preparedoutoffsets.
+
+        Note: The caller must call `.close()` on the collector when done
+        populating buffers.
 
         Returns:
-            TSFrame, an empty frame ready to be populated
+            tuple[SourcePad, TSCollectFrame], pad and collector for the output
+            frame
 
         Raises:
             AssertionError if there is not exactly one TS output pad
@@ -303,15 +314,15 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
         ), f"next_ts_output() requires exactly one TS output pad, got {len(all_ts)}"
         return next(iter(all_ts.items()))
 
-    def next_ts_outputs(self) -> dict[SourcePad, TSFrame]:
-        """Get all TSFrames for output pads configured as TS outputs.
+    def next_ts_outputs(self) -> dict[SourcePad, TSCollectFrame]:
+        """Get all TSCollectFrames for output pads configured as TS outputs.
 
-        Creates TSFrame instances with offset/noffset from preparedoutoffsets
-        for all source pads configured to produce TSFrame. The frames are
-        automatically registered in self.outframes for return.
+        Creates TSFrame instances with offset/noffset from preparedoutoffsets,
+        then creates TSCollectFrame collectors for atomic buffer population.
+        The parent TSFrames are automatically registered in self.outframes.
 
         Returns:
-            dict[SourcePad, TSFrame], mapping of source pads to empty TSFrames
+            dict[SourcePad, TSCollectFrame], mapping of source pads to collectors
         """
         offset = self.preparedoutoffsets["offset"]
         noffset = self.preparedoutoffsets["noffset"]
@@ -319,13 +330,14 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
             frame.EOS for frame in self.preparedframes.values() if frame is not None
         )
 
-        result: dict[SourcePad, TSFrame] = {}
+        result: dict[SourcePad, TSCollectFrame] = {}
         for pad in self.source_pads:
             pad_name = self.rsrcs[pad]  # type: ignore[attr-defined]
             if self.output_frame_types.get(pad_name, TSFrame) == TSFrame:
                 frame = TSFrame(offset=offset, noffset=noffset, EOS=at_EOS)
-                result[pad] = frame
-                # Automatically register in outframes
+                collector = frame.fill()
+                result[pad] = collector
+                # Automatically register the parent frame in outframes
                 self.outframes[pad] = frame
         return result
 
@@ -911,13 +923,18 @@ class TSTransform(TimeSeriesMixin[TSFrame], TransformElement[TimeSpanFrame]):
             inframes.update(self.next_ts_inputs())
             inframes.update(self.next_event_inputs())
 
-            # Collect all output frames (both TSFrame and EventFrame)
-            outframes: dict[SourcePad, TimeSpanFrame] = {}
-            outframes.update(self.next_ts_outputs())
+            # Collect all output collectors/frames (TSCollectFrame or EventFrame)
+            ts_collectors = self.next_ts_outputs()
+            outframes: dict[SourcePad, TimeSpanFrame | TSCollectFrame] = {}
+            outframes.update(ts_collectors)
             outframes.update(self.next_event_outputs())
 
             # Call the process method
             self.process(inframes, outframes)  # type: ignore[attr-defined]
+
+            # Close all TS collectors to commit buffers to parent frames
+            for collector in ts_collectors.values():
+                collector.close()
 
     def new(self, pad: SourcePad) -> TimeSpanFrame:
         """Return the output frame for the given pad.

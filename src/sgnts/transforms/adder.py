@@ -9,6 +9,7 @@ from sgnts.base import (
     ArrayBackend,
     NumpyBackend,
     SeriesBuffer,
+    TSCollectFrame,
     TSFrame,
     TSTransform,
 )
@@ -43,7 +44,7 @@ class Adder(TSTransform):
 
     @transform.many_to_one
     def process(
-        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSFrame
+        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSCollectFrame
     ) -> None:
         """Add up all the frames from all the sink pads."""
         frames = list(input_frames.values())

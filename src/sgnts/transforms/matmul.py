@@ -8,6 +8,7 @@ from sgnts.base import (
     Array,
     ArrayBackend,
     NumpyBackend,
+    TSCollectFrame,
     TSFrame,
     TSTransform,
 )
@@ -36,7 +37,7 @@ class Matmul(TSTransform):
         pass
 
     @transform.one_to_one
-    def process(self, input_frame: TSFrame, output_frame: TSFrame) -> None:
+    def process(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None:
         """Perform matrix multiplication on non-gap data."""
         for buf in input_frame:
             if buf.is_gap:

@@ -8,24 +8,24 @@ from typing import TYPE_CHECKING, Callable, TypeVar
 if TYPE_CHECKING:
     from sgn.base import SinkPad, SourcePad
 
-    from sgnts.base import TSFrame, TSTransform
+    from sgnts.base import TSCollectFrame, TSFrame, TSTransform
 
 T = TypeVar("T", bound="TSTransform")
 
 
 def one_to_one(
-    method: Callable[[T, TSFrame, TSFrame], None],
-) -> Callable[[T, dict[SinkPad, TSFrame], dict[SourcePad, TSFrame]], None]:
+    method: Callable[[T, TSFrame, TSCollectFrame], None],
+) -> Callable[[T, dict[SinkPad, TSFrame], dict[SourcePad, TSCollectFrame]], None]:
     """Decorator for simple one-to-one transforms.
 
     Transforms the simpler signature::
 
-        def process(self, input_frame: TSFrame, output_frame: TSFrame) -> None
+        def process(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None
 
     Into the dict-based signature expected by TSTransform::
 
         def process(self, input_frames: dict[SinkPad, TSFrame],
-                    output_frames: dict[SourcePad, TSFrame]) -> None
+                    output_frames: dict[SourcePad, TSCollectFrame]) -> None
 
     Usage::
 
@@ -33,7 +33,9 @@ def one_to_one(
 
         class MyTransform(TSTransform):
             @transform.one_to_one
-            def process(self, input_frame: TSFrame, output_frame: TSFrame) -> None:
+            def process(
+                self, input_frame: TSFrame, output_frame: TSCollectFrame
+            ) -> None:
                 for buf in input_frame:
                     output_frame.append(buf)
     """
@@ -42,7 +44,7 @@ def one_to_one(
     def wrapper(
         self: T,
         input_frames: dict[SinkPad, TSFrame],
-        output_frames: dict[SourcePad, TSFrame],
+        output_frames: dict[SourcePad, TSCollectFrame],
     ) -> None:
         assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
             f"@transform.one_to_one requires exactly one sink and source pad, "
@@ -57,21 +59,21 @@ def one_to_one(
 
 
 def many_to_one(
-    method: Callable[[T, dict[SinkPad, TSFrame], TSFrame], None],
-) -> Callable[[T, dict[SinkPad, TSFrame], dict[SourcePad, TSFrame]], None]:
+    method: Callable[[T, dict[SinkPad, TSFrame], TSCollectFrame], None],
+) -> Callable[[T, dict[SinkPad, TSFrame], dict[SourcePad, TSCollectFrame]], None]:
     """Decorator for many-to-one transforms.
 
     Transforms the simpler signature::
 
         def process(
-            self, input_frames: dict[SinkPad, TSFrame], output_frame: TSFrame
+            self, input_frames: dict[SinkPad, TSFrame], output_frame: TSCollectFrame
         ) -> None
 
     Into the dict-based signature expected by TSTransform::
 
         def process(
             self, input_frames: dict[SinkPad, TSFrame],
-            output_frames: dict[SourcePad, TSFrame]
+            output_frames: dict[SourcePad, TSCollectFrame]
         ) -> None
 
     Usage::
@@ -81,7 +83,7 @@ def many_to_one(
         class MyTransform(TSTransform):
             @transform.many_to_one
             def process(
-                self, input_frames: dict[SinkPad, TSFrame], output_frame: TSFrame
+                self, input_frames: dict[SinkPad, TSFrame], output_frame: TSCollectFrame
             ) -> None:
                 # Process multiple inputs to single output
                 pass
@@ -91,7 +93,7 @@ def many_to_one(
     def wrapper(
         self: T,
         input_frames: dict[SinkPad, TSFrame],
-        output_frames: dict[SourcePad, TSFrame],
+        output_frames: dict[SourcePad, TSCollectFrame],
     ) -> None:
         assert len(self.source_pads) == 1, (
             f"@transform.many_to_one requires exactly one source pad, "

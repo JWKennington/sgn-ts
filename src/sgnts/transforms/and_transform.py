@@ -9,6 +9,7 @@ from sgnts.base import (
     ArrayBackend,
     NumpyBackend,
     SeriesBuffer,
+    TSCollectFrame,
     TSFrame,
     TSSlice,
     TSSlices,
@@ -57,7 +58,7 @@ class ANDTransform(TSTransform):
 
     @transform.many_to_one
     def process(
-        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSFrame
+        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSCollectFrame
     ) -> None:
         """Generate output frame with AND logic across all inputs.
 

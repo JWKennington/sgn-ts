@@ -12,6 +12,7 @@ from sgnts.base.buffer import EventBuffer
 from sgnts.base.buffer import EventFrame
 from sgnts.base.buffer import SeriesBuffer
 from sgnts.base.buffer import TimeSpanFrame
+from sgnts.base.buffer import TSCollectFrame
 from sgnts.base.buffer import TSFrame
 from sgnts.base.offset import Offset
 from sgnts.base.slice_tools import TSSlice

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from sgn import validator
 from sgn.base import SinkPad, SourcePad
 
-from sgnts.base import TSFrame, TSTransform
+from sgnts.base import TSCollectFrame, TSFrame, TSTransform
 
 
 @dataclass
@@ -22,7 +22,7 @@ class Align(TSTransform):
     def process(
         self,
         input_frames: dict[SinkPad, TSFrame],
-        output_frames: dict[SourcePad, TSFrame],
+        output_frames: dict[SourcePad, TSCollectFrame],
     ) -> None:
         """Pass through frames from sink to source."""
         # just pass through frames from sink to source

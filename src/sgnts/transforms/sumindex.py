@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from sgn import validator
 
-from sgnts.base import ArrayBackend, NumpyBackend, TSFrame, TSTransform
+from sgnts.base import ArrayBackend, NumpyBackend, TSCollectFrame, TSFrame, TSTransform
 from sgnts.decorators import transform
 
 
@@ -28,7 +28,7 @@ class SumIndex(TSTransform):
             assert isinstance(sl, slice)
 
     @transform.one_to_one
-    def process(self, input_frame: TSFrame, output_frame: TSFrame) -> None:
+    def process(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None:
         """Sum array values over slices."""
         for buf in input_frame:
             if buf.is_gap:

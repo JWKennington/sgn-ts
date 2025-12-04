@@ -6,6 +6,7 @@ from sgn import validator
 from sgnts.base import (
     Offset,
     SeriesBuffer,
+    TSCollectFrame,
     TSFrame,
     TSSlice,
     TSSlices,
@@ -88,7 +89,7 @@ class Threshold(TSTransform):
         ]
 
     @transform.one_to_one
-    def process(self, input_frame: TSFrame, output_frame: TSFrame) -> None:
+    def process(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None:
         """Process frame to threshold data based on absolute value."""
 
         boundary_offsets = TSSlice(

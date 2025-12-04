@@ -4,7 +4,7 @@ import numpy as np
 from scipy.signal import correlate
 from sgn import validator
 
-from sgnts.base import Offset, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import Offset, SeriesBuffer, TSCollectFrame, TSFrame, TSTransform
 from sgnts.decorators import transform
 
 # Try to import torch, but don't fail if it's not available
@@ -293,7 +293,7 @@ class Resampler(TSTransform):
         return out.view(outshape)
 
     @transform.one_to_one
-    def process(self, input_frame: TSFrame, output_frame: TSFrame) -> None:
+    def process(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None:
         """Resample input frame to output sample rate."""
         assert input_frame.sample_rate == self.inrate, (
             f"Frame sample rate {input_frame.sample_rate} doesn't match "

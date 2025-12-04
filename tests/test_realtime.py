@@ -24,6 +24,7 @@ def test_realtime(capsys):
             _, input_frame = self.next_input()
             _, output_frame = self.next_output()
             output_frame.extend(input_frame.buffers)
+            output_frame.close()
 
     pipeline = Pipeline()
 

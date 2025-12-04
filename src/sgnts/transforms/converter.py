@@ -6,7 +6,7 @@ import numpy as np
 from sgn import validator
 from sgn.base import SinkPad, SourcePad
 
-from sgnts.base import TSFrame, TSTransform
+from sgnts.base import TSCollectFrame, TSFrame, TSTransform
 
 # Try to import torch, but don't fail if it's not available
 try:
@@ -79,7 +79,7 @@ class Converter(TSTransform):
     def process(
         self,
         input_frames: dict[SinkPad, TSFrame],
-        output_frames: dict[SourcePad, TSFrame],
+        output_frames: dict[SourcePad, TSCollectFrame],
     ) -> None:
         """Convert data type and device."""
         # process each source pad's corresponding sink pad

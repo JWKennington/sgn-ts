@@ -437,6 +437,8 @@ class SimpleAdder(TSTransform):
             )
             output_frame.append(output_buf)
 
+        output_frame.close()
+
 
 class TestAlignBuffersPipeline:
     """Pipeline-based integration tests for align_buffers"""
@@ -529,7 +531,7 @@ class TestAlignBuffersPipeline:
             name="snk",
             sink_pad_names=["out"],
             verbose=True,
-            adapter_config=AdapterConfig(disable=True),
+            adapter_config=AdapterConfig(),
         )
 
         # Connect sources to adder

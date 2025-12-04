@@ -16,6 +16,7 @@ from sgnts.base import (
     EventFrame,
     Offset,
     TimeSpanFrame,
+    TSCollectFrame,
     TSFrame,
     TSTransform,
 )
@@ -78,7 +79,7 @@ class Correlate(TSTransform):
             os.append(scipy.signal.correlate(data, self.filters[j], mode="valid"))
         return numpy.vstack(os).reshape(shape[:-1] + (-1,))
 
-    def _transform(self, input_frame: TSFrame, output_frame: TSFrame) -> None:
+    def _transform(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None:
         """Helper to correlate input with current filters and populate output.
 
         Args:
@@ -106,9 +107,10 @@ class Correlate(TSTransform):
     def internal(self) -> None:
         super().internal()
 
-        _, output_frame = self.next_output()
+        _, output_collector = self.next_output()
         _, input_frame = self.next_input()
-        self._transform(input_frame, output_frame)
+        self._transform(input_frame, output_collector)
+        output_collector.close()
 
 
 @dataclass
@@ -269,7 +271,7 @@ class AdaptiveCorrelate(Correlate):
 
         # Get aligned buffer to see if overlaps with new filters
         _, input_frame = self.next_input()
-        _, output_frame = self.next_output()
+        _, output_collector = self.next_output()
 
         if self.can_adapt(input_frame):
             # Correlate with current filters
@@ -299,8 +301,8 @@ class AdaptiveCorrelate(Correlate):
                 data = win_cur * data_cur + win_new * data_new
                 shape = data.shape
 
-                buf = buf.copy(offset=output_frame.offset, data=data, shape=shape)
-                output_frame.append(buf)
+                buf = buf.copy(offset=output_collector.offset, data=data, shape=shape)
+                output_collector.append(buf)
 
             # Remove the new filters to indicate adaptation is complete
             self.filter_deque.popleft()
@@ -309,4 +311,7 @@ class AdaptiveCorrelate(Correlate):
             # Just do normal correlation with current filters
             assert self.filters_cur is not None
             self.filters = self._extract_filter(self.filters_cur)
-            self._transform(input_frame, output_frame)
+            self._transform(input_frame, output_collector)
+
+        # Close the collector to commit buffers
+        output_collector.close()

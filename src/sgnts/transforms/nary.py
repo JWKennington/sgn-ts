@@ -10,7 +10,7 @@ import numpy as np
 from sgn import validator
 from sgn.base import SinkPad
 
-from sgnts.base import SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import SeriesBuffer, TSCollectFrame, TSFrame, TSTransform
 from sgnts.decorators import transform
 
 
@@ -51,7 +51,7 @@ class NaryTransform(TSTransform):
 
     @transform.many_to_one
     def process(
-        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSFrame
+        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSCollectFrame
     ) -> None:
         """Process multiple input frames to single output."""
         input_buffers = [frame.buffers for frame in input_frames.values()]
