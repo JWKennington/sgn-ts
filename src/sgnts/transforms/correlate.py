@@ -140,10 +140,19 @@ class AdaptiveCorrelate(Correlate):
 
     filter_sink_name: str = "filters"
 
+    @property
+    def static_sink_pads(self) -> list[str]:  # type: ignore[override]
+        """Add the filter sink pad as an static sink pad."""
+        return [self.filter_sink_name]
+
     def __post_init__(self) -> None:
         """Setup the adaptive FIR filter"""
-        # Argument validation
-        self._validate_filters_pad()
+        # Mark filter sink as unaligned
+        if self.unaligned is not None:
+            if self.filter_sink_name not in self.unaligned:
+                self.unaligned = list(self.unaligned) + [self.filter_sink_name]
+        else:
+            self.unaligned = [self.filter_sink_name]
 
         # Call the parent's post init, this will setup all the appropriate pads
         super().__post_init__()
@@ -178,25 +187,6 @@ class AdaptiveCorrelate(Correlate):
             self.filters is not None
         ), "Filters must be provided during initialization"
         assert self.sample_rate != -1, "Sample rate must be specified (not -1)"
-
-    def _validate_filters_pad(self):
-        """Validate the filter sink pad before initializing the filter"""
-        # Make sure the filter sink name is not already in use
-        assert self.filter_sink_name not in self.sink_pad_names, (
-            f"Filter sink name '{self.filter_sink_name}' already exists "
-            f"in sink_pad_names: {self.sink_pad_names}"
-        )
-
-        # Check that if unaligned pads are specified, that the filter sink name MUST
-        # be one of them, if not included then add
-        if self.unaligned is not None:
-            if self.filter_sink_name not in self.unaligned:
-                self.unaligned = list(self.unaligned) + [self.filter_sink_name]
-        else:
-            self.unaligned = [self.filter_sink_name]
-
-        # Add the filter sink name to the sink pad names
-        self.sink_pad_names = list(self.sink_pad_names) + [self.filter_sink_name]
 
     @staticmethod
     def _extract_filter(item: EventBuffer | EventFrame) -> Array:
