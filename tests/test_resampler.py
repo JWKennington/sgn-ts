@@ -44,7 +44,7 @@ def test_valid_resampler():
         sink_pad_names=("H1",),
         inrate=1,
         outrate=2,
-        config=AdapterConfig(),
+        adapter_config=AdapterConfig(),
     )
 
 

@@ -110,7 +110,7 @@ def test_adder_multiple_buffers():
             source_pad_names=("A",),
             sink_pad_names=("A", "B"),
             max_age=max_age,
-            config=AdapterConfig(stride=Offset.fromsec(2), align_buffers=True),
+            adapter_config=AdapterConfig(stride=Offset.fromsec(2), align_buffers=True),
         ),
         NullSeriesSink(name="snk1", sink_pad_names=("H1",)),
         link_map={

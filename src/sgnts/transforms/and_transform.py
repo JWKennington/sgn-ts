@@ -48,7 +48,7 @@ class ANDTransform(TSTransform):
 
     def configure(self) -> None:
         # Explicitly disable adapter to prevent gap filling
-        self.config.disable = True
+        self.adapter_config.disable = True
         if self.output_shape is None:
             self.output_shape = ()
 

@@ -42,11 +42,11 @@ class Correlate(TSTransform):
         self.shape = self.filters.shape
 
         # apply latency offset shift: negative shift moves output backward in time
-        self.config.alignment(
+        self.adapter_config.alignment(
             overlap=(Offset.fromsamples(self.shape[-1] - 1, self.sample_rate), 0),
             shift=-Offset.fromsamples(self.latency, self.sample_rate),
         )
-        self.config.on_startup(pad_zeros=False)
+        self.adapter_config.on_startup(pad_zeros=False)
 
         self.sink_pad = self.sink_pads[0]
         self.source_pad = self.source_pads[0]
