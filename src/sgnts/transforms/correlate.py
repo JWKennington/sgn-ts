@@ -145,17 +145,10 @@ class AdaptiveCorrelate(Correlate):
         """Add the filter sink pad as an static sink pad."""
         return [self.filter_sink_name]
 
-    def __post_init__(self) -> None:
-        """Setup the adaptive FIR filter"""
-        # Mark filter sink as unaligned
-        if self.unaligned is not None:
-            if self.filter_sink_name not in self.unaligned:
-                self.unaligned = list(self.unaligned) + [self.filter_sink_name]
-        else:
-            self.unaligned = [self.filter_sink_name]
-
-        # Call the parent's post init, this will setup all the appropriate pads
-        super().__post_init__()
+    @property
+    def static_unaligned_sink_pads(self) -> list[str]:  # type: ignore[override]
+        """Declare that the filter sink pad is unaligned."""
+        return [self.filter_sink_name]
 
     def configure(self) -> None:
         super().configure()

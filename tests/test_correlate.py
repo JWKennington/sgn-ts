@@ -146,20 +146,6 @@ class TestAdaptiveCorrelate:
         assert isinstance(crl, AdaptiveCorrelate)
         assert crl.sink_pad_names == ["I1", "filters"]
 
-    def test_init_unaligned(self):
-        """Test creating without specifying filter_sink_name in the unaligned pads"""
-        init_filters = numpy.array([[1, 2, 3]])
-        crl = AdaptiveCorrelate(
-            filters=init_filters,
-            sample_rate=4096,
-            source_pad_names=["O1"],
-            sink_pad_names=["I1", "OtherUnaligned"],
-            unaligned=["OtherUnaligned"],
-            filter_sink_name="MissingUnaligned",
-        )
-        assert isinstance(crl, AdaptiveCorrelate)
-        assert "MissingUnaligned" in crl.unaligned
-
     def test_corr_no_adapt(self):
         """Test the corr method"""
         # Create correlate element

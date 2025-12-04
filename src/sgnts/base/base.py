@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import (
     Any,
+    ClassVar,
     Generic,
     Optional,
     Sequence,
@@ -55,31 +56,40 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
     - Optional adapter processing (overlap/stride/gap handling)
     - Timeout detection and EOS handling
 
+    Note:
+        Subclasses can customize alignment behavior by setting class-level
+        attributes:
+          - static_unaligned_sink_pads: Declare which sink pads should not be
+            aligned (e.g., EventFrame pads or auxiliary inputs).
+
     Args:
         max_age:
             int, the max age before timeout, in nanoseconds
         adapter_config:
             AdapterConfig, holds parameters used for audioadapter behavior
         unaligned:
-            list[str], the list of unaligned sink pads
+            list[str], the list of unaligned sink pads.
 
     """
 
+    # Class-level attributes for alignment configuration
+    static_unaligned_sink_pads: ClassVar[list[str]] = []
+
     max_age: int = 100 * Time.SECONDS
     adapter_config: AdapterConfig = field(default_factory=AdapterConfig)
-    unaligned: Optional[Sequence[str]] = None
+    unaligned: Sequence[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Initialize timeseries state."""
         super().__post_init__()
 
-        # First, determine which input pads actually require alignment
-        if self.unaligned is None:
-            self.unaligned_sink_pads = []
-        else:
-            self.unaligned_sink_pads = [
-                self.snks[name] for name in self.unaligned  # type: ignore[attr-defined]
-            ]
+        # Determine which user-provided input pads require alignment
+        unaligned_names = list(self.unaligned) + self.static_unaligned_sink_pads
+
+        # Convert pad names to SinkPad objects and store in instance variable
+        self.unaligned_sink_pads = [
+            self.snks[name] for name in unaligned_names  # type: ignore[attr-defined]
+        ]
         self.aligned_sink_pads = [
             p for p in self.sink_pads if p not in self.unaligned_sink_pads
         ]
