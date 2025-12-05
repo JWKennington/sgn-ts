@@ -11,6 +11,18 @@ from sgnts.transforms import Converter
 torch = pytest.importorskip("torch")
 
 
+class BreakData(TSTransform):
+    """Test helper that breaks data by setting it to a string."""
+
+    def configure(self):
+        self.adapter_config.enable = True
+
+    def new(self, pad):
+        for buf in self.preparedframes[self.sink_pads[0]]:
+            buf.data = "blah"
+        return self.preparedframes[self.sink_pads[0]]
+
+
 def test_invalid_converter():
     with pytest.raises(ValueError):
         Converter(
@@ -80,13 +92,6 @@ def test_invalid_converter():
 
 
 def test_broken_converter_2():
-
-    class BreakData(TSTransform):
-        def new(self, pad):
-            for buf in self.preparedframes[self.sink_pads[0]]:
-                buf.data = "blah"
-            return self.preparedframes[self.sink_pads[0]]
-
     pipeline = Pipeline()
 
     inrate = 256
@@ -121,18 +126,11 @@ def test_broken_converter_2():
             "snk1:snk:H1": "trans2:src:H1",
         },
     )
-    with pytest.raises(AttributeError):
+    with pytest.raises(ValueError):
         pipeline.run()
 
 
 def test_broken_converter_1():
-
-    class BreakData(TSTransform):
-        def new(self, pad):
-            for buf in self.preparedframes[self.sink_pads[0]]:
-                buf.data = "blah"
-            return self.preparedframes[self.sink_pads[0]]
-
     pipeline = Pipeline()
 
     inrate = 256
@@ -168,7 +166,7 @@ def test_broken_converter_1():
             "snk1:snk:H1": "trans2:src:H1",
         },
     )
-    with pytest.raises(AttributeError):
+    with pytest.raises(ValueError):
         pipeline.run()
 
 

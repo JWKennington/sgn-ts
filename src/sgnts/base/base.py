@@ -87,9 +87,11 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
         # Configure adapter and element-specific attributes
         self.configure()
 
-        # Initialize adapter-specific state only if adapter not disabled
+        self.is_adapter_enabled = self.adapter_config.is_enabled
+
+        # Initialize adapter-specific state only if adapter is enabled
         self.audioadapters = None
-        if not self.adapter_config.disable:
+        if self.is_adapter_enabled:
             self.overlap = self.adapter_config.overlap
             self.stride = self.adapter_config.stride
             self.pad_zeros_startup = self.adapter_config.pad_zeros_startup
@@ -235,7 +237,7 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
 
         # Determine if we're using alignment mode
         use_alignment = (
-            not self.adapter_config.disable and self.adapter_config.align_to is not None
+            self.is_adapter_enabled and self.adapter_config.align_to is not None
         )
 
         # Apply alignment if configured
@@ -466,8 +468,8 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
                     len(out) > 0
                 ), "No buffers returned from get_sliced_buffers for aligned processing"
 
-                # Apply adapter processing only if adapter not disabled
-                if not self.adapter_config.disable:
+                # Apply adapter processing only if adapter is enabled
+                if self.is_adapter_enabled:
                     out = self.__adapter(sink_pad, out)
 
                 self.preparedframes[sink_pad] = TSFrame(
@@ -489,7 +491,7 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
                         )
 
             # Set preparedoutoffsets for non-adapter case
-            if self.adapter_config.disable:
+            if not self.is_adapter_enabled:
                 self.preparedoutoffsets = {
                     "offset": earliest + self.offset_shift,
                     "noffset": min_latest - earliest,
