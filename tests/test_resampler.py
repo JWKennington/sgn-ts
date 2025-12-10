@@ -44,7 +44,7 @@ def test_valid_resampler():
         sink_pad_names=("H1",),
         inrate=1,
         outrate=2,
-        adapter_config=AdapterConfig,
+        adapter_config=AdapterConfig(),
     )
 
 
@@ -294,7 +294,7 @@ def test_empty_buffer_handling():
     frame = TSFrame(buffers=[empty_buffer], EOS=False)
 
     # Set up the resampler's prepared data (normally done by the framework)
-    resampler.preparedframes = {resampler.sink_pad: frame}
+    resampler.preparedframes = {resampler.sink_pads[0]: frame}
     resampler.preparedoutoffsets = {
         "offset": Offset.fromsamples(0, outrate),
         "noffset": Offset.fromsamples(0, outrate),

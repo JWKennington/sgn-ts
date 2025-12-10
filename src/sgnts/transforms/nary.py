@@ -5,9 +5,10 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from functools import wraps
-from typing import Callable, Optional
+from typing import Callable
 
 import numpy as np
+from sgn import validator
 from sgn.base import SourcePad
 
 from sgnts.base import SeriesBuffer, TSFrame, TSTransform
@@ -25,22 +26,12 @@ class NaryTransform(TSTransform):
             single output.
     """
 
-    op: Optional[Callable] = None
+    op: Callable | None = None
 
-    def __post_init__(self):
-        """Checks"""
-        super().__post_init__()
-        # Check op is not None
+    @validator.many_to_one
+    def validate(self) -> None:
         assert self.op is not None, "op must be provided"
-
-        # Check only 1 output pad
-        assert len(self.source_pads) == 1
-
-        # Validate the operator and pads
         self._validate_op()
-
-        # Extra attrs
-        self._data = None
 
     def _validate_op(self):
         """Validate the given operator to make sure it
@@ -106,11 +97,8 @@ class NaryTransform(TSTransform):
 class Multiply(NaryTransform):
     """Multiply transform"""
 
-    def __post_init__(self):
-        """Post init"""
-        # Force the operator to be multiplication
+    def configure(self) -> None:
         self.op = _multiply
-        super().__post_init__()
 
 
 def _multiply(*arrays):
@@ -125,11 +113,8 @@ def _multiply(*arrays):
 class Real(NaryTransform):
     """Extract Real component of single input"""
 
-    def __post_init__(self):
-        """Post init"""
-        # Force the operator to be multiplication
+    def configure(self) -> None:
         self.op = _real
-        super().__post_init__()
 
 
 def _real(*arrays):

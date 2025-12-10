@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
+from sgn import validator
 from sgn.base import SourcePad
 
 from sgnts.base import (
@@ -21,23 +21,21 @@ class Matmul(TSTransform):
 
     Args:
         matrix:
-            Optional[Array], the matrix to multiply the data with, out = matrix x data
+            Array | None, the matrix to multiply the data with, out = matrix x data
         backend:
             type[ArrayBackend], the array backend for array operations
     """
 
-    matrix: Optional[Array] = None
+    matrix: Array | None = None
     backend: type[ArrayBackend] = NumpyBackend
 
-    def __post_init__(self):
-        super().__post_init__()
-        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
-            f"MatMul requires exactly one sink pad and one source pad, "
-            f"got {len(self.sink_pads)} sink pads and "
-            f"{len(self.source_pads)} source pads"
-        )
-        assert self.matrix is not None, "Matrix must be provided for MatMul operation"
+    def configure(self) -> None:
+        assert self.matrix is not None
         self.shape = self.matrix.shape
+
+    @validator.one_to_one
+    def validate(self) -> None:
+        assert self.matrix is not None, "Matrix must be provided for MatMul operation"
 
     def new(self, pad: SourcePad) -> TSFrame:
         outbufs = []

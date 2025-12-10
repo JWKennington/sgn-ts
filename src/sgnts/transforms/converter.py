@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from sgn import validator
 from sgn.base import SourcePad
 
 from sgnts.base import SeriesBuffer, TSFrame, TSTransform
@@ -38,13 +39,7 @@ class Converter(TSTransform):
     dtype: str = "float32"
     device: str = "cpu"
 
-    def __post_init__(self):
-        assert set(self.source_pad_names) == set(self.sink_pad_names), (
-            f"Source and sink pad names must match. "
-            f"Source: {self.source_pad_names}, Sink: {self.sink_pad_names}"
-        )
-        super().__post_init__()
-
+    def configure(self) -> None:
         if self.backend == "numpy":
             if self.device != "cpu":
                 raise ValueError("Converting to numpy only supports device as cpu")
@@ -57,11 +52,11 @@ class Converter(TSTransform):
 
             if isinstance(self.dtype, str):
                 if self.dtype == "float64":
-                    self.dtype = torch.float64
+                    self.dtype = torch.float64  # type: ignore[assignment]
                 elif self.dtype == "float32":
-                    self.dtype = torch.float32
+                    self.dtype = torch.float32  # type: ignore[assignment]
                 elif self.dtype == "float16":
-                    self.dtype = torch.float16
+                    self.dtype = torch.float16  # type: ignore[assignment]
                 else:
                     raise ValueError(
                         "Supported torch data types: float64, float32, float16"
@@ -74,9 +69,12 @@ class Converter(TSTransform):
             raise ValueError("Supported backends: 'numpy' or 'torch'")
 
         self.pad_map = {
-            p: self.sink_pad_dict["%s:snk:%s" % (self.name, p.name.split(":")[-1])]
-            for p in self.source_pads
+            src_pad: self.snks[src_pad.pad_name] for src_pad in self.source_pads
         }
+
+    @validator.pad_names_match
+    def validate(self) -> None:
+        pass
 
     def new(self, pad: SourcePad) -> TSFrame:
         frame = self.preparedframes[self.pad_map[pad]]

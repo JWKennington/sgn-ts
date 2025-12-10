@@ -17,6 +17,15 @@ class AdapterConfig:
     """Config to hold parameters used for the audioadapter in _TSTransSink.
 
     Args:
+        enable:
+            bool | None, controls whether adapter processing is enabled.
+            - None (default): Auto-detect based on configuration
+              - Disabled if all config values remain at defaults
+              - Enabled if any non-default config is provided
+              - Enabled if any configuration method is called
+            - True: Force enable adapter processing
+            - False: Force disable adapter processing
+            Default: None
         overlap:
             tuple[int, int], the overlap before and after the data segment to process,
             in offsets
@@ -42,15 +51,123 @@ class AdapterConfig:
             across all pads. This expands gaps and shrinks data slices to ensure
             all buffers align to integer sample boundaries at the lowest rate.
             Default: False
+        offset_shift:
+            int, offset shift to apply to output buffers, in offsets This is
+            used for transforms that introduce latency or phase shifts. The
+            output offset will be shifted by this amount: offset +
+            offset_shift. Positive values shift forward in time, negative
+            values shift backward. For example, a filter with latency=2 samples
+            at rate=1 Hz would use offset_shift=-Offset.fromsamples(2, 1) to
+            shift output backward by 2 samples.
+            Default: 0 (no shift)
     """
 
+    enable: bool | None = None
     overlap: tuple[int, int] = (0, 0)
     stride: int = 0
     pad_zeros_startup: bool = False
     skip_gaps: bool = False
     backend: type[ArrayBackend] = NumpyBackend
-    align_to: Optional[int] = None
+    align_to: int | None = None
     align_buffers: bool = False
+    offset_shift: int = 0
+
+    @property
+    def is_enabled(self) -> bool:
+        """Check if adapter should be enabled.
+
+        Returns:
+            True if adapter is explicitly enabled or has non-default configuration.
+            False if adapter is explicitly disabled or has all default values.
+        """
+        if self.enable is False:
+            return False
+        if self.enable is True:
+            return True
+        # enable is None - auto-detect based on configuration
+        return (
+            self.overlap != (0, 0)
+            or self.stride != 0
+            or self.pad_zeros_startup
+            or self.skip_gaps
+            or self.backend != NumpyBackend
+            or self.align_to is not None
+            or self.align_buffers
+            or self.offset_shift != 0
+        )
+
+    def alignment(
+        self,
+        overlap: Optional[tuple[int, int]] = None,
+        stride: Optional[int] = None,
+        align_to: Optional[int] = None,
+        align_buffers: Optional[bool] = None,
+        shift: Optional[int] = None,
+    ) -> AdapterConfig:
+        """Configure alignment and buffering parameters.
+
+        Enables the adapter when called.
+
+        Args:
+            overlap: tuple[int, int], the overlap before and after the data segment
+            stride: int, the stride to produce, in offsets
+            align_to: int, alignment boundary in offsets
+            align_buffers: bool, align buffer slices to minimum sampling rate
+            shift: int, offset shift to apply to output buffers
+
+        Returns:
+            AdapterConfig, self for method chaining
+        """
+        if self.enable is None:
+            self.enable = True
+
+        if overlap is not None:
+            self.overlap = overlap
+        if stride is not None:
+            self.stride = stride
+        if align_to is not None:
+            self.align_to = align_to
+        if align_buffers is not None:
+            self.align_buffers = align_buffers
+        if shift is not None:
+            self.offset_shift = shift
+        return self
+
+    def on_gap(self, skip: Optional[bool] = None) -> AdapterConfig:
+        """Configure gap handling.
+
+        Enables the adapter when called.
+
+        Args:
+            skip: bool, produce a whole gap buffer if there are any gaps
+
+        Returns:
+            AdapterConfig, self for method chaining
+        """
+        if self.enable is None:
+            self.enable = True
+
+        if skip is not None:
+            self.skip_gaps = skip
+        return self
+
+    def on_startup(self, pad_zeros: Optional[bool] = None) -> AdapterConfig:
+        """Configure startup behavior.
+
+        Enables the adapter when called.
+
+        Args:
+            pad_zeros: bool, whether to pad zeros in front of the first buffer
+
+        Returns:
+            AdapterConfig, self for method chaining
+        """
+        if self.enable is None:
+            self.enable = True
+
+        if pad_zeros is not None:
+            self.pad_zeros_startup = pad_zeros
+        return self
 
     def valid_buffer(self, buf, data: Optional[Union[int, Array]] = 0):
         """

@@ -114,6 +114,46 @@ class TestAdapterConfig:
         with pytest.raises(AssertionError):
             ac.valid_buffer(inbuf)
 
+    def test_alignment_with_parameters(self):
+        """Test the alignment builder method with parameters"""
+        ac = AdapterConfig()
+
+        # Test setting stride
+        result = ac.alignment(stride=Offset.fromsec(2))
+        assert result is ac  # Check method chaining
+        assert ac.stride == Offset.fromsec(2)
+
+        # Test setting align_to
+        align_boundary = Offset.fromsec(1)
+        result = ac.alignment(align_to=align_boundary)
+        assert result is ac
+        assert ac.align_to == align_boundary
+
+        # Test setting overlap
+        overlap = (Offset.fromsec(0.5), Offset.fromsec(1.5))
+        result = ac.alignment(overlap=overlap)
+        assert result is ac
+        assert ac.overlap == overlap
+
+        # Test setting shift
+        result = ac.alignment(shift=Offset.fromsec(0.1))
+        assert result is ac
+        assert ac.offset_shift == Offset.fromsec(0.1)
+
+    def test_on_gap_with_parameters(self):
+        """Test the on_gap builder method with parameters"""
+        ac = AdapterConfig()
+
+        # Test setting skip_gaps to True
+        result = ac.on_gap(skip=True)
+        assert result is ac  # Check method chaining
+        assert ac.skip_gaps is True
+
+        # Test setting skip_gaps to False
+        result = ac.on_gap(skip=False)
+        assert result is ac
+        assert ac.skip_gaps is False
+
 
 class Test_TSTransSink:
     """Test group for the TSTransSink class

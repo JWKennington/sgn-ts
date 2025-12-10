@@ -8,7 +8,14 @@ from itertools import chain
 from typing import Any, Generic, Optional, Sequence, Type, TypeVar, Union
 
 import numpy
-from sgn.base import SinkElement, SinkPad, SourceElement, SourcePad, TransformElement
+from sgn.base import (
+    ElementLike,
+    SinkElement,
+    SinkPad,
+    SourceElement,
+    SourcePad,
+    TransformElement,
+)
 from sgn.sources import SignalEOS
 from sgn.subprocess import ParallelizeSourceElement, WorkerContext
 
@@ -23,11 +30,11 @@ TSFrameLike = TypeVar("TSFrameLike", bound=TSFrame)
 
 
 @dataclass
-class TimeSeriesMixin(Generic[TSFrameLike]):
+class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
     """Mixin that adds time-series capabilities to any SGN element.
 
-    This will produce aligned frames in preparedframes. If
-    adapter_config is provided, will trigger the audioadapter to queue
+    This will produce aligned frames in preparedframes. If the adapter
+    is not explicitly disabled, will trigger the audioadapter to queue
     data, and make padded or strided frames in preparedframes.
 
     This mixin provides:
@@ -46,7 +53,7 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
     """
 
     max_age: int = 100 * Time.SECONDS
-    adapter_config: Optional[AdapterConfig] = None
+    adapter_config: AdapterConfig = field(default_factory=AdapterConfig)
     unaligned: Optional[Sequence[str]] = None
 
     def __post_init__(self):
@@ -77,13 +84,19 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
         self._last_offset = {p: None for p in self.aligned_sink_pads}
         self.metadata = {p: None for p in self.aligned_sink_pads}
 
-        # Initialize adapter-specific state only if config provided
+        # Configure adapter and element-specific attributes
+        self.configure()
+
+        self.is_adapter_enabled = self.adapter_config.is_enabled
+
+        # Initialize adapter-specific state only if adapter is enabled
         self.audioadapters = None
-        if self.adapter_config is not None:
+        if self.is_adapter_enabled:
             self.overlap = self.adapter_config.overlap
             self.stride = self.adapter_config.stride
             self.pad_zeros_startup = self.adapter_config.pad_zeros_startup
             self.skip_gaps = self.adapter_config.skip_gaps
+            self.offset_shift = self.adapter_config.offset_shift
 
             # we need audioadapters
             self.audioadapters = {
@@ -95,6 +108,20 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                 # at startup, pad zeros in front of the first buffer to
                 # serve as history
                 self.pad_zeros_offset = self.overlap[0]
+        else:
+            # No adapter, so no offset shift
+            self.offset_shift = 0
+
+        # Call validation hooks
+        self.validate()
+
+    def configure(self) -> None:
+        """Configure element-specific settings."""
+        pass
+
+    def validate(self) -> None:
+        """Validate element configuration."""
+        pass
 
     def pull(self, pad: SinkPad, frame: TSFrameLike) -> None:
         """Pull data and queue for alignment.
@@ -163,7 +190,7 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
 
         Returns:
             list[SeriesBuffers], a list of SeriesBuffers that are adapted according to
-            the adapter_config
+            the adapter config
 
         Examples:
             upsampling:
@@ -210,12 +237,11 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
 
         # Determine if we're using alignment mode
         use_alignment = (
-            self.adapter_config is not None and self.adapter_config.align_to is not None
+            self.is_adapter_enabled and self.adapter_config.align_to is not None
         )
 
         # Apply alignment if configured
         if use_alignment:
-            assert self.adapter_config is not None
             assert self.adapter_config.align_to is not None
             outoffset = self._compute_aligned_offset(
                 outoffset,
@@ -243,7 +269,10 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                 )
             )
             # prepare output frames, one buffer per frame
-            self.preparedoutoffsets = {"offset": outoffset, "noffset": 0}
+            self.preparedoutoffsets = {
+                "offset": outoffset + self.offset_shift,
+                "noffset": 0,
+            }
         else:
             # We have enough samples, retrieve data
             if use_alignment:
@@ -283,7 +312,10 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
 
                 # Output offset metadata
                 outnoffset = self.stride
-                self.preparedoutoffsets = {"offset": outoffset, "noffset": outnoffset}
+                self.preparedoutoffsets = {
+                    "offset": outoffset + self.offset_shift,
+                    "noffset": outnoffset,
+                }
 
                 # No padding offset adjustment needed for aligned mode
                 self.pad_zeros_offset = 0
@@ -304,12 +336,7 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                 )
 
                 # Check if we should preserve buffer boundaries (align_buffers mode)
-                preserve_boundaries = (
-                    self.adapter_config is not None
-                    and self.adapter_config.align_buffers
-                )
-
-                if preserve_boundaries:
+                if self.adapter_config.align_buffers:
                     # Return sliced buffers without merging, preserving gaps
                     end_offset = a.offset + Offset.fromsamples(
                         num_copy_samples, a.sample_rate
@@ -358,7 +385,7 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                 else:
                     # copy out samples from head of audioadapter
                     data = a.copy_samples(num_copy_samples)
-                    if self.pad_zeros_offset > 0 and self.adapter_config is not None:
+                    if self.pad_zeros_offset > 0:
                         # pad zeros in front of buffer
                         data = self.adapter_config.backend.pad(
                             data, (pad_zeros_samples, 0)
@@ -381,7 +408,7 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                     preparedbufs.append(pbuf)
                     outnoffset = pbuf.noffset - sum(self.overlap)
                     self.preparedoutoffsets = {
-                        "offset": outoffset,
+                        "offset": outoffset + self.offset_shift,
                         "noffset": outnoffset,
                     }
 
@@ -411,6 +438,11 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                     ],
                     metadata=self.metadata[sink_pad],
                 )
+            # Set preparedoutoffsets for heartbeat (zero-length output)
+            self.preparedoutoffsets = {
+                "offset": self.earliest + self.offset_shift,
+                "noffset": 0,
+            }
         # Else pack all the buffers
         else:
             min_latest = self.min_latest
@@ -436,8 +468,8 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                     len(out) > 0
                 ), "No buffers returned from get_sliced_buffers for aligned processing"
 
-                # Apply adapter processing only if config provided
-                if self.adapter_config is not None:
+                # Apply adapter processing only if adapter is enabled
+                if self.is_adapter_enabled:
                     out = self.__adapter(sink_pad, out)
 
                 self.preparedframes[sink_pad] = TSFrame(
@@ -447,14 +479,23 @@ class TimeSeriesMixin(Generic[TSFrameLike]):
                 )
 
             # Apply buffer alignment if requested
-            if self.adapter_config is not None and self.adapter_config.align_buffers:
+            if self.adapter_config.align_buffers:
                 self.aligned_slices = self._compute_aligned_slices()
 
                 for pad in self.aligned_sink_pads:
                     aligned_slice = self.aligned_slices[pad]
-                    self.preparedframes[pad] = self.preparedframes[pad].align(
-                        aligned_slice
-                    )
+                    # Only align if there are slices (skip if all gaps)
+                    if aligned_slice.slices:
+                        self.preparedframes[pad] = self.preparedframes[pad].align(
+                            aligned_slice
+                        )
+
+            # Set preparedoutoffsets for non-adapter case
+            if not self.is_adapter_enabled:
+                self.preparedoutoffsets = {
+                    "offset": earliest + self.offset_shift,
+                    "noffset": min_latest - earliest,
+                }
 
     def _compute_aligned_slices(self) -> dict[SinkPad, TSSlices]:
         """Compute aligned slices for all pads based on minimum sampling rate.
@@ -1131,7 +1172,7 @@ def make_ts_element(sgn_element_class: Type) -> Type:
         """Dynamically created TS-enabled element."""
 
         # Use basic adapter config that works for general TS connectivity
-        adapter_config: Optional[AdapterConfig] = field(default_factory=AdapterConfig)
+        adapter_config: AdapterConfig = field(default_factory=AdapterConfig)
 
     # Set a meaningful name for the new class
     TSEnabledElement.__name__ = f"TS{sgn_element_class.__name__}"

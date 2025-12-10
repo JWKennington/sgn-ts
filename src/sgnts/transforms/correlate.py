@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, Optional
 
 import numpy
 import scipy
+from sgn import validator
 from sgn.base import SinkPad, SourcePad
 
 from sgnts.base import (
-    AdapterConfig,
     Array,
     Event,
     EventBuffer,
@@ -34,29 +33,30 @@ class Correlate(TSTransform):
     """
 
     sample_rate: int = -1
-    filters: Optional[Array] = None
+    filters: Array | None = None
     latency: int = 0
 
-    def __post_init__(self):
+    def configure(self) -> None:
         # FIXME: read sample_rate from data
+        assert self.filters is not None
+        self.shape = self.filters.shape
+
+        # apply latency offset shift: negative shift moves output backward in time
+        self.adapter_config.alignment(
+            overlap=(Offset.fromsamples(self.shape[-1] - 1, self.sample_rate), 0),
+            shift=-Offset.fromsamples(self.latency, self.sample_rate),
+        )
+        self.adapter_config.on_startup(pad_zeros=False)
+
+        self.sink_pad = self.sink_pads[0]
+        self.source_pad = self.source_pads[0]
+
+    @validator.one_to_one
+    def validate(self) -> None:
         assert (
             self.filters is not None
         ), "Filters must be provided during initialization"
         assert self.sample_rate != -1, "Sample rate must be specified (not -1)"
-        self.shape = self.filters.shape
-        if self.adapter_config is None:
-            self.adapter_config = AdapterConfig()
-        self.adapter_config.overlap = (
-            Offset.fromsamples(self.shape[-1] - 1, self.sample_rate),
-            0,
-        )
-        self.adapter_config.pad_zeros_startup = False
-        super().__post_init__()
-        assert len(self.aligned_sink_pads) == 1 and len(self.source_pads) == 1, (
-            f"Correlate requires exactly one aligned sink pad and one "
-            f"source pad, got {len(self.aligned_sink_pads)} aligned sink "
-            f"pads and {len(self.source_pads)} source pads"
-        )
 
     def corr(self, data: Array) -> Array:
         """Correlate an array of data with an array of filters.
@@ -97,8 +97,7 @@ class Correlate(TSTransform):
                 data = self.corr(buf.data)
             outbufs.append(
                 SeriesBuffer(
-                    offset=outoffset["offset"]
-                    - Offset.fromsamples(self.latency, self.sample_rate),
+                    offset=outoffset["offset"],
                     sample_rate=buf.sample_rate,
                     data=data,
                     shape=(
@@ -143,9 +142,6 @@ class AdaptiveCorrelate(Correlate):
 
     def __post_init__(self) -> None:
         """Setup the adaptive FIR filter"""
-        # Setup empty deque for storing filters
-        self.filter_deque: Deque[EventFrame] = deque()
-
         # Argument validation
         self._validate_filters_pad()
 
@@ -161,6 +157,22 @@ class AdaptiveCorrelate(Correlate):
         )
         frame = EventFrame(data=[buf])
         self.filter_deque.append(frame)
+
+    def configure(self) -> None:
+        super().configure()
+        # Setup empty deque for storing filters
+        self.filter_deque: deque[EventFrame] = deque()
+
+    def validate(self) -> None:
+        assert len(self.aligned_sink_pads) == 1 and len(self.source_pads) == 1, (
+            f"Correlate requires exactly one aligned sink pad and one "
+            f"source pad, got {len(self.aligned_sink_pads)} aligned sink "
+            f"pads and {len(self.source_pads)} source pads"
+        )
+        assert (
+            self.filters is not None
+        ), "Filters must be provided during initialization"
+        assert self.sample_rate != -1, "Sample rate must be specified (not -1)"
 
     def _validate_filters_pad(self):
         """Validate the filter sink pad before initializing the filter"""
@@ -196,7 +208,7 @@ class AdaptiveCorrelate(Correlate):
         return self.filter_deque[0]
 
     @property
-    def filters_new(self) -> Optional[EventFrame]:
+    def filters_new(self) -> EventFrame | None:
         """Get the new filters"""
         if len(self.filter_deque) > 1:
             return self.filter_deque[1]

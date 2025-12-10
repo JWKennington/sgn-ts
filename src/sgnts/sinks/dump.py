@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import numpy as np
+from sgn import validator
 
 from sgnts.base import Time, TSSink
 
@@ -19,18 +20,16 @@ class DumpSeriesSink(TSSink):
     fname: str = "out.txt"
     verbose: bool = False
 
-    def __post_init__(self):
-        super().__post_init__()
-        if len(self.sink_pads) != 1:
-            # FIXME: When will we use multiple sink pads here?
-            # Do we want to support writing multiple frames into the same file?
-            raise ValueError("Only supports one sink pad.")
-
+    def configure(self) -> None:
         self.sink_pad = self.sink_pads[0]
 
         # overwrite existing file
         with open(self.fname, "w"):
             pass
+
+    @validator.single_pad
+    def validate(self) -> None:
+        pass
 
     def write_to_file(self, buf) -> None:
         """Write time series data to txt file.

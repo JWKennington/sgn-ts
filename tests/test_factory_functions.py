@@ -42,7 +42,7 @@ def test_make_ts_element_basic():
 
 
 def test_make_ts_element_default_config():
-    """Test factory function uses basic default config."""
+    """Test factory function uses basic default adapter config."""
     TSElement = make_ts_element(SimpleSGNSink)
     element = TSElement(name="test", sink_pad_names=["input"])
 
@@ -53,10 +53,10 @@ def test_make_ts_element_default_config():
 
 
 def test_make_ts_element_config_override():
-    """Test factory function allows config override at instantiation."""
+    """Test factory function allows adapter config override at instantiation."""
     TSElement = make_ts_element(SimpleSGNSink)
 
-    # Can override the default config at instantiation
+    # Can override the default adapter config at instantiation
     override_config = AdapterConfig(stride=1024, skip_gaps=True)
     element = TSElement(
         name="test", sink_pad_names=["input"], adapter_config=override_config

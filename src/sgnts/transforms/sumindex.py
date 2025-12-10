@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
+from sgn import validator
 from sgn.base import SourcePad
 
 from sgnts.base import ArrayBackend, NumpyBackend, SeriesBuffer, TSFrame, TSTransform
@@ -19,11 +19,11 @@ class SumIndex(TSTransform):
             type[ArrayBackend], the wrapper around array operations.
     """
 
-    sl: Optional[list[slice]] = None
+    sl: list[slice] | None = None
     backend: type[ArrayBackend] = NumpyBackend
 
-    def __post_init__(self):
-        super().__post_init__()
+    @validator.one_to_one
+    def validate(self) -> None:
         assert (
             self.sl is not None
         ), "Slice list (sl) must be provided for SumIndex operation"

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from sgn import validator
 from sgn.base import SourcePad
 
 from sgnts.base import TSFrame, TSSlices, TSTransform
@@ -18,23 +19,18 @@ class Gate(TSTransform):
 
     control: str = ""
 
-    def __post_init__(self):
+    def configure(self) -> None:
+        self.controlpad = self.snks[self.control]
+        data_pad_name = list(set(self.sink_pad_names) - set([self.control]))[0]
+        self.sinkpad = self.snks[data_pad_name]
+        self.source_pad = self.source_pads[0]
+
+    @validator.num_pads(sink_pads=2, source_pads=1)
+    def validate(self) -> None:
         assert self.control and self.control in self.sink_pad_names, (
             f"Control pad '{self.control}' must be specified and exist "
             f"in sink_pad_names: {self.sink_pad_names}"
         )
-        super().__post_init__()
-        assert (
-            len(self.sink_pads) == 2
-        ), f"Gate requires exactly 2 sink pads, got {len(self.sink_pads)}"
-        assert (
-            len(self.source_pads) == 1
-        ), f"Gate requires exactly 1 source pad, got {len(self.source_pads)}"
-        self.controlpad = self.sink_pad_dict["%s:snk:%s" % (self.name, self.control)]
-        self.sinkpad = self.sink_pad_dict[
-            "%s:snk:%s"
-            % (self.name, list(set(self.sink_pad_names) - set([self.control]))[0])
-        ]
 
     def new(self, pad: SourcePad) -> TSFrame:
         nongap_slices = TSSlices(

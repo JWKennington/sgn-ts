@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
+from sgn import validator
 from sgn.base import SourcePad
 
 from sgnts.base import ArrayBackend, NumpyBackend, SeriesBuffer, TSFrame, TSTransform
@@ -28,13 +28,16 @@ class Adder(TSTransform):
     """
 
     backend: type[ArrayBackend] = NumpyBackend
-    addslices_map: Optional[dict[str, tuple[slice, ...]]] = None
+    addslices_map: dict[str, tuple[slice, ...]] | None = None
 
-    def __post_init__(self):
-        super().__post_init__()
+    @validator.many_to_one
+    def validate(self) -> None:
+        pass
 
     def new(self, pad: SourcePad) -> TSFrame:
-        frames = [self.preparedframes[self.snks[snk]] for snk in self.sink_pad_names]
+        frames: list[TSFrame] = [
+            self.preparedframes[self.snks[snk]] for snk in self.sink_pad_names
+        ]
 
         # Sanity check frames
         assert (

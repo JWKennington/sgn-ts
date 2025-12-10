@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from sgn import validator
 from sgn.base import SourcePad
 
 from sgnts.base import SeriesBuffer, TSFrame, TSTransform
@@ -16,19 +17,15 @@ class Amplify(TSTransform):
 
     factor: float = 1
 
-    def __post_init__(self):
-        super().__post_init__()
-        assert len(self.sink_pads) == 1 and len(self.source_pads) == 1, (
-            f"Amplify requires exactly one sink pad and one source pad, "
-            f"got {len(self.sink_pads)} sink pads and "
-            f"{len(self.source_pads)} source pads"
-        )
-        self.sink_pad = self.sink_pads[0]
+    @validator.one_to_one
+    def validate(self) -> None:
+        pass
 
     def new(self, pad: SourcePad) -> TSFrame:
         outbufs = []
         # loop over the input data, only amplify non-gap data
-        frame = self.preparedframes[self.sink_pad]
+        sink_pad = self.sink_pads[0]
+        frame = self.preparedframes[sink_pad]
         for inbuf in frame:
             if inbuf.is_gap:
                 data = None
