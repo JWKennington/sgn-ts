@@ -607,7 +607,7 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
                     )
                     outnoffset = end_offset - a.offset
                     self.preparedoutoffsets = {
-                        "offset": a.offset,
+                        "offset": a.offset + self.offset_shift,
                         "noffset": outnoffset,
                     }
 
@@ -639,7 +639,7 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
                     preparedbufs.append(pbuf)
                     outnoffset = pbuf.noffset - sum(self.overlap)
                     self.preparedoutoffsets = {
-                        "offset": outoffset,
+                        "offset": outoffset + self.offset_shift,
                         "noffset": outnoffset,
                     }
 
