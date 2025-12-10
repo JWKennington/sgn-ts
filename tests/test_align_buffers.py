@@ -5,12 +5,14 @@ from dataclasses import dataclass
 import numpy
 from sgn import validator
 from sgn.apps import Pipeline
+from sgn.sources import SignalEOS
 
 from sgnts.base import Offset, SeriesBuffer, TSFrame, TSTransform
 from sgnts.base.audioadapter import AdapterConfig
 from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.sinks import NullSeriesSink
-from sgnts.sources import TSIterSource
+from sgnts.sources import FakeSeriesSource, TSIterSource
+from sgnts.transforms import Correlate
 
 
 class TestAlignBuffersBasic:
@@ -546,3 +548,122 @@ class TestAlignBuffersPipeline:
         # The adder should have processed the frames
         # With align_buffers=True, the buffers should be aligned to match
         # We expect the assertion in internal() to pass, confirming alignment
+
+
+class TestOffsetShiftWithAlignBuffers:
+    """Tests for offset_shift application in various adapter configurations.
+
+    These tests verify that offset_shift is correctly applied to output buffer
+    offsets in different code paths through the prepare_buffers method. The
+    offset_shift parameter is used by transforms that introduce latency or
+    phase shifts (e.g., filters, correlators) to adjust output timestamps.
+    """
+
+    def test_offset_shift_applied_with_align_buffers_mode(self):
+        """Verify offset_shift is applied when align_buffers=True."""
+        pipeline = Pipeline()
+
+        src1 = FakeSeriesSource(
+            name="src1",
+            source_pad_names=["O1"],
+            signals={"O1": {"signal_type": "const", "const": 1.0, "rate": 256}},
+            duration=5,
+            t0=1000000000,
+        )
+        src2 = FakeSeriesSource(
+            name="src2",
+            source_pad_names=["O1"],
+            signals={"O1": {"signal_type": "const", "const": 2.0, "rate": 256}},
+            duration=5,
+            t0=1000000000,
+        )
+
+        # Create correlate filters with latency
+        filter_length = 32
+        filters = numpy.ones(filter_length)
+
+        corr1 = Correlate(
+            name="corr1",
+            sink_pad_names=["I1"],
+            source_pad_names=["O1"],
+            sample_rate=256,
+            filters=filters,
+            latency=filter_length // 2,
+        )
+        corr2 = Correlate(
+            name="corr2",
+            sink_pad_names=["I1"],
+            source_pad_names=["O1"],
+            sample_rate=256,
+            filters=filters,
+            latency=filter_length // 2,
+        )
+
+        snk = NullSeriesSink(
+            name="snk",
+            sink_pad_names=["I1", "I2"],
+            verbose=True,
+            adapter_config=AdapterConfig(align_buffers=True),
+        )
+
+        pipeline.insert(
+            src1,
+            corr1,
+            src2,
+            corr2,
+            snk,
+            link_map={
+                corr1.snks["I1"]: src1.srcs["O1"],
+                corr2.snks["I1"]: src2.srcs["O1"],
+                snk.snks["I1"]: corr1.srcs["O1"],
+                snk.snks["I2"]: corr2.srcs["O1"],
+            },
+        )
+
+        with SignalEOS():
+            pipeline.run()
+
+    def test_offset_shift_applied_with_gap_buffer_generation(self):
+        """Verify offset_shift is applied when generating gap buffers."""
+        pipeline = Pipeline()
+
+        # Create a source that generates gaps periodically
+        src = FakeSeriesSource(
+            name="src",
+            source_pad_names=["O1"],
+            signals={"O1": {"signal_type": "white", "rate": 256}},
+            duration=5,
+            t0=1000000000,
+            ngap=2,  # Generate a gap every 2 buffers
+        )
+
+        filter_length = 32
+        filters = numpy.ones(filter_length)
+        correlate = Correlate(
+            name="corr",
+            sink_pad_names=["I1"],
+            source_pad_names=["O1"],
+            sample_rate=256,
+            filters=filters,
+            latency=filter_length // 2,
+        )
+
+        snk = NullSeriesSink(
+            name="snk",
+            sink_pad_names=["I1"],
+            verbose=True,
+            adapter_config=AdapterConfig(skip_gaps=True),
+        )
+
+        pipeline.insert(
+            src,
+            correlate,
+            snk,
+            link_map={
+                correlate.snks["I1"]: src.srcs["O1"],
+                snk.snks["I1"]: correlate.srcs["O1"],
+            },
+        )
+
+        with SignalEOS():
+            pipeline.run()
