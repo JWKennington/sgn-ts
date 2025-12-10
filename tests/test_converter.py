@@ -11,16 +11,27 @@ from sgnts.transforms import Converter
 torch = pytest.importorskip("torch")
 
 
+class FakeArray:
+    """An object that looks like an array but isn't numpy or torch"""
+
+    def __init__(self, shape):
+        self.shape = shape
+        self.ndim = len(shape) if isinstance(shape, tuple) else 1
+
+
 class BreakData(TSTransform):
-    """Test helper that breaks data by setting it to a string."""
+    """Test helper that breaks data by setting it to an unsupported type."""
 
     def configure(self):
         self.adapter_config.enable = True
 
-    def new(self, pad):
-        for buf in self.preparedframes[self.sink_pads[0]]:
-            buf.data = "blah"
-        return self.preparedframes[self.sink_pads[0]]
+    def internal(self) -> None:
+        super().internal()
+        _, input_frame = self.next_input()
+        _, output_frame = self.next_output()
+        for buf in input_frame:
+            new_buf = buf.copy(data=FakeArray(buf.shape))
+            output_frame.append(new_buf)
 
 
 def test_invalid_converter():

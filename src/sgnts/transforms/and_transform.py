@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sgn import validator
-from sgn.base import SourcePad
+from sgn.base import SinkPad
 
 from sgnts.base import (
     ArrayBackend,
     NumpyBackend,
     SeriesBuffer,
+    TSCollectFrame,
     TSFrame,
     TSSlice,
     TSSlices,
     TSTransform,
 )
+from sgnts.decorators import transform
 
 
 @dataclass
@@ -44,27 +46,26 @@ class ANDTransform(TSTransform):
     """
 
     backend: type[ArrayBackend] = NumpyBackend
-    output_shape: tuple[int, ...] | None = None
+    output_shape: tuple[int, ...] = field(default_factory=tuple)
 
     def configure(self) -> None:
         # Explicitly disable adapter to prevent gap filling
         self.adapter_config.enable = False
-        if self.output_shape is None:
-            self.output_shape = ()
 
     @validator.many_to_one
     def validate(self) -> None:
         pass
 
-    def new(self, pad: SourcePad) -> TSFrame:
+    @transform.many_to_one
+    def process(
+        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSCollectFrame
+    ) -> None:
         """Generate output frame with AND logic across all inputs.
 
-        Returns:
-            TSFrame containing buffers with 1s where all inputs have data,
-            and gap buffers where any input has gaps.
+        Output contains buffers with 1s where all inputs have data,
+        and gap buffers where any input has gaps.
         """
-        # Get all input frames
-        frames = [self.preparedframes[sink_pad] for sink_pad in self.aligned_sink_pads]
+        frames = list(input_frames.values())
 
         # Use the maximum sample rate among all inputs for output
         max_rate = max(f.sample_rate for f in frames)
@@ -79,7 +80,6 @@ class ANDTransform(TSTransform):
 
         # Create initial buffer spanning entire frame with 1s
         frame_slice = TSSlice(frames[0].offset, frames[0].end_offset)
-        assert self.output_shape is not None  # Set in __post_init__
         full_buffer = SeriesBuffer.fromoffsetslice(
             frame_slice,
             sample_rate=max_rate,
@@ -97,4 +97,4 @@ class ANDTransform(TSTransform):
             else [full_buffer.new()]  # new() with no data creates a gap buffer
         )
 
-        return TSFrame(buffers=output_buffers, EOS=self.at_EOS, metadata={})
+        output_frame.extend(output_buffers)

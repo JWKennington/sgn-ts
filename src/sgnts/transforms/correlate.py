@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from typing import Deque
 
 import numpy
 import scipy
 from sgn import validator
-from sgn.base import SinkPad, SourcePad
+from sgn.base import SinkPad
 
 from sgnts.base import (
     Array,
@@ -14,31 +15,33 @@ from sgnts.base import (
     EventBuffer,
     EventFrame,
     Offset,
-    SeriesBuffer,
+    TimeSpanFrame,
+    TSCollectFrame,
     TSFrame,
     TSTransform,
 )
 from sgnts.base.slice_tools import TIME_MAX
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Correlate(TSTransform):
     """Correlates input data with filters
 
     Args:
+        sample_rate:
+            int, the sample rate of the input data
         filters:
             Array, the filter to correlate over
         latency:
             int, the latency of the filter in samples
     """
 
-    sample_rate: int = -1
-    filters: Array | None = None
+    sample_rate: int
+    filters: Array
     latency: int = 0
 
     def configure(self) -> None:
         # FIXME: read sample_rate from data
-        assert self.filters is not None
         self.shape = self.filters.shape
 
         # apply latency offset shift: negative shift moves output backward in time
@@ -53,10 +56,7 @@ class Correlate(TSTransform):
 
     @validator.one_to_one
     def validate(self) -> None:
-        assert (
-            self.filters is not None
-        ), "Filters must be provided during initialization"
-        assert self.sample_rate != -1, "Sample rate must be specified (not -1)"
+        pass
 
     def corr(self, data: Array) -> Array:
         """Correlate an array of data with an array of filters.
@@ -68,7 +68,6 @@ class Correlate(TSTransform):
         Returns:
             Array, the result of the correlation
         """
-        assert self.filters is not None, "Filters must not be None during correlation"
         if len(self.filters.shape) == 1:
             return scipy.signal.correlate(data, self.filters, mode="valid")
 
@@ -80,35 +79,38 @@ class Correlate(TSTransform):
             os.append(scipy.signal.correlate(data, self.filters[j], mode="valid"))
         return numpy.vstack(os).reshape(shape[:-1] + (-1,))
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        outbufs = []
-        outoffset = self.preparedoutoffsets
-        frames = self.preparedframes[self.sink_pads[0]]
-        for buf in frames:
+    def _transform(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None:
+        """Helper to correlate input with current filters and populate output.
+
+        Args:
+            input_frame: Input frame to process
+            output_frame: Output frame to populate
+        """
+        for buf in input_frame:
             assert buf.sample_rate == self.sample_rate, (
                 f"Buffer sample rate {buf.sample_rate} doesn't match "
                 f"correlator sample rate {self.sample_rate}"
             )
             if buf.is_gap:
                 data = None
+                output_samples = Offset.tosamples(output_frame.noffset, buf.sample_rate)
+                shape = self.shape[:-1] + (output_samples,)
             else:
                 # FIXME: Are there multi-channel correlation in numpy or scipy?
                 # FIXME: consider multi-dimensional filters
                 data = self.corr(buf.data)
-            outbufs.append(
-                SeriesBuffer(
-                    offset=outoffset["offset"],
-                    sample_rate=buf.sample_rate,
-                    data=data,
-                    shape=(
-                        self.shape[:-1]
-                        + (Offset.tosamples(outoffset["noffset"], buf.sample_rate),)
-                        if data is None
-                        else data.shape
-                    ),
-                )
-            )
-        return TSFrame(buffers=outbufs, EOS=frames.EOS)
+                shape = data.shape
+
+            buf = buf.copy(offset=output_frame.offset, data=data, shape=shape)
+            output_frame.append(buf)
+
+    def internal(self) -> None:
+        super().internal()
+
+        _, output_collector = self.next_output()
+        _, input_frame = self.next_input()
+        self._transform(input_frame, output_collector)
+        output_collector.close()
 
 
 @dataclass
@@ -140,13 +142,25 @@ class AdaptiveCorrelate(Correlate):
 
     filter_sink_name: str = "filters"
 
-    def __post_init__(self) -> None:
-        """Setup the adaptive FIR filter"""
-        # Argument validation
-        self._validate_filters_pad()
+    @property
+    def static_sink_pads(self) -> list[str]:  # type: ignore[override]
+        """Add the filter sink pad as an static sink pad."""
+        return [self.filter_sink_name]
 
-        # Call the parent's post init, this will setup all the appropriate pads
-        super().__post_init__()
+    @property
+    def static_unaligned_sink_pads(self) -> list[str]:  # type: ignore[override]
+        """Declare that the filter sink pad is unaligned."""
+        return [self.filter_sink_name]
+
+    def configure(self) -> None:
+        super().configure()
+        self.filter_pad = self.snks[self.filter_sink_name]
+
+        # Set the input frame type for the filter pad to EventFrame
+        self.input_frame_types[self.filter_sink_name] = EventFrame
+
+        # Setup empty deque for storing filters
+        self.filter_deque: Deque[EventFrame] = deque()
 
         # Set the initial filters
         event = Event(offset=0, data=self.filters)
@@ -158,11 +172,6 @@ class AdaptiveCorrelate(Correlate):
         frame = EventFrame(data=[buf])
         self.filter_deque.append(frame)
 
-    def configure(self) -> None:
-        super().configure()
-        # Setup empty deque for storing filters
-        self.filter_deque: deque[EventFrame] = deque()
-
     def validate(self) -> None:
         assert len(self.aligned_sink_pads) == 1 and len(self.source_pads) == 1, (
             f"Correlate requires exactly one aligned sink pad and one "
@@ -173,25 +182,6 @@ class AdaptiveCorrelate(Correlate):
             self.filters is not None
         ), "Filters must be provided during initialization"
         assert self.sample_rate != -1, "Sample rate must be specified (not -1)"
-
-    def _validate_filters_pad(self):
-        """Validate the filter sink pad before initializing the filter"""
-        # Make sure the filter sink name is not already in use
-        assert self.filter_sink_name not in self.sink_pad_names, (
-            f"Filter sink name '{self.filter_sink_name}' already exists "
-            f"in sink_pad_names: {self.sink_pad_names}"
-        )
-
-        # Check that if unaligned pads are specified, that the filter sink name MUST
-        # be one of them, if not included then add
-        if self.unaligned is not None:
-            if self.filter_sink_name not in self.unaligned:
-                self.unaligned = list(self.unaligned) + [self.filter_sink_name]
-        else:
-            self.unaligned = [self.filter_sink_name]
-
-        # Add the filter sink name to the sink pad names
-        self.sink_pad_names = list(self.sink_pad_names) + [self.filter_sink_name]
 
     @staticmethod
     def _extract_filter(item: EventBuffer | EventFrame) -> Array:
@@ -238,17 +228,15 @@ class AdaptiveCorrelate(Correlate):
         overlap = new_slice & frame_slice
         return overlap.isfinite()
 
-    def pull(self, pad: SinkPad, frame: TSFrame) -> None:
+    def pull(self, pad: SinkPad, frame: TimeSpanFrame) -> None:
         # Pull the data from the sink pad
         super().pull(pad, frame)
 
         # If the pad is the special filter sink pad, then update filter
         # metadata values
-        if pad.name == self.snks[self.filter_sink_name].name:
-            # Assume frame is an EventFrame containing a single Event
-            event_frame = self.unaligned_data[pad]
-            assert isinstance(event_frame, EventFrame)
-            new_filter = self._extract_filter(event_frame)
+        if pad.name == self.filter_pad.name:
+            _, input_frame = self.next_event_input()
+            new_filter = self._extract_filter(input_frame)
 
             # If the buffer is null, then short circuit
             if new_filter is None:
@@ -268,57 +256,62 @@ class AdaptiveCorrelate(Correlate):
                 )
 
             # Set the new filters
-            self.filter_deque.append(event_frame)
+            self.filter_deque.append(input_frame)
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        # Get a aligned buffer to see if overlaps with new filters
-        frame = self.preparedframes[self.sink_pads[0]]
+    def internal(self) -> None:
+        # Check if we're adapting without needing frames
+        if not self.is_adapting:
+            # Just delegate to parent Correlate implementation
+            super().internal()
+            return
 
-        if self.can_adapt(frame):
-            # Call the parent's new method for each set of filters
+        # If we're adapting, we need to do custom processing
+        # Call base TSTransform internal for alignment/preparation
+        TSTransform.internal(self)
+
+        # Get aligned buffer to see if overlaps with new filters
+        _, input_frame = self.next_input()
+        _, output_collector = self.next_output()
+
+        if self.can_adapt(input_frame):
+            # Correlate with current filters
             assert self.filters_cur is not None
             self.filters = self._extract_filter(self.filters_cur)
-            res_cur = super().new(pad)  # type: ignore  # not recognizing self
 
-            # Change the state of filters
-            assert self.filters_new is not None
-            self.filters = self._extract_filter(self.filters_new)
-            res_new = super().new(pad)  # type: ignore  # not recognizing self
+            for buf in input_frame:
+                assert not buf.is_gap
+                data_cur = self.corr(buf.data)
 
-            # Combine data with window functions
+                # Change the state of filters
+                assert self.filters_new is not None
+                self.filters = self._extract_filter(self.filters_new)
+                data_new = self.corr(buf.data)
 
-            # remove the new filters to indicate adaptation is complete
+                # Combine data with window functions
+
+                # Compute window functions. Window functions
+                # will be piecewise functions for the corresponding
+                # intersection of the filter slice and data slice
+                # where the window function is 0.0 before the intersection
+                # and 1.0 after the intersection, and cos^2 in between
+                N = data_cur.shape[-1]
+                win_new = (scipy.signal.windows.cosine(2 * N, sym=True) ** 2)[:N]
+                win_cur = 1.0 - win_new
+
+                data = win_cur * data_cur + win_new * data_new
+                shape = data.shape
+
+                buf = buf.copy(offset=output_collector.offset, data=data, shape=shape)
+                output_collector.append(buf)
+
+            # Remove the new filters to indicate adaptation is complete
             self.filter_deque.popleft()
-
-            # Compute window functions. Window functions
-            # will be piecewise functions for the corresponding
-            # intersection of the filter slice and data slice
-            # where the window function is 0.0 before the intersection
-            # and 1.0 after the intersection, and cos^2 in between
-            N = res_cur[0].data.shape[-1]
-            win_new = (scipy.signal.windows.cosine(2 * N, sym=True) ** 2)[:N]
-            win_cur = 1.0 - win_new
-
-            data = win_cur * res_cur[0].data + win_new * res_new[0].data
-
         else:
-            res_new = super().new(pad)
-            if res_new.is_gap:
-                data = None
-            else:
-                data = res_new.buffers[0].data
+            # We're adapting but this frame doesn't overlap with the new filter
+            # Just do normal correlation with current filters
+            assert self.filters_cur is not None
+            self.filters = self._extract_filter(self.filters_cur)
+            self._transform(input_frame, output_collector)
 
-        # Return the new frame
-        assert data is None or isinstance(data, numpy.ndarray)  # assert for typing
-        frame = TSFrame(
-            buffers=[
-                SeriesBuffer(
-                    offset=res_new[0].offset,
-                    data=data,
-                    sample_rate=res_new.sample_rate,
-                    shape=res_new.shape if data is None else data.shape,
-                )
-            ],
-            EOS=res_new.EOS,
-        )
-        return frame
+        # Close the collector to commit buffers
+        output_collector.close()

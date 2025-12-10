@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from abc import abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import total_ordering
-from typing import Any, Optional, Protocol, Union, runtime_checkable
+from typing import Any, Iterable, Optional, Protocol, Union, runtime_checkable
 
 import numpy
 from sgn.frames import DataSpec, Frame
@@ -199,29 +200,62 @@ class EventBuffer(TimeSpanLike):
             return False
 
 
+class TimeSpanFrame(Frame, TimeSpanLike):
+    """Base class for frames with time span semantics.
+
+    TimeSpanFrame combines Frame's data-carrying capabilities with
+    TimeSpanLike's temporal semantics (start/end offsets).
+
+    All TimeSpanFrame subclasses must be iterable.
+    """
+
+    @abstractmethod
+    def __iter__(self):
+        """Iterate over the frame's data elements."""
+        ...
+
+
 @dataclass(eq=False)
-class EventFrame(Frame, TimeSpanLike):
-    """An sgn Frame object that holds a dictionary of events.
+class EventFrame(TimeSpanFrame):
+    """An sgn Frame object that holds a list of EventBuffers.
+
+    EventFrame can be created with data (offset/noffset computed from buffers)
+    or empty with explicit offset/noffset for incremental population.
 
     Args:
-        events:
-            dict, Dictionary of EventBuffers
+        data: list[EventBuffer], EventBuffers to hold
+        offset: int, explicit offset when creating empty frame
+        noffset: int, explicit noffset (duration) when creating empty frame
     """
 
     data: list[EventBuffer] = field(default_factory=list)
+    offset: int = 0
+    noffset: int = 0
 
     def __post_init__(self):
         super().__post_init__()
-        assert len(self.data) > 0
-        if (
-            not isinstance(self.start, int)
-            or not isinstance(self.end, int)
-            or not (self.start <= self.end)
-        ):
-            raise ValueError(
-                "start and end must be integers and start must be <= end,"
-                f"got {self.start} and {self.end}"
-            )
+        # If data exists, compute offset/noffset from data
+        if self.data:
+            # Ensure user didn't try to manually set offset/noffset
+            if self.offset != 0 or self.noffset != 0:
+                raise ValueError(
+                    "Cannot specify offset/noffset when providing data - "
+                    "they are computed from data"
+                )
+            # Compute from data
+            self.offset = self.data[0].offset
+            self.noffset = self.data[-1].end_offset - self.offset
+
+            # Validate computed values
+            if (
+                not isinstance(self.start, int)
+                or not isinstance(self.end, int)
+                or not (self.start <= self.end)
+            ):
+                raise ValueError(
+                    "start and end must be integers and start must be <= end,"
+                    f"got {self.start} and {self.end}"
+                )
 
     def __iter__(self):
         return iter(self.data)
@@ -247,33 +281,66 @@ class EventFrame(Frame, TimeSpanLike):
         out += "}})"
         return out
 
-    @property
-    def offset(self) -> int:
-        """The offset of the EventFrame, which is the offset of the first buffer.
+    def append(self, item: EventBuffer) -> None:
+        """Append EventBuffer with validation.
 
-        Returns:
-            int, the offset of the EventFrame
+        Validates that buffer falls within frame bounds (offset to offset+noffset)
+        and is contiguous with previous buffers.
+
+        Args:
+            item: EventBuffer to append
+
+        Raises:
+            AssertionError if validation fails
         """
-        return self.data[0].offset
+        frame_end_offset = self.offset + self.noffset
 
-    @offset.setter
-    def offset(self, other: int) -> None:
-        msg = "cannot set offset on an EventFrame"
-        raise AttributeError(msg)
+        # Check buffer falls within bounds
+        assert (
+            self.offset <= item.offset
+        ), f"Buffer offset {item.offset} starts before frame offset {self.offset}"
+        assert item.end_offset <= frame_end_offset, (
+            f"Buffer end_offset {item.end_offset} extends beyond frame "
+            f"end_offset {frame_end_offset}"
+        )
 
-    @property
-    def noffset(self) -> int:
-        """The end offset of the EventFrame, which is the end offset of the last buffer.
+        # Check contiguity with previous buffer
+        if self.data:
+            assert item.offset == self.data[-1].end_offset, (
+                f"Buffer offset {item.offset} is not contiguous with "
+                f"previous buffer end {self.data[-1].end_offset}"
+            )
 
-        Returns:
-            int, the end offset of the EventFrame
+        self.data.append(item)
+
+    def validate_span(self) -> None:
+        """Validate that data fully spans the offset/noffset range.
+
+        Checks that:
+        - First buffer starts at frame offset
+        - Last buffer ends at frame offset+noffset (the frame's end_offset)
+        - All buffers are contiguous
+
+        Raises:
+            AssertionError if validation fails
         """
-        return self.data[-1].end_offset - self.offset
+        if self.data:
+            frame_end_offset = self.offset + self.noffset
 
-    @noffset.setter
-    def noffset(self, other: int) -> None:
-        msg = "cannot set noffset on an EventFrame"
-        raise AttributeError(msg)
+            assert self.data[0].offset == self.offset, (
+                f"First buffer offset {self.data[0].offset} != "
+                f"frame offset {self.offset}"
+            )
+            assert self.data[-1].end_offset == frame_end_offset, (
+                f"Last buffer end_offset {self.data[-1].end_offset} != "
+                f"frame end_offset {frame_end_offset}"
+            )
+            # Check all buffers are contiguous
+            for i in range(1, len(self.data)):
+                assert self.data[i].offset == self.data[i - 1].end_offset, (
+                    f"Gap between buffer {i-1} (end={self.data[i-1].end_offset}) "
+                    f"and buffer {i} (start={self.data[i].offset})"
+                )
 
 
 @dataclass(frozen=True)
@@ -364,6 +431,61 @@ class SeriesBuffer(TimeSpanLike):
 
     def isfinite(self):
         return self.slice.isfinite()
+
+    def copy(
+        self,
+        offset: int | None = None,
+        sample_rate: int | None = None,
+        data: int | Array | None = None,
+        is_gap: bool | None = None,
+        shape: tuple | None = None,
+        backend: type[ArrayBackend] | None = None,
+    ) -> SeriesBuffer:
+        """Returns a copy of the TSFrame with requested modifications.
+
+        Any attributes not being changed will inherit from the original
+        TSFrame.
+
+        Args:
+            offset:
+                int, optional, the offset of the buffer. See Offset class for
+                definitions.
+            sample_rate:
+                int, optional, the sample rate belonging to the set of
+                Offset.ALLOWED_RATES
+            data:
+                int | Array, optional, the timeseries data.
+            is_gap:
+                bool, optional, set the buffer as a gap (or non-gap).
+            shape:
+                tuple, optional, the shape of the data regardless of gaps.
+                Required if data is None or int, and represents the shape of
+                the absent data.
+            backend:
+                type[ArrayBackend], optional, the wrapper around array
+                operations
+        """
+        offset = self.offset if offset is None else offset
+        sample_rate = self.sample_rate if sample_rate is None else sample_rate
+        shape = self.shape if shape is None else shape
+        backend = self.backend if backend is None else backend
+
+        # using data=None as a case to decide whether to modify the buffer's
+        # data with user-specified data needs extra care due to data=None also
+        # being used to define the presence of a gap, so instead we enumerate
+        # the possible cases based on whether is_gap is set and what the value
+        # is if it is set.
+        # NOTE: this can be simplified but is written as such to be explicit
+        if is_gap is None:  # inherit buffer's gap status
+            buf_data = self.data if data is None else data
+        elif is_gap:  # change to gap
+            buf_data = None
+        else:  # change to non-gap
+            buf_data = data
+
+        return SeriesBuffer(
+            offset=offset, sample_rate=sample_rate, data=buf_data, shape=shape
+        )
 
     @staticmethod
     def fromoffsetslice(
@@ -598,7 +720,7 @@ class SeriesBuffer(TimeSpanLike):
         else:
             return None
 
-    def __add__(self, item: "SeriesBuffer") -> "SeriesBuffer":
+    def __add__(self, item: SeriesBuffer) -> SeriesBuffer:
         """Add two `SeriesBuffer`s, padding as necessary.
 
         Args:
@@ -737,23 +859,224 @@ class SeriesBuffer(TimeSpanLike):
         return sorted(out)
 
 
-@dataclass(eq=False)
-class TSFrame(Frame, TimeSpanLike):
-    """An sgn Frame object that holds a list of buffers
+def ensure_nonempty(func):
+    """Decorator to ensure TSFrame has buffers before accessing properties/methods.
 
-    Args:
-        buffers:
-            list[SeriesBuffer], An iterable of SeriesBuffers
+    Raises ValueError with a helpful message if the frame is empty.
     """
 
-    buffers: list[SeriesBuffer] = field(default_factory=list)
+    def wrapper(self, *args, **kwargs):
+        if len(self.buffers) == 0:
+            raise ValueError(
+                f"TSFrame.{func.__name__} cannot be used when there are no buffers "
+                f"in the frame. Use TSFrame.fill() to populate the frame."
+            )
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
+@dataclass(eq=False, kw_only=True)
+class TSCollectFrame(TimeSpanFrame):
+    """A collector for incrementally building a TSFrame with validation.
+
+    TSCollectFrame provides atomic all-or-nothing buffer collection:
+    - Buffers are collected in a temporary list
+    - Validation occurs on close()
+    - Only commits to parent TSFrame if all validations pass
+    - Can be used as a context manager for automatic cleanup
+
+    Args:
+        parent_frame: TSFrame, the frame to populate
+
+    Usage:
+        # Context manager (automatic close)
+        frame = TSFrame(offset=0, noffset=1000)
+        with frame.fill() as collector:
+            collector.append(buf1)
+            collector.append(buf2)
+        # frame now has buffers
+
+        # Manual (explicit control)
+        frame = TSFrame(offset=0, noffset=1000)
+        collector = frame.fill()
+        collector.append(buf1)
+        collector.close()
+    """
+
+    parent_frame: TSFrame
+    _buffers: list[SeriesBuffer] = field(default_factory=list, init=False, repr=False)
+    _closed: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self):
         super().__post_init__()
-        assert len(self.buffers) > 0, "Cannot create TSFrame with empty buffers list"
-        self.validate_buffers()
-        self.update_buffer_attrs()
-        self.spec = self.buffers[0].spec
+        # Inherit offset/noffset from parent
+        self.offset = self.parent_frame.offset
+        self.noffset = self.parent_frame.noffset
+        self.EOS = self.parent_frame.EOS
+        self.metadata = self.parent_frame.metadata
+
+    def __iter__(self):
+        """Iterate over collected buffers."""
+        return iter(self._buffers)
+
+    def __len__(self) -> int:
+        """Return number of collected buffers."""
+        return len(self._buffers)
+
+    def __enter__(self) -> TSCollectFrame:
+        """Enter context manager."""
+        if len(self.parent_frame.buffers) > 0:
+            raise ValueError(
+                "Cannot use fill() on a TSFrame that already has buffers. "
+                "TSCollectFrame can only populate empty frames."
+            )
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit context manager - close if no exception occurred."""
+        if exc_type is None:
+            self.close()
+        return False
+
+    def append(self, item: SeriesBuffer) -> None:
+        """Append SeriesBuffer to temporary collection.
+
+        Validates that buffer falls within frame bounds and is contiguous
+        with previous buffers. Does not commit to parent frame until close().
+
+        Args:
+            item: SeriesBuffer to append
+        """
+        if self._closed:
+            raise ValueError("Cannot append to closed TSCollectFrame")
+
+        frame_end_offset = self.offset + self.noffset
+
+        # Check buffer falls within bounds
+        assert (
+            self.offset <= item.offset
+        ), f"Buffer offset {item.offset} starts before frame offset {self.offset}"
+        assert item.end_offset <= frame_end_offset, (
+            f"Buffer end_offset {item.end_offset} extends beyond frame "
+            f"end_offset {frame_end_offset}"
+        )
+
+        # Check contiguity with previous buffer
+        if self._buffers:
+            assert item.offset == self._buffers[-1].end_offset, (
+                f"Buffer offset {item.offset} is not contiguous with "
+                f"previous buffer end {self._buffers[-1].end_offset}"
+            )
+        else:
+            # First buffer must start at frame offset
+            assert item.offset == self.offset, (
+                f"First buffer offset {item.offset} must match "
+                f"frame offset {self.offset}"
+            )
+
+        self._buffers.append(item)
+
+    def extend(self, items: Iterable[SeriesBuffer]) -> None:
+        """Extend with multiple SeriesBuffers, validating each.
+
+        Args:
+            items: Iterable of SeriesBuffers to append
+        """
+        for item in items:
+            self.append(item)
+
+    def __iadd__(self, item: SeriesBuffer) -> TSCollectFrame:
+        """Support += operator for appending."""
+        self.append(item)
+        return self
+
+    def validate_span(self) -> None:
+        """Validate that buffers fully span the offset/noffset range.
+
+        Checks that:
+        - First buffer starts at frame offset
+        - Last buffer ends at frame offset+noffset (the frame's end_offset)
+        """
+        if not self._buffers:
+            raise ValueError("Cannot validate empty collector - no buffers added")
+
+        frame_end_offset = self.offset + self.noffset
+
+        assert self._buffers[0].offset == self.offset, (
+            f"First buffer offset {self._buffers[0].offset} != "
+            f"frame offset {self.offset}"
+        )
+        assert self._buffers[-1].end_offset == frame_end_offset, (
+            f"Last buffer end_offset {self._buffers[-1].end_offset} != "
+            f"frame end_offset {frame_end_offset}"
+        )
+
+    def close(self) -> None:
+        """Validate and commit buffers to parent TSFrame.
+
+        This validates that buffers span the frame's offset/noffset range,
+        then atomically commits them to the parent frame using set_buffers(),
+        which performs additional validation (contiguity, consistent specs, etc.).
+
+        After close(), this TSCollectFrame cannot be used again.
+        """
+        if self._closed:
+            raise ValueError("TSCollectFrame already closed")
+
+        # Validate that buffers span the frame's range
+        self.validate_span()
+
+        # Atomically commit to parent frame
+        # set_buffers() handles contiguity, backend, and spec validation
+        self.parent_frame.set_buffers(self._buffers)
+
+        # Mark as closed
+        self._closed = True
+
+
+@dataclass(eq=False)
+class TSFrame(TimeSpanFrame):
+    """An sgn Frame object that holds a list of buffers
+
+    TSFrame can be created with data (offset/noffset computed from buffers)
+    or empty with explicit offset/noffset for incremental population.
+
+    Args:
+        buffers: list[SeriesBuffer], SeriesBuffers to hold
+        offset: int, explicit offset when creating empty frame
+        noffset: int, explicit noffset (duration) when creating empty frame
+    """
+
+    buffers: list[SeriesBuffer] = field(default_factory=list)
+    offset: int = 0
+    noffset: int = 0
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        # If buffers exist, compute offset/noffset from buffers
+        if self.buffers:
+            # Ensure user didn't try to manually set offset/noffset
+            if self.offset != 0 or self.noffset != 0:
+                raise ValueError(
+                    "Cannot specify offset/noffset when providing buffers - "
+                    "they are computed from buffers"
+                )
+
+            # Compute from buffers
+            self.offset = self.buffers[0].offset
+            self.noffset = self.buffers[-1].end_offset - self.offset
+
+            # Validate and update buffer-dependent attributes
+            self.validate_buffers()
+            self.update_buffer_attrs()
+            self.spec = self.buffers[0].spec
+        else:
+            # Empty frame - offset/noffset are used as-is
+            # Set default attributes for empty frame
+            self.is_gap = False
+            self.spec = None
 
     def __getitem__(self, item):
         return self.buffers[item]
@@ -773,6 +1096,54 @@ class TSFrame(Frame, TimeSpanLike):
 
     def __len__(self):
         return len(self.buffers)
+
+    def fill(self) -> TSCollectFrame:
+        """Create a TSCollectFrame for atomically populating this frame.
+
+        Returns a TSCollectFrame that can be used to incrementally add buffers
+        with validation. The buffers are only committed to this frame when
+        close() is called (or automatically via context manager).
+
+        Returns:
+            TSCollectFrame: A collector for building this frame
+
+        Usage:
+            # Context manager (recommended - automatic close)
+            frame = TSFrame(offset=0, noffset=1000)
+            with frame.fill() as collector:
+                collector.append(buf1)
+                collector.append(buf2)
+            # frame now has buffers
+
+            # Manual (explicit control)
+            frame = TSFrame(offset=0, noffset=1000)
+            collector = frame.fill()
+            collector.append(buf1)
+            collector.close()  # commits to frame
+        """
+        return TSCollectFrame(parent_frame=self)
+
+    def validate_span(self) -> None:
+        """Validate that buffers fully span the offset/noffset range.
+
+        Checks that:
+        - First buffer starts at frame offset
+        - Last buffer ends at frame offset+noffset (the frame's end_offset)
+        - All buffers are contiguous
+        """
+        if self.buffers:
+            frame_end_offset = self.offset + self.noffset
+
+            assert self.buffers[0].offset == self.offset, (
+                f"First buffer offset {self.buffers[0].offset} != "
+                f"frame offset {self.offset}"
+            )
+            assert self.buffers[-1].end_offset == frame_end_offset, (
+                f"Last buffer end_offset {self.buffers[-1].end_offset} != "
+                f"frame end_offset {frame_end_offset}"
+            )
+            # validate_buffers checks contiguity
+            self.validate_buffers()
 
     def validate_buffers(self) -> None:
         """Sanity check that the buffers don't overlap nor have discontinuities.
@@ -826,34 +1197,7 @@ class TSFrame(Frame, TimeSpanLike):
         self.update_buffer_attrs()
 
     @property
-    def offset(self) -> int:
-        """The offset of the TSFrame, which is the offset of the first buffer.
-
-        Returns:
-            int, the offset of the TSFrame
-        """
-        return self.buffers[0].offset
-
-    @offset.setter
-    def offset(self, other: int) -> None:
-        msg = "cannot set offset on a TSFrame"
-        raise AttributeError(msg)
-
-    @property
-    def noffset(self) -> int:
-        """The number of offsets spanned by this frame.
-
-        Returns:
-            int, the offset duration
-        """
-        return self.buffers[-1].end_offset - self.offset
-
-    @noffset.setter
-    def noffset(self, other: int) -> None:
-        msg = "cannot set noffset on a TSFrame"
-        raise AttributeError(msg)
-
-    @property
+    @ensure_nonempty
     def shape(self) -> tuple[int, ...]:
         """The shape of the TSFrame.
 
@@ -863,6 +1207,7 @@ class TSFrame(Frame, TimeSpanLike):
         return self.buffers[0].shape[:-1] + (sum(b.samples for b in self.buffers),)
 
     @property
+    @ensure_nonempty
     def samples(self) -> int:
         """The number of samples in the Frame.
 
@@ -872,11 +1217,13 @@ class TSFrame(Frame, TimeSpanLike):
         return sum(buf.samples for buf in self.buffers)
 
     @property
+    @ensure_nonempty
     def sample_shape(self) -> tuple:
         """return the sample shape"""
         return self.buffers[0].sample_shape
 
     @property
+    @ensure_nonempty
     def sample_rate(self) -> int:
         """The sample rate of the TSFrame.
 
@@ -895,6 +1242,7 @@ class TSFrame(Frame, TimeSpanLike):
         return cls(buffers=[SeriesBuffer(**kwargs)])
 
     @property
+    @ensure_nonempty
     def backend(self) -> type[ArrayBackend]:
         """The backend of the buffers.
 
@@ -903,6 +1251,7 @@ class TSFrame(Frame, TimeSpanLike):
         """
         return self.buffers[0].backend
 
+    @ensure_nonempty
     def heartbeat(self, EOS=False):
         frame = TSFrame.from_buffer_kwargs(
             offset=self.offset,
@@ -933,6 +1282,7 @@ class TSFrame(Frame, TimeSpanLike):
     def __contains__(self, other):
         return other.slice in self.slice
 
+    @ensure_nonempty
     def intersect(self, other):
         """
         Intersect self with another frame and return up to three
@@ -1011,6 +1361,7 @@ class TSFrame(Frame, TimeSpanLike):
         )
 
     @property
+    @ensure_nonempty
     def tarr(self) -> Array:
         """An array of time stamps for each sample of the data in the buffer, in
         seconds.
@@ -1023,6 +1374,7 @@ class TSFrame(Frame, TimeSpanLike):
             + self.t0 / Time.SECONDS
         )
 
+    @ensure_nonempty
     def filleddata(self, zeros_func=None) -> Array:
         """Combined buffer data for the entire frame with zeros filled
         in for buffer gaps.
@@ -1040,6 +1392,7 @@ class TSFrame(Frame, TimeSpanLike):
         arrays = [buf.filleddata(zeros_func) for buf in self.buffers]
         return self.backend.cat(arrays, axis=-1)
 
+    @ensure_nonempty
     def search(self, buf):
         out = []
         for b in self:
@@ -1048,6 +1401,7 @@ class TSFrame(Frame, TimeSpanLike):
                 out.append(intersects)
         return out
 
+    @ensure_nonempty
     def align(self, tsslices) -> "TSFrame":
         "Align buffers according to the TSSlices provided"
         assert (
@@ -1065,20 +1419,3 @@ class TSFrame(Frame, TimeSpanLike):
                 aligned_buf = aligned_buf + sb
             bufs.append(aligned_buf)
         return TSFrame(buffers=bufs)
-
-
-@dataclass(eq=False)
-class TSEmptyFrame(TimeSpanLike):
-    """An sgn Frame object that holds no buffers but can be promoted to a
-    TSFrame when set_buffers is called"""
-
-    offset: int
-    noffset: int
-
-    def __call__(self, buffers):
-        print(buffers)
-        frame = TSFrame(buffers=buffers)
-        assert (
-            frame.slice == self.slice
-        ), "The buffers provided to not span the same offsets as this empty frame"
-        return frame

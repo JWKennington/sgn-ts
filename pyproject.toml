@@ -112,6 +112,10 @@ source = [
 
 [tool.coverage.report]
 omit = ["_version.py", "tests/*", "examples/*", "setup.py"]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "^\\s*\\.\\.\\.",
+]
 
 [tool.isort]
 profile = "black"

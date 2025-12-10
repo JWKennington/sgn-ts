@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from functools import wraps
 from typing import Callable
 
 import numpy as np
 from sgn import validator
-from sgn.base import SourcePad
+from sgn.base import SinkPad
 
-from sgnts.base import SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import SeriesBuffer, TSCollectFrame, TSFrame, TSTransform
+from sgnts.decorators import transform
 
 
 @dataclass
@@ -33,6 +33,43 @@ class NaryTransform(TSTransform):
         assert self.op is not None, "op must be provided"
         self._validate_op()
 
+    def apply(self, *buffers: SeriesBuffer) -> SeriesBuffer:
+        """Apply the operator to the given sequence of buffers"""
+        # Check if there are any gaps
+        if any(buf.is_gap for buf in buffers):
+            data = None
+        else:
+            assert self.op is not None
+            data = self.op(*[buf.data for buf in buffers])
+
+        return SeriesBuffer(
+            data=data,
+            offset=buffers[0].offset,
+            sample_rate=buffers[0].sample_rate,
+            shape=buffers[0].shape,
+        )
+
+    @transform.many_to_one
+    def process(
+        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSCollectFrame
+    ) -> None:
+        """Process multiple input frames to single output."""
+        input_buffers = [frame.buffers for frame in input_frames.values()]
+
+        # Check all prepared frames have same number of buffers, this
+        # is to make sure that zip doesn't silently drop any buffers
+        assert all(len(b) == len(input_buffers[0]) for b in input_buffers), (
+            "Prepared frames have different number "
+            "of buffers, expected same number of "
+            "buffers for all sink pads, got:"
+            f" {[len(b) for b in input_buffers]}"
+        )
+
+        # Apply the operator to zipped groups of buffers
+        for buffers in zip(*input_buffers):
+            buf = self.apply(*buffers)
+            output_frame.append(buf)
+
     def _validate_op(self):
         """Validate the given operator to make sure it
         has the right number of arguments
@@ -50,47 +87,6 @@ class NaryTransform(TSTransform):
                 f"Got {len(sig.parameters)} arguments, "
                 f"expected {len(self.aligned_sink_pads)}"
             )
-
-    def apply(self, *buffers: SeriesBuffer) -> SeriesBuffer:
-        """Apply the operator to the given sequence of buffers"""
-        # Check if there are any gaps
-        if any(buf.is_gap for buf in buffers):
-            data = None
-        else:
-            assert self.op is not None
-            data = self.op(*[buf.data for buf in buffers])
-
-        return SeriesBuffer(
-            data=data,
-            offset=buffers[0].offset,
-            sample_rate=buffers[0].sample_rate,
-            shape=buffers[0].shape,
-        )
-
-    @wraps(TSTransform.new)
-    def new(self, pad: SourcePad) -> TSFrame:  # type: ignore
-        """New method"""
-        # Get all prepared frames
-        prepped_pad_buffers = [
-            self.preparedframes[snk].buffers for snk in self.sink_pads
-        ]
-
-        # Check all prepared frames have same number of buffers, this
-        # is to make sure that zip doesn't silently drop any buffers
-        assert all(
-            len(b) == len(prepped_pad_buffers[0]) for b in prepped_pad_buffers
-        ), (
-            "Prepared frames have different number "
-            "of buffers, expected same number of "
-            "buffers for all sink pads, got:"
-            f" {[len(b) for b in prepped_pad_buffers]}"
-        )
-
-        # Apply the operator to zipped groups of buffers
-        bufs = [self.apply(*b) for b in zip(*prepped_pad_buffers)]
-
-        # Assemble the frame and return
-        return TSFrame(buffers=bufs, EOS=self.at_EOS)
 
 
 @dataclass

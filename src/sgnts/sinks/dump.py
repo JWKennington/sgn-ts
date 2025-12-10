@@ -3,10 +3,11 @@ from dataclasses import dataclass
 import numpy as np
 from sgn import validator
 
-from sgnts.base import Time, TSSink
+from sgnts.base import Time, TSFrame, TSSink
+from sgnts.decorators import sink
 
 
-@dataclass
+@dataclass(kw_only=True)
 class DumpSeriesSink(TSSink):
     """A sink element that dumps time series data to a txt file.
 
@@ -17,12 +18,10 @@ class DumpSeriesSink(TSSink):
             bool, be verbose
     """
 
-    fname: str = "out.txt"
+    fname: str
     verbose: bool = False
 
     def configure(self) -> None:
-        self.sink_pad = self.sink_pads[0]
-
         # overwrite existing file
         with open(self.fname, "w"):
             pass
@@ -53,15 +52,13 @@ class DumpSeriesSink(TSSink):
         with open(self.fname, "ab") as f:
             np.savetxt(f, out)
 
-    def internal(self) -> None:
+    @sink.single_pad
+    def process(self, input_frame: TSFrame) -> None:
         """Write out time-series data."""
-        super().internal()
-        sink_pad = self.sink_pad
-        frame = self.preparedframes[sink_pad]
-        if frame.EOS:
-            self.mark_eos(sink_pad)
+        if input_frame.EOS:
+            self.mark_eos(self.sink_pads[0])
         if self.verbose is True:
-            print(frame)
-        for buf in frame:
+            print(input_frame)
+        for buf in input_frame:
             if not buf.is_gap:
                 self.write_to_file(buf)

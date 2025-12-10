@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import pytest
 import sys
 from unittest.mock import patch
@@ -271,7 +270,7 @@ def test_torch_not_available_resample():
 
 def test_empty_buffer_handling():
     """Test for line 299 - handling empty buffers"""
-    from sgnts.base import SeriesBuffer, TSFrame, Offset
+    from sgnts.base import SeriesBuffer, Offset
 
     # Create a resampler
     inrate = 256
@@ -284,26 +283,31 @@ def test_empty_buffer_handling():
         outrate=outrate,
     )
 
-    # Create an empty buffer frame
+    # Create an empty buffer
     empty_buffer = SeriesBuffer(
         offset=Offset.fromsamples(0, inrate),
         sample_rate=inrate,
         data=None,
         shape=(1, 0),  # Empty shape in the time dimension
     )
-    frame = TSFrame(buffers=[empty_buffer], EOS=False)
 
-    # Set up the resampler's prepared data (normally done by the framework)
-    resampler.preparedframes = {resampler.sink_pads[0]: frame}
+    # Push buffer to the resampler's audioadapter (simulating pull())
+    resampler.inbufs[resampler.sink_pads[0]].push(empty_buffer)
+
+    # Set up output offsets
     resampler.preparedoutoffsets = {
         "offset": Offset.fromsamples(0, outrate),
         "noffset": Offset.fromsamples(0, outrate),
     }
 
-    # Call the new method directly - this will execute line 299
+    # Call internal() to process the frame and populate outframes
+    resampler.internal()
+
+    # Call the new method to get the output
     output_frame = resampler.new(resampler.source_pads[0])
 
     # Verify result
+    assert output_frame is not None
     assert len(output_frame) == 1
     assert output_frame[0].shape[-1] == 0
     assert output_frame[0].is_gap

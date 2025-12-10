@@ -15,6 +15,7 @@ from sgnts.base.base import (
     TSSource,
     TSTransform,
 )
+from sgnts.base.buffer import EventFrame
 from sgnts.base.numpy_backend import NumpyBackend
 
 
@@ -155,6 +156,10 @@ class TestAdapterConfig:
         assert ac.skip_gaps is False
 
 
+class DummyTSTransform(TSTransform):
+    pass
+
+
 class Test_TSTransSink:
     """Test group for the TSTransSink class
     Note, since the _TSTransSink class is not actually instantiable,
@@ -165,7 +170,7 @@ class Test_TSTransSink:
     @pytest.fixture(autouse=True)
     def ts(self):
         """Test creating an instance of the TSTransSink class"""
-        ts = TSTransform(
+        ts = DummyTSTransform(
             sink_pad_names=["I1"],
             source_pad_names=["O1"],
             max_age=100 * Time.SECONDS,
@@ -203,7 +208,7 @@ class Test_TSTransSink:
 
     def test_pull_unaligned_pad(self):
         """Test pull method with unaligned pad"""
-        ts = TSTransform(
+        ts = DummyTSTransform(
             sink_pad_names=["aligned", "unaligned"],
             source_pad_names=["out"],
             unaligned=["unaligned"],
@@ -239,22 +244,69 @@ class TestTSTransform:
 
     def test_init(self):
         """Test creating an instance of the TSTransform class"""
-        ts = TSTransform(
+        ts = DummyTSTransform(
             sink_pad_names=["I1"],
             source_pad_names=["O1"],
             max_age=100 * Time.SECONDS,
         )
         assert isinstance(ts, TSTransform)
 
-    def test_base_class_new_err(self):
-        """Test the base class new method"""
-        ts = TSTransform(
+    def test_base_class_internal(self):
+        """Test that the base class internal method can be called"""
+        # Create transform with adapter disabled to test basic internal() behavior
+        ts = DummyTSTransform(
             sink_pad_names=["I1"],
             source_pad_names=["O1"],
             max_age=100 * Time.SECONDS,
+            adapter_config=AdapterConfig(),
         )
-        with pytest.raises(NotImplementedError):
-            ts.new(pad=ts.srcs["O1"])
+
+        # Create dummy buffer for internal() to process
+        dummy_buffer = SeriesBuffer(
+            offset=Offset.fromsamples(0, 256),
+            sample_rate=256,
+            data=numpy.zeros((1, 256)),
+            shape=(1, 256),
+        )
+
+        # Push buffer to the audioadapter
+        ts.inbufs[ts.sink_pads[0]].push(dummy_buffer)
+
+        # Set up the output offset state
+        ts.preparedoutoffsets = {
+            "offset": Offset.fromsamples(0, 256),
+            "noffset": Offset.fromsamples(256, 256),
+        }
+
+        # internal() should work without raising - subclasses override to
+        # add behavior
+        ts.internal()
+
+        # Verify that outframes is not populated by the base class
+        assert ts.outframes[ts.source_pads[0]] is None
+
+    def test_next_outputs_helper(self):
+        """Test the next_outputs() convenience method"""
+        ts = DummyTSTransform(
+            sink_pad_names=["I1"],
+            source_pad_names=["O1"],
+            max_age=100 * Time.SECONDS,
+            adapter_config=AdapterConfig(),
+        )
+
+        # Set up the output offset state
+        ts.preparedoutoffsets = {
+            "offset": Offset.fromsamples(0, 256),
+            "noffset": Offset.fromsamples(256, 256),
+        }
+
+        # Call next_outputs() to get output frames
+        output_frames = ts.next_outputs()
+
+        # Verify we get a dict with the source pad
+        assert isinstance(output_frames, dict)
+        assert ts.source_pads[0] in output_frames
+        assert output_frames[ts.source_pads[0]] is not None
 
     def test_init_with_adapter_config_alignment(self):
         """Test TSTransform initialization with adapter_config that has alignment"""
@@ -265,7 +317,7 @@ class TestTSTransform:
             align_to=one_second,
         )
 
-        ts = TSTransform(
+        ts = DummyTSTransform(
             sink_pad_names=["test"],
             source_pad_names=["test"],
             adapter_config=config,
@@ -280,7 +332,7 @@ class TestTSTransform:
 
     def test_init_with_unaligned_pads(self):
         """Test TSTransform initialization with unaligned pads"""
-        ts = TSTransform(
+        ts = DummyTSTransform(
             sink_pad_names=["aligned", "unaligned"],
             source_pad_names=["out"],
             unaligned=["unaligned"],
@@ -425,3 +477,166 @@ class TestTSSource:
         # Manually reset the end attribute to None
         src.end = None
         assert src.end_offset == float("inf")
+
+
+class TestUnalignedTSFrameInputs:
+    """Test group for unaligned TSFrame inputs coverage"""
+
+    def test_next_input_unaligned_tsframe(self):
+        """Test next_input_inputs with unaligned TSFrame pad (lines 249-254)"""
+        # Create transform with unaligned pad configured
+        ts = DummyTSTransform(
+            sink_pad_names=["aligned", "unaligned"],
+            source_pad_names=["out"],
+            unaligned=["unaligned"],
+        )
+
+        # Set the input frame type to TSFrame for the unaligned pad
+        ts.input_frame_types["unaligned"] = TSFrame
+
+        # Create a TSFrame for the unaligned pad
+        unaligned_frame = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=0,
+                    sample_rate=1,
+                    shape=(10,),
+                    data=numpy.arange(10),
+                )
+            ]
+        )
+
+        # Store it in unaligned_data as would happen during pull()
+        unaligned_pad = ts.snks["unaligned"]
+        ts.unaligned_data[unaligned_pad] = unaligned_frame
+
+        # Create dummy frame for aligned pad
+        aligned_frame = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=0,
+                    sample_rate=1,
+                    shape=(10,),
+                    data=numpy.zeros(10),
+                )
+            ]
+        )
+        aligned_pad = ts.snks["aligned"]
+        ts.preparedframes[aligned_pad] = aligned_frame
+
+        # Call next_inputs() which should retrieve the unaligned TSFrame
+        result = ts.next_inputs()
+
+        # Verify the unaligned frame was returned
+        assert unaligned_pad in result
+        assert result[unaligned_pad] is unaligned_frame
+
+
+class TestEventFrameInputs:
+    """Test group for EventFrame inputs coverage"""
+
+    def test_next_event_inputs_aligned_pad(self):
+        """Test next_event_inputs with aligned EventFrame pad (line 286)"""
+        # Create transform with aligned pad
+        ts = DummyTSTransform(
+            sink_pad_names=["event_input"],
+            source_pad_names=["out"],
+        )
+
+        # Configure the pad to expect EventFrame input
+        ts.input_frame_types["event_input"] = EventFrame
+
+        # Create an EventFrame
+        event_frame = EventFrame(
+            offset=Offset.fromsamples(0, 256), noffset=Offset.fromsamples(256, 256)
+        )
+
+        # Store it in preparedframes (as would happen for aligned pads)
+        event_pad = ts.snks["event_input"]
+        ts.preparedframes[event_pad] = event_frame
+
+        # Call next_event_inputs() which should retrieve from preparedframes
+        result = ts.next_event_inputs()
+
+        # Verify the event frame was returned
+        assert event_pad in result
+        assert result[event_pad] is event_frame
+
+
+class TestEventFrameOutputs:
+    """Test group for EventFrame outputs coverage"""
+
+    def test_next_event_output_single(self):
+        """Test next_event_output with single event output pad (lines 343-348)"""
+        # Create transform with one source pad configured for events
+        ts = DummyTSTransform(
+            sink_pad_names=["in"],
+            source_pad_names=["event_out"],
+        )
+
+        # Configure the source pad to produce EventFrame
+        ts.output_frame_types["event_out"] = EventFrame
+
+        # Set up preparedoutoffsets as would be done by internal()
+        ts.preparedoutoffsets = {
+            "offset": Offset.fromsamples(0, 256),
+            "noffset": Offset.fromsamples(256, 256),
+        }
+
+        # Set up preparedframes (empty is fine for this test)
+        ts.preparedframes = {}
+
+        # Call next_event_output() which should create an EventFrame
+        event_pad, event_frame = ts.next_event_output()
+
+        # Verify the event frame was created
+        assert event_pad == ts.srcs["event_out"]
+        assert isinstance(event_frame, EventFrame)
+        assert event_frame.offset == Offset.fromsamples(0, 256)
+        assert event_frame.noffset == Offset.fromsamples(256, 256)
+
+    def test_next_event_outputs_multiple(self):
+        """Test next_event_outputs with multiple event output pads (lines 360-373)"""
+        # Create transform with multiple source pads configured for events
+        ts = DummyTSTransform(
+            sink_pad_names=["in"],
+            source_pad_names=["event_out1", "event_out2"],
+        )
+
+        # Configure both source pads to produce EventFrame
+        ts.output_frame_types["event_out1"] = EventFrame
+        ts.output_frame_types["event_out2"] = EventFrame
+
+        # Set up preparedoutoffsets
+        ts.preparedoutoffsets = {
+            "offset": Offset.fromsamples(0, 256),
+            "noffset": Offset.fromsamples(256, 256),
+        }
+
+        # Set up preparedframes with EOS flag
+        input_frame = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=0, sample_rate=256, shape=(256,), data=numpy.zeros(256)
+                )
+            ]
+        )
+        input_frame.EOS = True
+        ts.preparedframes = {ts.snks["in"]: input_frame}
+
+        # Call next_event_outputs() which should create EventFrames for both pads
+        result = ts.next_event_outputs()
+
+        # Verify both event frames were created
+        assert len(result) == 2
+        assert ts.srcs["event_out1"] in result
+        assert ts.srcs["event_out2"] in result
+
+        # Verify properties
+        for pad, frame in result.items():
+            assert isinstance(frame, EventFrame)
+            assert frame.offset == Offset.fromsamples(0, 256)
+            assert frame.noffset == Offset.fromsamples(256, 256)
+            assert frame.EOS is True
+            # Verify it was registered in outframes
+            assert ts.outframes[pad] is frame

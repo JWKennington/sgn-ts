@@ -5,7 +5,16 @@ import time as stime
 from collections import deque
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import Any, Generic, Optional, Sequence, Type, TypeVar, Union
+from typing import (
+    Any,
+    ClassVar,
+    Generic,
+    Optional,
+    Sequence,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import numpy
 from sgn.base import (
@@ -21,7 +30,13 @@ from sgn.subprocess import ParallelizeSourceElement, WorkerContext
 
 from sgnts.base.array_ops import Array
 from sgnts.base.audioadapter import AdapterConfig, Audioadapter
-from sgnts.base.buffer import SeriesBuffer, TSFrame
+from sgnts.base.buffer import (
+    EventFrame,
+    SeriesBuffer,
+    TimeSpanFrame,
+    TSCollectFrame,
+    TSFrame,
+)
 from sgnts.base.offset import Offset
 from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.base.time import Time
@@ -42,47 +57,83 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
     - Optional adapter processing (overlap/stride/gap handling)
     - Timeout detection and EOS handling
 
+    Note:
+        Subclasses can customize alignment behavior by setting class-level
+        attributes:
+          - static_unaligned_sink_pads: Declare which sink pads should not be
+            aligned (e.g., EventFrame pads or auxiliary inputs).
+
     Args:
         max_age:
             int, the max age before timeout, in nanoseconds
         adapter_config:
             AdapterConfig, holds parameters used for audioadapter behavior
         unaligned:
-            list[str], the list of unaligned sink pads
+            list[str], the list of unaligned sink pads.
 
     """
 
+    # Class-level attributes for alignment configuration
+    static_unaligned_sink_pads: ClassVar[list[str]] = []
+
     max_age: int = 100 * Time.SECONDS
     adapter_config: AdapterConfig = field(default_factory=AdapterConfig)
-    unaligned: Optional[Sequence[str]] = None
+    unaligned: Sequence[str] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize timeseries state."""
         super().__post_init__()
 
-        # First, determine which input pads actually require alignment
-        if self.unaligned is None:
-            self.unaligned_sink_pads = []
-        else:
-            self.unaligned_sink_pads = [self.snks[name] for name in self.unaligned]
+        # Determine which user-provided input pads require alignment
+        unaligned_names = list(self.unaligned) + self.static_unaligned_sink_pads
+
+        # Convert pad names to SinkPad objects and store in instance variable
+        self.unaligned_sink_pads = [
+            self.snks[name] for name in unaligned_names  # type: ignore[attr-defined]
+        ]
         self.aligned_sink_pads = [
             p for p in self.sink_pads if p not in self.unaligned_sink_pads
         ]
 
         # Initialize metadata for exempt sink pads
-        self.unaligned_data = {p: None for p in self.unaligned_sink_pads}
+        self.unaligned_data: dict[SinkPad, TimeSpanFrame | None] = {
+            p: None for p in self.unaligned_sink_pads
+        }
 
         # Initialize the alignment metadata for all sink pads that need to be aligned
         self._is_aligned = False
         self.inbufs = {p: Audioadapter() for p in self.aligned_sink_pads}
-        self.preparedframes = {p: None for p in self.aligned_sink_pads}
-        self.aligned_slices = {p: None for p in self.aligned_sink_pads}
-        self.outframes = {p: None for p in self.source_pads}
-        self.preparedoutoffsets = None
+        self.preparedframes: dict[SinkPad, TSFrame | None] = {
+            p: None for p in self.aligned_sink_pads
+        }
+        self.aligned_slices: dict[SinkPad, TSSlices | None] = {
+            p: None for p in self.aligned_sink_pads
+        }
+        self.outframes: dict[SourcePad, TimeSpanFrame | None] = {
+            p: None for p in self.source_pads
+        }
+        self.preparedoutoffsets = {"offset": 0, "noffset": 0}
         self.at_EOS = False
-        self._last_ts = {p: None for p in self.aligned_sink_pads}
-        self._last_offset = {p: None for p in self.aligned_sink_pads}
-        self.metadata = {p: None for p in self.aligned_sink_pads}
+        self._last_ts: dict[SinkPad, float | None] = {
+            p: None for p in self.aligned_sink_pads
+        }
+        self._last_offset: dict[SinkPad, int | None] = {
+            p: None for p in self.aligned_sink_pads
+        }
+        self.metadata: dict[SinkPad, dict[Any, Any]] = {
+            p: {} for p in self.aligned_sink_pads
+        }
+
+        # Initialize default frame types for inputs and outputs
+        # These can be overridden by derived classes in configure()
+        self.input_frame_types: dict[str, type[TimeSpanFrame]] = {
+            name: TSFrame for name in self.sink_pad_names  # type: ignore[attr-defined]
+        }
+        # Initialize default output frame types (only for elements with source pads)
+        # All pads default to TSFrame, elements can override in configure()
+        self.output_frame_types: dict[str, type[TimeSpanFrame]] = {
+            name: TSFrame for name in getattr(self, "source_pad_names", [])
+        }
 
         # Configure adapter and element-specific attributes
         self.configure()
@@ -123,7 +174,216 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
         """Validate element configuration."""
         pass
 
-    def pull(self, pad: SinkPad, frame: TSFrameLike) -> None:
+    def next_input(self) -> tuple[SinkPad, TSFrame]:
+        """Convenience method - get single TSFrame input.
+
+        Equivalent to next_ts_input(). For transforms that only work with TSFrames.
+
+        Returns:
+            TSFrame, single input frame
+        """
+        return self.next_ts_input()
+
+    def next_output(self) -> tuple[SourcePad, TSCollectFrame]:
+        """Convenience method - get single TSCollectFrame output.
+
+        Equivalent to next_ts_output(). For transforms that only work with TSFrames.
+
+        Note: Elements using this method must call `.close()` on the collector
+        when done populating buffers.
+
+        Returns:
+            tuple[SourcePad, TSCollectFrame], pad and collector for output frame
+        """
+        return self.next_ts_output()
+
+    def next_inputs(self) -> dict[SinkPad, TSFrame]:
+        """Convenience method - get all TSFrame inputs.
+
+        Equivalent to next_ts_inputs(). For transforms that only work with TSFrames.
+
+        Returns:
+            dict[SinkPad, TSFrame], dictionary of input frames
+        """
+        return self.next_ts_inputs()
+
+    def next_outputs(self) -> dict[SourcePad, TSCollectFrame]:
+        """Convenience method - get all TSCollectFrame outputs.
+
+        Equivalent to next_ts_outputs(). For transforms that only work with TSFrames.
+
+        Note: Elements using this method must call `.close()` on each collector
+        when done populating buffers.
+
+        Returns:
+            dict[SourcePad, TSCollectFrame], dictionary of collectors for output frames
+        """
+        return self.next_ts_outputs()
+
+    def next_ts_input(self) -> tuple[SinkPad, TSFrame]:
+        """Get single TSFrame input.
+
+        Returns:
+            TSFrame, the single TSFrame from inputs
+
+        Raises:
+            AssertionError if there is not exactly one TSFrame input
+        """
+        all_ts = self.next_ts_inputs()
+        assert (
+            len(all_ts) == 1
+        ), f"next_ts_input() requires exactly one TSFrame input, got {len(all_ts)}"
+        return next(iter(all_ts.items()))
+
+    def next_ts_inputs(self) -> dict[SinkPad, TSFrame]:
+        """Get all TSFrame inputs based on input_frame_types configuration.
+
+        Returns:
+            dict[SinkPad, TSFrame], mapping of sink pads to TSFrame inputs
+        """
+        result: dict[SinkPad, TSFrame] = {}
+        for pad in self.sink_pads:
+            pad_name = self.rsnks[pad]  # type: ignore[attr-defined]
+            if self.input_frame_types.get(pad_name, TSFrame) == TSFrame:
+                if pad in self.aligned_sink_pads:
+                    frame = self.preparedframes[pad]
+                    assert frame is not None
+                    result[pad] = frame
+                else:
+                    unaligned_frame = self.unaligned_data[pad]
+                    assert isinstance(unaligned_frame, TSFrame), (
+                        f"Expected TSFrame on unaligned pad {pad_name}, "
+                        f"got {type(unaligned_frame).__name__}"
+                    )
+                    result[pad] = unaligned_frame
+        return result
+
+    def next_event_input(self) -> tuple[SinkPad, EventFrame]:
+        """Get single EventFrame input.
+
+        Returns:
+            EventFrame, the single EventFrame from inputs
+
+        Raises:
+            AssertionError if there is not exactly one EventFrame input
+        """
+        all_events = self.next_event_inputs()
+        assert len(all_events) == 1, (
+            f"next_event_input() requires exactly one EventFrame input, "
+            f"got {len(all_events)}"
+        )
+        return next(iter(all_events.items()))
+
+    def next_event_inputs(self) -> dict[SinkPad, EventFrame]:
+        """Get all EventFrame inputs based on input_frame_types configuration.
+
+        Returns:
+            dict[SinkPad, EventFrame], mapping of sink pads to EventFrame inputs
+        """
+        result: dict[SinkPad, EventFrame] = {}
+        for pad in self.sink_pads:
+            pad_name = self.rsnks[pad]  # type: ignore[attr-defined]
+            if self.input_frame_types.get(pad_name) == EventFrame:
+                if pad in self.unaligned_sink_pads:
+                    frame = self.unaligned_data[pad]
+                else:
+                    frame = self.preparedframes[pad]
+                assert isinstance(frame, EventFrame), (
+                    f"Expected EventFrame on pad {pad_name}, "
+                    f"got {type(frame).__name__}"
+                )
+                result[pad] = frame
+        return result
+
+    def next_ts_output(self) -> tuple[SourcePad, TSCollectFrame]:
+        """Get single TSCollectFrame for output with offsets from preparedoutoffsets.
+
+        Note: The caller must call `.close()` on the collector when done
+        populating buffers.
+
+        Returns:
+            tuple[SourcePad, TSCollectFrame], pad and collector for the output
+            frame
+
+        Raises:
+            AssertionError if there is not exactly one TS output pad
+        """
+        all_ts = self.next_ts_outputs()
+        assert (
+            len(all_ts) == 1
+        ), f"next_ts_output() requires exactly one TS output pad, got {len(all_ts)}"
+        return next(iter(all_ts.items()))
+
+    def next_ts_outputs(self) -> dict[SourcePad, TSCollectFrame]:
+        """Get all TSCollectFrames for output pads configured as TS outputs.
+
+        Creates TSFrame instances with offset/noffset from preparedoutoffsets,
+        then creates TSCollectFrame collectors for atomic buffer population.
+        The parent TSFrames are automatically registered in self.outframes.
+
+        Returns:
+            dict[SourcePad, TSCollectFrame], mapping of source pads to collectors
+        """
+        offset = self.preparedoutoffsets["offset"]
+        noffset = self.preparedoutoffsets["noffset"]
+        at_EOS = any(
+            frame.EOS for frame in self.preparedframes.values() if frame is not None
+        )
+
+        result: dict[SourcePad, TSCollectFrame] = {}
+        for pad in self.source_pads:
+            pad_name = self.rsrcs[pad]  # type: ignore[attr-defined]
+            if self.output_frame_types.get(pad_name, TSFrame) == TSFrame:
+                frame = TSFrame(offset=offset, noffset=noffset, EOS=at_EOS)
+                collector = frame.fill()
+                result[pad] = collector
+                # Automatically register the parent frame in outframes
+                self.outframes[pad] = frame
+        return result
+
+    def next_event_output(self) -> tuple[SourcePad, EventFrame]:
+        """Get single EventFrame for output with offset/noffset from preparedoutoffsets.
+
+        Returns:
+            EventFrame, an empty event frame ready to be populated
+
+        Raises:
+            AssertionError if there is not exactly one event output pad
+        """
+        all_events = self.next_event_outputs()
+        assert len(all_events) == 1, (
+            f"next_event_output() requires exactly one event output pad, "
+            f"got {len(all_events)}"
+        )
+        return next(iter(all_events.items()))
+
+    def next_event_outputs(self) -> dict[SourcePad, EventFrame]:
+        """Get all EventFrames for output pads configured as event outputs.
+
+        Creates EventFrame instances with offset/noffset from preparedoutoffsets
+        for all source pads configured to produce EventFrame. The frames are
+        automatically registered in self.outframes for return.
+
+        Returns:
+            dict[SourcePad, EventFrame], mapping of source pads to empty EventFrames
+        """
+        offset = self.preparedoutoffsets["offset"]
+        noffset = self.preparedoutoffsets["noffset"]
+        at_EOS = any(
+            frame.EOS for frame in self.preparedframes.values() if frame is not None
+        )
+
+        result: dict[SourcePad, EventFrame] = {}
+        for pad in self.source_pads:
+            pad_name = self.rsrcs[pad]  # type: ignore[attr-defined]
+            if self.output_frame_types.get(pad_name) == EventFrame:
+                frame = EventFrame(offset=offset, noffset=noffset, EOS=at_EOS)
+                result[pad] = frame
+                # Automatically register in outframes
+                self.outframes[pad] = frame
+        return result
+
+    def pull(self, pad: SinkPad, frame: TimeSpanFrame) -> None:
         """Pull data and queue for alignment.
 
         Pull data from the input pads (source pads of upstream elements) and
@@ -133,7 +393,7 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
             pad:
                 SinkPad, The sink pad that is pulling the frame
             frame:
-                TSFrame, The frame that is pulled to sink pad
+                TimeSpanFrame, The frame that is pulled to sink pad
         """
         self.at_EOS |= frame.EOS
 
@@ -217,6 +477,7 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
                                     samples=15
 
         """
+        assert self.audioadapters is not None
         a = self.audioadapters[pad]
         buf0 = frame[0]
         sample_rate = buf0.sample_rate
@@ -341,8 +602,8 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
                     end_offset = a.offset + Offset.fromsamples(
                         num_copy_samples, a.sample_rate
                     )
-                    preparedbufs = a.get_sliced_buffers(
-                        (a.offset, end_offset), pad_start=False
+                    preparedbufs = list(
+                        a.get_sliced_buffers((a.offset, end_offset), pad_start=False)
                     )
                     outnoffset = end_offset - a.offset
                     self.preparedoutoffsets = {
@@ -459,8 +720,10 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
                     min_latest = earliest + off
 
             for sink_pad in self.aligned_sink_pads:
-                out = self.inbufs[sink_pad].get_sliced_buffers(
-                    (earliest, min_latest), pad_start=True
+                out = list(
+                    self.inbufs[sink_pad].get_sliced_buffers(
+                        (earliest, min_latest), pad_start=True
+                    )
                 )
                 if min_latest > self.inbufs[sink_pad].offset:
                     self.inbufs[sink_pad].flush_samples_by_end_offset(min_latest)
@@ -480,15 +743,18 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
 
             # Apply buffer alignment if requested
             if self.adapter_config.align_buffers:
-                self.aligned_slices = self._compute_aligned_slices()
+                computed_slices = self._compute_aligned_slices()
+                for pad, slices in computed_slices.items():
+                    self.aligned_slices[pad] = slices
 
                 for pad in self.aligned_sink_pads:
                     aligned_slice = self.aligned_slices[pad]
+                    assert aligned_slice is not None
+                    frame = self.preparedframes[pad]
+                    assert frame is not None
                     # Only align if there are slices (skip if all gaps)
                     if aligned_slice.slices:
-                        self.preparedframes[pad] = self.preparedframes[pad].align(
-                            aligned_slice
-                        )
+                        self.preparedframes[pad] = frame.align(aligned_slice)
 
             # Set preparedoutoffsets for non-adapter case
             if not self.is_adapter_enabled:
@@ -505,17 +771,20 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
         """
         # Find minimum sampling rate across all aligned pads
         nongap_slices: dict[SinkPad, TSSlices] = {}
-        min_rate = min(
-            self.preparedframes[pad].sample_rate for pad in self.aligned_sink_pads
-        )
+        sample_rates = []
+        for pad in self.aligned_sink_pads:
+            frame = self.preparedframes[pad]
+            assert frame is not None
+            sample_rates.append(frame.sample_rate)
+        min_rate = min(sample_rates)
 
         # For each pad, extract slices corresponding to non-gaps and align to
         # minimum rate
         for pad in self.aligned_sink_pads:
+            frame = self.preparedframes[pad]
+            assert frame is not None
             # Extract non-gap buffer slices from the prepared frame
-            buffer_slices = [
-                buf.slice for buf in self.preparedframes[pad].buffers if not buf.is_gap
-            ]
+            buffer_slices = [buf.slice for buf in frame.buffers if not buf.is_gap]
 
             if not buffer_slices:
                 # No non-gap buffers, no slices to align
@@ -635,31 +904,79 @@ class TimeSeriesMixin(ElementLike, Generic[TSFrameLike]):
 
 
 @dataclass
-class TSTransform(TimeSeriesMixin[TSFrame], TransformElement[TSFrame]):
+class TSTransform(TimeSeriesMixin[TSFrame], TransformElement[TimeSpanFrame]):
     """A time-series transform element."""
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        """The transform function must be provided by the subclass.
+    def internal(self) -> None:
+        """Process frames by calling child class implementation.
+
+        If the child class defines a process() method, it will be called with
+        input and output frame dictionaries. Otherwise, child classes should
+        override internal() directly.
+        """
+        super().internal()
+
+        # Check if the element defines a process() method
+        if hasattr(self, "process"):
+            # Collect all input frames (both TSFrame and EventFrame)
+            inframes: dict[SinkPad, TimeSpanFrame] = {}
+            inframes.update(self.next_ts_inputs())
+            inframes.update(self.next_event_inputs())
+
+            # Collect all output collectors/frames (TSCollectFrame or EventFrame)
+            ts_collectors = self.next_ts_outputs()
+            outframes: dict[SourcePad, TimeSpanFrame | TSCollectFrame] = {}
+            outframes.update(ts_collectors)
+            outframes.update(self.next_event_outputs())
+
+            # Call the process method
+            self.process(inframes, outframes)  # type: ignore[attr-defined]
+
+            # Close all TS collectors to commit buffers to parent frames
+            for collector in ts_collectors.values():
+                collector.close()
+
+    def new(self, pad: SourcePad) -> TimeSpanFrame:
+        """Return the output frame for the given pad.
 
         It should take the source pad as an argument and return a new
-        TSFrame.
+        TSFrame or EventFrame.
 
         Args:
             pad:
                 SourcePad, The source pad that is producing the transformed frame
 
         Returns:
-            TSFrame, The transformed frame
+            TSFrame or EventFrame, The transformed frame
 
         """
-        raise NotImplementedError
+        frame = self.outframes.get(pad)
+        assert frame is not None
+        return frame
 
 
 @dataclass
-class TSSink(TimeSeriesMixin[TSFrame], SinkElement[TSFrame]):
+class TSSink(TimeSeriesMixin[TSFrame], SinkElement[TimeSpanFrame]):
     """A time-series sink element."""
 
-    pass
+    def internal(self) -> None:
+        """Process frames by calling child class implementation.
+
+        If the child class defines a process() method, it will be called with
+        input frame dictionaries. Otherwise, child classes should override
+        internal() directly.
+        """
+        super().internal()
+
+        # Check if the element defines a process() method
+        if hasattr(self, "process"):
+            # Collect all input frames (both TSFrame and EventFrame)
+            inframes: dict[SinkPad, TimeSpanFrame] = {}
+            inframes.update(self.next_ts_inputs())
+            inframes.update(self.next_event_inputs())
+
+            # Call the process method
+            self.process(inframes)  # type: ignore[attr-defined]
 
 
 @dataclass
@@ -835,6 +1152,7 @@ class TSSource(_TSSource):
 
     @property
     def start_offset(self):
+        assert self.t0 is not None
         return Offset.fromsec(self.t0 - Offset.offset_ref_t0 / Time.SECONDS)
 
     def set_pad_buffer_params(
@@ -950,11 +1268,15 @@ class TSResourceSource(ParallelizeSourceElement, _TSSource):
     def sample_shape(self, pad):
         """The channels per sample that a buffer should produce as a tuple
         (since it can be a tensor). For single channels just return ()"""
-        return self.first_buffer_properties[pad]["sample_shape"]
+        props = self.first_buffer_properties[pad]
+        assert props is not None
+        return props["sample_shape"]
 
     def sample_rate(self, pad):
         """The integer sample rate that a buffer should carry"""
-        return self.first_buffer_properties[pad]["sample_rate"]
+        props = self.first_buffer_properties[pad]
+        assert props is not None
+        return props["sample_rate"]
 
     @property
     def latest_offset(self):
@@ -968,7 +1290,10 @@ class TSResourceSource(ParallelizeSourceElement, _TSSource):
 
     @property
     def start_offset(self):
-        return min(b["offset"] for b in self.first_buffer_properties.values())
+        offsets = [
+            b["offset"] for b in self.first_buffer_properties.values() if b is not None
+        ]
+        return min(offsets)
 
     @property
     def end_offset(self):
@@ -981,10 +1306,12 @@ class TSResourceSource(ParallelizeSourceElement, _TSSource):
         """The starting time of the resource in seconds"""
         return Offset.tosec(self.start_offset)
 
-    def setup(self):
+    def setup(self) -> None:
         """Initialize the TSResourceSource data structures."""
         if not self.__is_setup:
-            self.buffer_queue = {p: deque() for p in self.rsrcs}
+            self.buffer_queue: dict[SourcePad, deque[SeriesBuffer]] = {
+                p: deque() for p in self.rsrcs
+            }
             self.latest_buffer_properties = {p: None for p in self.rsrcs}
             self.first_buffer_properties = {p: None for p in self.rsrcs}
             self.__is_setup = True
@@ -997,9 +1324,11 @@ class TSResourceSource(ParallelizeSourceElement, _TSSource):
         else:
             return 0.0
 
-    def _get_data_from_worker(self, timeout=60):
+    def _get_data_from_worker(
+        self, timeout: int = 60
+    ) -> dict[SourcePad, list[SeriesBuffer]]:
         """Get data from the worker via ParallelizeSourceElement's queue."""
-        data_by_pad = {p: [] for p in self.rsrcs}
+        data_by_pad: dict[SourcePad, list[SeriesBuffer]] = {p: [] for p in self.rsrcs}
         start_time = stime.time()
 
         # Collect data from worker until we have data for all pads or timeout
@@ -1061,7 +1390,7 @@ class TSResourceSource(ParallelizeSourceElement, _TSSource):
             return out_frame
 
         # Otherwise create a TSFrame from all the buffers that we have queued up
-        in_frame = TSFrame(buffers=self.buffer_queue[pad])
+        in_frame = TSFrame(buffers=list(self.buffer_queue[pad]))
 
         # make sure nothing is fishy
         assert out_frame.end_offset <= in_frame.end_offset, (
@@ -1173,6 +1502,10 @@ def make_ts_element(sgn_element_class: Type) -> Type:
 
         # Use basic adapter config that works for general TS connectivity
         adapter_config: AdapterConfig = field(default_factory=AdapterConfig)
+
+        def new(self, pad):
+            """Default implementation of new() for factory-created elements."""
+            return self.outframes.get(pad)
 
     # Set a meaningful name for the new class
     TSEnabledElement.__name__ = f"TS{sgn_element_class.__name__}"

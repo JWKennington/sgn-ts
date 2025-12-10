@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
 from sgn import validator
-from sgn.base import SourcePad
 
-from sgnts.base import SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import TSCollectFrame, TSFrame, TSTransform
+from sgnts.decorators import transform
 
 
 @dataclass
@@ -21,23 +21,12 @@ class Amplify(TSTransform):
     def validate(self) -> None:
         pass
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        outbufs = []
-        # loop over the input data, only amplify non-gap data
-        sink_pad = self.sink_pads[0]
-        frame = self.preparedframes[sink_pad]
-        for inbuf in frame:
-            if inbuf.is_gap:
-                data = None
-            else:
-                data = inbuf.data * self.factor
-
-            outbuf = SeriesBuffer(
-                offset=inbuf.offset,
-                sample_rate=inbuf.sample_rate,
-                data=data,
-                shape=inbuf.shape,
-            )
-            outbufs.append(outbuf)
-
-        return TSFrame(buffers=outbufs, EOS=frame.EOS, metadata=frame.metadata)
+    @transform.one_to_one
+    def process(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None:
+        """Amplify non-gap data by the factor."""
+        for buf in input_frame:
+            if not buf.is_gap:
+                assert buf.data is not None
+                data = buf.data * self.factor
+                buf = buf.copy(data=data)
+            output_frame.append(buf)

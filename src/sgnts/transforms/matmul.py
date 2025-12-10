@@ -3,58 +3,49 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sgn import validator
-from sgn.base import SourcePad
 
 from sgnts.base import (
     Array,
     ArrayBackend,
     NumpyBackend,
-    SeriesBuffer,
+    TSCollectFrame,
     TSFrame,
     TSTransform,
 )
+from sgnts.decorators import transform
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Matmul(TSTransform):
     """Performs matrix multiplication with provided matrix.
 
     Args:
         matrix:
-            Array | None, the matrix to multiply the data with, out = matrix x data
+            Array, the matrix to multiply the data with, out = matrix x data
         backend:
             type[ArrayBackend], the array backend for array operations
     """
 
-    matrix: Array | None = None
+    matrix: Array
     backend: type[ArrayBackend] = NumpyBackend
 
     def configure(self) -> None:
-        assert self.matrix is not None
         self.shape = self.matrix.shape
 
     @validator.one_to_one
     def validate(self) -> None:
-        assert self.matrix is not None, "Matrix must be provided for MatMul operation"
+        pass
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        outbufs = []
-        # loop over the input data, only perform matmul on non-gaps
-        frame = self.preparedframes[self.sink_pads[0]]
-        for inbuf in frame:
-            is_gap = inbuf.is_gap
-
-            if is_gap:
+    @transform.one_to_one
+    def process(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None:
+        """Perform matrix multiplication on non-gap data."""
+        for buf in input_frame:
+            if buf.is_gap:
                 data = None
+                shape = self.shape[:-1] + (buf.samples,)
             else:
-                data = self.backend.matmul(self.matrix, inbuf.data)
+                data = self.backend.matmul(self.matrix, buf.data)
+                shape = data.shape
 
-            outbuf = SeriesBuffer(
-                offset=inbuf.offset,
-                sample_rate=inbuf.sample_rate,
-                data=data,
-                shape=self.shape[:-1] + (inbuf.samples,),
-            )
-            outbufs.append(outbuf)
-
-        return TSFrame(buffers=outbufs, EOS=frame.EOS, metadata=frame.metadata)
+            buf = buf.copy(data=data, shape=shape)
+            output_frame.append(buf)

@@ -2,9 +2,17 @@ from dataclasses import dataclass
 
 import numpy
 from sgn import validator
-from sgn.base import SourcePad
 
-from sgnts.base import Offset, SeriesBuffer, TSFrame, TSSlice, TSSlices, TSTransform
+from sgnts.base import (
+    Offset,
+    SeriesBuffer,
+    TSCollectFrame,
+    TSFrame,
+    TSSlice,
+    TSSlices,
+    TSTransform,
+)
+from sgnts.decorators import transform
 
 
 # FIXME: only supports numpy and not pytorch
@@ -31,7 +39,6 @@ class Threshold(TSTransform):
     stopwn: int = 0
 
     def configure(self) -> None:
-        self.sinkpad = self.sink_pads[0]
         self.nongap_slices = TSSlices([])
 
     @validator.one_to_one
@@ -81,11 +88,13 @@ class Threshold(TSTransform):
             for i in range(0, len(idx), 2)
         ]
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        frame = self.preparedframes[self.sinkpad]
+    @transform.one_to_one
+    def process(self, input_frame: TSFrame, output_frame: TSCollectFrame) -> None:
+        """Process frame to threshold data based on absolute value."""
+
         boundary_offsets = TSSlice(
-            frame[0].offset,
-            frame[-1].end_offset,
+            input_frame[0].offset,
+            input_frame[-1].end_offset,
         )
         self.nongap_slices += TSSlices(
             [
@@ -97,7 +106,7 @@ class Threshold(TSTransform):
                         self.startwn,
                         self.stopwn,
                     )
-                    for b in frame
+                    for b in input_frame
                     if b
                 ]
                 for j in sub
@@ -123,7 +132,7 @@ class Threshold(TSTransform):
                 b
                 for bs in [
                     buf.split(aligned_nongap_slices.search(buf.slice), contiguous=True)
-                    for buf in frame
+                    for buf in input_frame
                 ]
                 for b in bs
             ]
@@ -138,4 +147,4 @@ class Threshold(TSTransform):
             )
             o0 = o
 
-        return TSFrame(buffers=out, EOS=self.at_EOS, metadata=frame.metadata)
+        output_frame.extend(out)

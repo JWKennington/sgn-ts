@@ -3,9 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sgn import validator
-from sgn.base import SourcePad
+from sgn.base import SinkPad
 
-from sgnts.base import ArrayBackend, NumpyBackend, SeriesBuffer, TSFrame, TSTransform
+from sgnts.base import (
+    ArrayBackend,
+    NumpyBackend,
+    SeriesBuffer,
+    TSCollectFrame,
+    TSFrame,
+    TSTransform,
+)
+from sgnts.decorators import transform
 
 
 @dataclass
@@ -34,25 +42,27 @@ class Adder(TSTransform):
     def validate(self) -> None:
         pass
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        frames: list[TSFrame] = [
-            self.preparedframes[self.snks[snk]] for snk in self.sink_pad_names
-        ]
+    @transform.many_to_one
+    def process(
+        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSCollectFrame
+    ) -> None:
+        """Add up all the frames from all the sink pads."""
+        frames = list(input_frames.values())
 
         # Sanity check frames
         assert (
-            len(set(f.sample_rate for f in frames)) == 1
+            len({f.sample_rate for f in frames}) == 1
         ), "Sample rate of frames must be the same"
-        assert len(set(f.offset for f in frames)) == 1, "Frames must be aligned"
-        assert len(set(f.end_offset for f in frames)) == 1, "Frames must be aligned"
+        assert len({f.offset for f in frames}) == 1, "Frames must be aligned"
+        assert len({f.end_offset for f in frames}) == 1, "Frames must be aligned"
 
         if self.addslices_map is None:
             assert (
-                len(set(f.shape for f in frames)) == 1
+                len({f.shape for f in frames}) == 1
             ), "Shape of frames must be the same"
         else:
             assert (
-                len(set(f.shape[-1] for f in frames)) == 1
+                len({f.shape[-1] for f in frames}) == 1
             ), "Size of last dimension must be the same"
 
         if all(frame.is_gap for frame in frames):
@@ -65,7 +75,8 @@ class Adder(TSTransform):
                 out = frames[0][0].filleddata(self.backend.zeros)
             else:
                 out = self.backend.cat(
-                    [buf.filleddata(self.backend.zeros) for buf in frames[0]], axis=-1
+                    [buf.filleddata(self.backend.zeros) for buf in frames[0]],
+                    axis=-1,
                 )
             shape = out.shape
             # add to the first frame
@@ -83,15 +94,11 @@ class Adder(TSTransform):
 
                     i0 += buf.samples
 
-        return TSFrame(
-            buffers=[
-                SeriesBuffer(
-                    offset=frames[0].offset,
-                    sample_rate=frames[0].sample_rate,
-                    data=out,
-                    shape=shape,
-                )
-            ],
-            EOS=frames[0].EOS,
-            metadata=frames[0].metadata,
+        output_frame.append(
+            SeriesBuffer(
+                offset=frames[0].offset,
+                sample_rate=frames[0].sample_rate,
+                data=out,
+                shape=shape,
+            )
         )

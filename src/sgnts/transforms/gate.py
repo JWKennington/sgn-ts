@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 
 from sgn import validator
-from sgn.base import SourcePad
+from sgn.base import SinkPad
 
-from sgnts.base import TSFrame, TSSlices, TSTransform
+from sgnts.base import TSCollectFrame, TSFrame, TSSlices, TSTransform
+from sgnts.decorators import transform
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Gate(TSTransform):
     """Uses one sink pad's buffers to control the state of anothers. The control buffer
     state is defined by either being gap or not. The actual content of the data is
@@ -17,7 +18,7 @@ class Gate(TSTransform):
             str, the name of the pad to use as a control signal
     """
 
-    control: str = ""
+    control: str
 
     def configure(self) -> None:
         self.controlpad = self.snks[self.control]
@@ -32,18 +33,20 @@ class Gate(TSTransform):
             f"in sink_pad_names: {self.sink_pad_names}"
         )
 
-    def new(self, pad: SourcePad) -> TSFrame:
-        nongap_slices = TSSlices(
-            [b.slice for b in self.preparedframes[self.controlpad] if b]
-        )
-        out = sorted(
+    @transform.many_to_one
+    def process(
+        self, input_frames: dict[SinkPad, TSFrame], output_frame: TSCollectFrame
+    ) -> None:
+        """Gate input based on control pad."""
+        nongap_slices = TSSlices([b.slice for b in input_frames[self.controlpad] if b])
+        bufs = sorted(
             [
                 b
                 for bs in [
                     buf.split(nongap_slices.search(buf.slice), contiguous=True)
-                    for buf in self.preparedframes[self.sinkpad]
+                    for buf in input_frames[self.sinkpad]
                 ]
                 for b in bs
             ]
         )
-        return TSFrame(buffers=out, EOS=self.at_EOS)
+        output_frame.extend(bufs)
