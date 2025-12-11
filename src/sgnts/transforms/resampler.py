@@ -15,6 +15,14 @@ try:
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
+
+# Import fast C-based gstlal upsampling
+try:
+    from sgnl_cpu_interp import upsample_transposed
+
+    GSTLAL_AVAILABLE = True
+except ImportError:
+    GSTLAL_AVAILABLE = False
 from sgnts.base.array_ops import (
     Array,
     ArrayBackend,
@@ -42,6 +50,8 @@ class Resampler(TSTransform):
         gstlal_norm:
             boolean: If true it will normalize consistent with SGNL
             filter matching. If false it have a slightly more accurate normalization
+        use_gstlal_cpu_upsample:
+            boolean: If true, use fast C-based gstlal implementation for upsampling
 
     """
 
@@ -49,6 +59,7 @@ class Resampler(TSTransform):
     outrate: int
     backend: type[ArrayBackend] = NumpyBackend
     gstlal_norm: bool = True
+    use_gstlal_cpu_upsample: bool = False
 
     def configure(self) -> None:
         self.next_out_offset = None
@@ -223,6 +234,41 @@ class Resampler(TSTransform):
 
         return vecs.reshape(int(factor), 1, sub_kernel_length)
 
+    def upsample_gstlal(self, data):
+        """Upsample using gstlal implementation.
+
+        Handles both numpy arrays and torch tensors.
+
+        Args:
+            data: Input data (numpy array or torch tensor), shape (-1, n_samples)
+
+        Returns:
+            Upsampled data (same type as input), not reshaped
+        """
+        # Check if input is torch tensor
+        is_torch = TORCH_AVAILABLE and torch.is_tensor(data)
+        if is_torch:
+            # Convert torch -> numpy
+            torch_device = data.device
+            torch_dtype = data.dtype
+            data_np = data.cpu().numpy()
+        else:
+            data_np = data
+
+        # Call gstlal
+        factor = self.outrate // self.inrate
+        out_np = upsample_transposed(
+            data_np, factor=factor, half_length=self.half_length
+        )
+
+        # Convert back to torch if needed
+        if is_torch:
+            out = torch.from_numpy(out_np).to(torch_device).to(torch_dtype)
+        else:
+            out = out_np
+
+        return out
+
     def resample_numpy(
         self, data0: NumpyArray, outshape: tuple[int, ...]
     ) -> NumpyArray:
@@ -241,11 +287,16 @@ class Resampler(TSTransform):
 
         if self.outrate > self.inrate:
             # upsample
-            os = []
-            for i in range(self.outrate // self.inrate):
-                os.append(correlate(data, self.thiskernel[i], mode="valid"))
-            out = np.vstack(os)
-            out = np.moveaxis(out, -1, -2)
+            if self.use_gstlal_cpu_upsample and GSTLAL_AVAILABLE:
+                # Use fast C-based gstlal implementation
+                out = self.upsample_gstlal(data)
+            else:
+                # Fall back to scipy correlate
+                os = []
+                for i in range(self.outrate // self.inrate):
+                    os.append(correlate(data, self.thiskernel[i], mode="valid"))
+                out = np.vstack(os)
+                out = np.moveaxis(out, -1, -2)
         else:
             # downsample
             # FIXME: implement a strided correlation, rather than doing unnecessary
@@ -274,19 +325,32 @@ class Resampler(TSTransform):
                 "PyTorch is not installed. Install it with 'pip install sgn-ts[torch]'"
             )
 
-        # FIXME: should this be in ArrayBackend?
-        # FIXME: include memeory format
-        data = data0.view(-1, 1, data0.shape[-1])
-        thiskernel = self.thiskernel
-
-        # Convert data to match kernel's dtype if necessary
-        if data.dtype != thiskernel.dtype:
-            data = data.to(thiskernel.dtype)
-
         if self.outrate > self.inrate:  # upsample
-            out = Fconv1d(data, thiskernel)
-            out = out.mT.reshape(data.shape[0], -1)
+            if self.use_gstlal_cpu_upsample and GSTLAL_AVAILABLE:
+                # Use gstlal (handles torch->numpy->torch conversion)
+                data = data0.view(-1, data0.shape[-1])
+                out = self.upsample_gstlal(data)
+                return out.view(outshape)
+            else:
+                # Use PyTorch conv1d
+                data = data0.view(-1, 1, data0.shape[-1])
+                thiskernel = self.thiskernel
+
+                # Convert data to match kernel's dtype if necessary
+                if data.dtype != thiskernel.dtype:
+                    data = data.to(thiskernel.dtype)
+
+                out = Fconv1d(data, thiskernel)
+                out = out.mT.reshape(data.shape[0], -1)
+                return out.view(outshape)
         else:  # downsample
+            data = data0.view(-1, 1, data0.shape[-1])
+            thiskernel = self.thiskernel
+
+            # Convert data to match kernel's dtype if necessary
+            if data.dtype != thiskernel.dtype:
+                data = data.to(thiskernel.dtype)
+
             out = Fconv1d(data, thiskernel, stride=self.inrate // self.outrate)
             out = out.squeeze(1)
 

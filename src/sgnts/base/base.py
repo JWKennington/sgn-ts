@@ -5,16 +5,7 @@ import time as stime
 from collections import deque
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import (
-    Any,
-    ClassVar,
-    Generic,
-    Optional,
-    Sequence,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Any, ClassVar, Generic, Optional, Sequence, Type, TypeVar, Union
 
 import numpy
 from sgn.base import (
