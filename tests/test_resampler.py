@@ -404,3 +404,203 @@ def test_gstlal_norm_false():
     # Verify that the kernel was created (line 158 uses sum(vecs) for norm)
     assert resampler.thiskernel is not None
     assert resampler.thiskernel.shape[0] > 0
+
+
+def test_gstlal_not_available():
+    """Test lines 23-24 - ImportError handling when gstlal is not available"""
+
+    # Test when GSTLAL is not available
+    with patch("sgnts.transforms.resampler.GSTLAL_AVAILABLE", False):
+        inrate = 512
+        outrate = 1024
+
+        # Create resampler with use_gstlal_cpu_upsample=True
+        resampler = Resampler(
+            name="gstlal_unavail",
+            source_pad_names=("H1",),
+            sink_pad_names=("H1",),
+            inrate=inrate,
+            outrate=outrate,
+            use_gstlal_cpu_upsample=True,
+        )
+
+        # Should fall back to scipy even though use_gstlal_cpu_upsample=True
+        import numpy as np
+
+        data = np.random.randn(10, 528).astype(np.float32)
+        output_shape = (10, 1024)
+
+        # This should work - it falls back to scipy
+        result = resampler.resample_numpy(data, output_shape)
+        assert result.shape == output_shape
+
+
+def test_upsample_gstlal_numpy():
+    """Test lines 257-278 - upsample_gstlal method with numpy arrays"""
+    import sgnts.transforms.resampler
+    import numpy as np
+
+    # Skip if gstlal not available
+    if not sgnts.transforms.resampler.GSTLAL_AVAILABLE:
+        pytest.skip("gstlal not available")
+
+    inrate = 512
+    outrate = 1024
+
+    resampler = Resampler(
+        name="gstlal_numpy",
+        source_pad_names=("H1",),
+        sink_pad_names=("H1",),
+        inrate=inrate,
+        outrate=outrate,
+        use_gstlal_cpu_upsample=True,
+    )
+
+    # Create numpy test data
+    data = np.random.randn(10, 528).astype(np.float32)
+
+    # Call upsample_gstlal directly
+    result = resampler.upsample_gstlal(data)
+
+    # Verify result is numpy array
+    assert isinstance(result, np.ndarray)
+    assert result.dtype == np.float32
+
+
+def test_upsample_gstlal_torch():
+    """Test lines 257-278 - upsample_gstlal method with torch tensors"""
+    torch = pytest.importorskip("torch")
+    import sgnts.transforms.resampler
+
+    # Skip if gstlal not available
+    if not sgnts.transforms.resampler.GSTLAL_AVAILABLE:
+        pytest.skip("gstlal not available")
+
+    inrate = 512
+    outrate = 1024
+
+    resampler = Resampler(
+        name="gstlal_torch",
+        source_pad_names=("H1",),
+        sink_pad_names=("H1",),
+        inrate=inrate,
+        outrate=outrate,
+        backend=TorchBackend,
+        use_gstlal_cpu_upsample=True,
+    )
+
+    # Create torch test data
+    data = torch.randn(10, 528, dtype=torch.float32)
+
+    # Call upsample_gstlal directly
+    result = resampler.upsample_gstlal(data)
+
+    # Verify result is torch tensor on correct device
+    assert torch.is_tensor(result)
+    assert result.dtype == torch.float32
+    assert result.device == data.device
+
+
+def test_resample_numpy_with_gstlal():
+    """Test line 300 - resample_numpy using gstlal path"""
+    import sgnts.transforms.resampler
+    import numpy as np
+
+    # Skip if gstlal not available
+    if not sgnts.transforms.resampler.GSTLAL_AVAILABLE:
+        pytest.skip("gstlal not available")
+
+    inrate = 512
+    outrate = 1024
+
+    resampler = Resampler(
+        name="numpy_gstlal",
+        source_pad_names=("H1",),
+        sink_pad_names=("H1",),
+        inrate=inrate,
+        outrate=outrate,
+        use_gstlal_cpu_upsample=True,
+    )
+
+    # Create numpy test data
+    data = np.random.randn(10, 528).astype(np.float32)
+    output_shape = (10, 1024)
+
+    # Call resample_numpy - should use gstlal path (line 300)
+    result = resampler.resample_numpy(data, output_shape)
+
+    # Verify result
+    assert result.shape == output_shape
+    assert isinstance(result, np.ndarray)
+
+
+def test_resample_torch_with_gstlal():
+    """Test lines 339-341 - resample_torch using gstlal path"""
+    torch = pytest.importorskip("torch")
+    import sgnts.transforms.resampler
+
+    # Skip if gstlal not available
+    if not sgnts.transforms.resampler.GSTLAL_AVAILABLE:
+        pytest.skip("gstlal not available")
+
+    inrate = 512
+    outrate = 1024
+
+    resampler = Resampler(
+        name="torch_gstlal",
+        source_pad_names=("H1",),
+        sink_pad_names=("H1",),
+        inrate=inrate,
+        outrate=outrate,
+        backend=TorchBackend,
+        use_gstlal_cpu_upsample=True,
+    )
+
+    # Create torch test data
+    data = torch.randn(10, 528, dtype=torch.float32)
+    output_shape = (10, 1024)
+
+    # Call resample_torch - should use gstlal path (lines 339-341)
+    result = resampler.resample_torch(data, output_shape)
+
+    # Verify result
+    assert result.shape == output_shape
+    assert torch.is_tensor(result)
+
+
+def test_resample_torch_downsample_dtype_conversion():
+    """Test line 360 - dtype conversion in torch downsampling"""
+    torch = pytest.importorskip("torch")
+
+    inrate = 256
+    outrate = 64
+    factor = inrate // outrate  # 4
+
+    # Create resampler with default TorchBackend (float32 kernel)
+    resampler = Resampler(
+        name="downsample_dtype",
+        source_pad_names=("H1",),
+        sink_pad_names=("H1",),
+        inrate=inrate,
+        outrate=outrate,
+        backend=TorchBackend,
+    )
+
+    # Calculate correct input size:
+    # output_samples = (input_samples - kernel_length + 1) / stride
+    # For 64 output samples: input_samples = 64 * 4 + kernel_length - 1
+    n_output_samples = 64
+    kernel_length = resampler.kernel_length
+    n_input_samples = n_output_samples * factor + kernel_length - 1
+
+    # Create test data with float64 (different from kernel's float32)
+    # This will trigger the dtype conversion at line 360
+    data = torch.randn(10, n_input_samples, dtype=torch.float64)
+    output_shape = (10, n_output_samples)
+
+    # Call resample_torch - should trigger dtype conversion at line 360
+    result = resampler.resample_torch(data, output_shape)
+
+    # Verify result
+    assert result.shape == output_shape
+    assert torch.is_tensor(result)

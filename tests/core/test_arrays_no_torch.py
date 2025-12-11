@@ -164,6 +164,27 @@ def test_resampler_torch_import():
         assert TORCH_AVAILABLE is False
 
 
+def test_resampler_gstlal_import():
+    """Test resampler GSTLAL_AVAILABLE when sgnl_cpu_interp is not available"""
+
+    def mock_no_gstlal_import(name, *args, **kwargs):
+        if name == "sgnl_cpu_interp" or name.startswith("sgnl_cpu_interp."):
+            raise ImportError(f"No module named '{name}'")
+        return original_import(name, *args, **kwargs)
+
+    # Mock the import of sgnl_cpu_interp to simulate it not being available
+    with mock.patch("builtins.__import__", side_effect=mock_no_gstlal_import):
+        # Force reimport of resampler module
+        if "sgnts.transforms.resampler" in sys.modules:
+            del sys.modules["sgnts.transforms.resampler"]
+
+        # Import the module
+        from sgnts.transforms.resampler import GSTLAL_AVAILABLE
+
+        # Check that GSTLAL_AVAILABLE is False
+        assert GSTLAL_AVAILABLE is False
+
+
 def test_resampler_torch_specific_lines():
     """Test specific lines in the resampler module for torch error handling"""
     # Mock import to test specific failure paths
