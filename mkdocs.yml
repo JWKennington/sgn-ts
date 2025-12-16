@@ -30,6 +30,8 @@ nav:
     - Sinks:
       - DumpSeriesSink: user-guide/dump_series_sink_tutorial.md
       - NullSeriesSink: user-guide/null_series_sink_tutorial.md
+      - TSPlotSink: user-guide/plot_sink_tutorial.md
+    - Plotting: user-guide/plotting_tutorial.md
   - Developer Guide:
     - Contributing: dev-guide/contributing.md
   - API Reference:
@@ -59,6 +61,7 @@ nav:
       - Threshold: api/transforms/threshold.md
     - Sinks:
       - Sinks: api/sinks/sinks.md
+    - Plotting: api/plotting.md
 
 
 plugins:
@@ -76,6 +79,9 @@ plugins:
 theme:
   name: material
   logo: assets/img/sgnts.png
+  features:
+    - content.code.copy
+    - content.code.annotate
 
 
 extra_css:
@@ -85,7 +91,14 @@ extra_css:
 
 
 markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
   - pymdownx.superfences:
+      preserve_tabs: true
+  - pymdownx.details
   - toc:
       permalink: true
       toc_depth: 4

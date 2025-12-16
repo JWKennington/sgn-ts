@@ -3,3 +3,5 @@
       members:
       - NullSeriesSink
       - DumpSeriesSink
+      - TSFrameCollectSink
+      - TSPlotSink
