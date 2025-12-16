@@ -39,10 +39,14 @@ Issues = "https://git.ligo.org/greg/sgn-ts/issues"
 torch = [
     "torch",
 ]
+plot = [
+    "matplotlib",
+]
 test = [
     "pytest",
     "pytest-cov",
     "sgn-ts[torch]",
+    "sgn-ts[plot]",
     "pytest-markdown-docs",
     "gwpy",
     "gpstime",
@@ -53,6 +57,7 @@ docs = [
     "mkdocstrings-python",
     "mkdocs-material",
     "pymdown-extensions",
+    "sgn-ts[plot]",
 ]
 lint = [
     "black",

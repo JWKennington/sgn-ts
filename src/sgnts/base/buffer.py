@@ -4,7 +4,7 @@ from abc import abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import total_ordering
-from typing import Any, Iterable, Optional, Protocol, Union, runtime_checkable
+from typing import Any, Iterable, Literal, Optional, Protocol, Union, runtime_checkable
 
 import numpy
 from sgn.frames import DataSpec, Frame
@@ -858,6 +858,59 @@ class SeriesBuffer(TimeSpanLike):
                 out.append(self.sub_buffer(slc, gap=True))
         return sorted(out)
 
+    def plot(
+        self,
+        ax=None,
+        label: Optional[str] = None,
+        channel: Optional[Union[int, tuple]] = None,
+        gap_color: str = "red",
+        gap_alpha: float = 0.3,
+        show_gaps: bool = True,
+        time_unit: Literal["s", "ms", "ns", "gps"] = "gps",
+        **kwargs,
+    ):
+        """Plot the buffer's time-series data.
+
+        Requires matplotlib. Install with: pip install sgn-ts[plot]
+
+        Args:
+            ax:
+                matplotlib Axes, optional. If None, creates a new figure and axes.
+            label:
+                str, optional. Legend label for this buffer's data line.
+            channel:
+                int or tuple[int, ...], optional. For multi-dimensional data,
+                specifies which channel(s) to plot. If None and data is
+                multi-dimensional, plots all channels.
+            gap_color:
+                str, color for gap region shading. Default 'red'.
+            gap_alpha:
+                float, alpha transparency for gap region shading. Default 0.3.
+            show_gaps:
+                bool, whether to show gap indicators. Default True.
+            time_unit:
+                str, time unit for x-axis: 's' (seconds since start), 'ms',
+                'ns', or 'gps' (absolute GPS time). Default 'gps'.
+            **kwargs:
+                Additional keyword arguments passed to ax.plot().
+
+        Returns:
+            tuple: (fig, ax) matplotlib figure and axes objects
+        """
+        from sgnts.plotting import plot_buffer
+
+        return plot_buffer(
+            self,
+            ax=ax,
+            label=label,
+            channel=channel,
+            gap_color=gap_color,
+            gap_alpha=gap_alpha,
+            show_gaps=show_gaps,
+            time_unit=time_unit,
+            **kwargs,
+        )
+
 
 def ensure_nonempty(func):
     """Decorator to ensure TSFrame has buffers before accessing properties/methods.
@@ -1419,3 +1472,64 @@ class TSFrame(TimeSpanFrame):
                 aligned_buf = aligned_buf + sb
             bufs.append(aligned_buf)
         return TSFrame(buffers=bufs)
+
+    def plot(
+        self,
+        ax=None,
+        label: Optional[str] = None,
+        channel: Optional[Union[int, tuple]] = None,
+        gap_color: str = "red",
+        gap_alpha: float = 0.3,
+        show_gaps: bool = True,
+        time_unit: Literal["s", "ms", "ns", "gps"] = "gps",
+        multichannel: Literal["overlay", "subplots"] = "overlay",
+        **kwargs,
+    ):
+        """Plot the frame's time-series data.
+
+        Requires matplotlib. Install with: pip install sgn-ts[plot]
+
+        Args:
+            ax:
+                matplotlib Axes, optional. If None, creates a new figure and axes.
+                Ignored if multichannel='subplots' and channel is None.
+            label:
+                str, optional. Legend label for this frame's data line.
+            channel:
+                int or tuple[int, ...], optional. For multi-dimensional data,
+                specifies which channel(s) to plot. If None and data is
+                multi-dimensional, behavior depends on multichannel parameter.
+            gap_color:
+                str, color for gap region shading. Default 'red'.
+            gap_alpha:
+                float, alpha transparency for gap region shading. Default 0.3.
+            show_gaps:
+                bool, whether to show gap indicators. Default True.
+            time_unit:
+                str, time unit for x-axis: 's' (seconds since start), 'ms',
+                'ns', or 'gps' (absolute GPS time). Default 'gps'.
+            multichannel:
+                str, how to handle multi-channel data when channel is None:
+                'overlay' plots all channels on the same axes,
+                'subplots' creates a subplot for each channel. Default 'overlay'.
+            **kwargs:
+                Additional keyword arguments passed to ax.plot().
+
+        Returns:
+            tuple: (fig, ax) matplotlib figure and axes objects. If
+                   multichannel='subplots', ax is an array of axes.
+        """
+        from sgnts.plotting import plot_frame
+
+        return plot_frame(
+            self,
+            ax=ax,
+            label=label,
+            channel=channel,
+            gap_color=gap_color,
+            gap_alpha=gap_alpha,
+            show_gaps=show_gaps,
+            time_unit=time_unit,
+            multichannel=multichannel,
+            **kwargs,
+        )
