@@ -45,7 +45,6 @@ class TestTSAppSinkBasic:
         for pad, buf in received_buffers:
             assert pad.pad_name == "data"
             assert isinstance(buf, SeriesBuffer)
-            assert not buf.is_gap  # Default: gaps are skipped
 
     def test_multi_pad_different_callbacks(self):
         """Test that different callbacks are invoked for different pads."""
@@ -203,7 +202,42 @@ class TestTSAppSinkCallbackRegistration:
 class TestTSAppSinkGapHandling:
     """Tests for gap buffer handling."""
 
-    def test_gaps_skipped_by_default(self):
+    def test_gaps_emitted_by_default(self):
+        """Test that gap buffers are emitted by default (emit_gaps=True)."""
+        received_buffers = []
+
+        def callback(pad: SinkPad, buf: SeriesBuffer) -> None:
+            received_buffers.append(buf)
+
+        source = FakeSeriesSource(
+            name="source",
+            source_pad_names=("data",),
+            rate=256,
+            signal_type="sine",
+            fsin=5.0,
+            ngap=2,  # Create gaps
+            t0=0,
+            end=2.0,
+        )
+        sink = TSAppSink(
+            name="sink",
+            sink_pad_names=("data",),
+            callbacks={"data": callback},
+            # emit_gaps=True is the default
+        )
+
+        pipeline = Pipeline()
+        pipeline.connect(source, sink)
+        pipeline.run()
+
+        # Should have received both gap and non-gap buffers
+        gap_buffers = [b for b in received_buffers if b.is_gap]
+        non_gap_buffers = [b for b in received_buffers if not b.is_gap]
+
+        assert len(gap_buffers) > 0, "Expected gap buffers by default"
+        assert len(non_gap_buffers) > 0, "Expected non-gap buffers"
+
+    def test_gaps_skipped_when_disabled(self):
         """Test that gap buffers are skipped when emit_gaps=False."""
         received_buffers = []
 
@@ -224,7 +258,7 @@ class TestTSAppSinkGapHandling:
             name="sink",
             sink_pad_names=("data",),
             callbacks={"data": callback},
-            emit_gaps=False,  # Default
+            emit_gaps=False,
         )
 
         pipeline = Pipeline()
@@ -234,41 +268,6 @@ class TestTSAppSinkGapHandling:
         # Should not have received any gap buffers
         for buf in received_buffers:
             assert not buf.is_gap
-
-    def test_gaps_emitted_when_enabled(self):
-        """Test that gap buffers are emitted when emit_gaps=True."""
-        received_buffers = []
-
-        def callback(pad: SinkPad, buf: SeriesBuffer) -> None:
-            received_buffers.append(buf)
-
-        source = FakeSeriesSource(
-            name="source",
-            source_pad_names=("data",),
-            rate=256,
-            signal_type="sine",
-            fsin=5.0,
-            ngap=2,  # Create gaps
-            t0=0,
-            end=2.0,
-        )
-        sink = TSAppSink(
-            name="sink",
-            sink_pad_names=("data",),
-            callbacks={"data": callback},
-            emit_gaps=True,
-        )
-
-        pipeline = Pipeline()
-        pipeline.connect(source, sink)
-        pipeline.run()
-
-        # Should have received both gap and non-gap buffers
-        gap_buffers = [b for b in received_buffers if b.is_gap]
-        non_gap_buffers = [b for b in received_buffers if not b.is_gap]
-
-        assert len(gap_buffers) > 0, "Expected gap buffers when emit_gaps=True"
-        assert len(non_gap_buffers) > 0, "Expected non-gap buffers"
 
 
 class TestTSAppSinkCallbackArgs:
