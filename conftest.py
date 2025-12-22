@@ -1,7 +1,5 @@
 """Pytest configuration for sgn-ts tests."""
 
-import sys
-
 
 def pytest_configure(config):
     """Set matplotlib to non-interactive backend before any tests run."""
