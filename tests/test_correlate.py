@@ -278,7 +278,7 @@ class TestAdaptiveCorrelate:
             real_time=False,
         )
 
-        def make_filters_frame(EOS: bool, data: tuple | None):
+        def make_filters_frame(EOS: bool, data: tuple | None, **kwargs):
             # Handle case of no data left
             if data is None:
                 t0, arr = 0, None
@@ -378,7 +378,7 @@ class TestAdaptiveCorrelate:
             real_time=False,
         )
 
-        def make_filters_frame(EOS: bool, data: tuple | None):
+        def make_filters_frame(EOS: bool, data: tuple | None, **kwargs):
             # Handle case of no data left
             if data is None:
                 t0, arr = 0, None
@@ -463,7 +463,7 @@ class TestAdaptiveCorrelate:
             source_pad_names=["C1"],
         )
 
-        def make_filters_frame(EOS: bool, data: tuple | None):
+        def make_filters_frame(EOS: bool, data: tuple | None, **kwargs):
             # Handle case of no data left
             if data is None:
                 t0, arr = 0, None
@@ -553,7 +553,7 @@ class TestAdaptiveCorrelate:
             source_pad_names=["C1"],
         )
 
-        def make_filters_frame(EOS: bool, data: tuple | None):
+        def make_filters_frame(EOS: bool, data: tuple | None, **kwargs):
             # Handle case of no data left
             if data is None:
                 t0, arr = 0, None
@@ -658,7 +658,7 @@ class TestAdaptiveCorrelate:
             fsin=f_source,
         )
 
-        def make_filters_frame(EOS: bool, data: tuple | None):
+        def make_filters_frame(EOS: bool, data: tuple | None, **kwargs):
             # Handle case of no data left
             if data is None:
                 t0, params = 0, {"f_cutoff": f_cutoff1}
@@ -805,7 +805,7 @@ class TestAdaptiveCorrelate:
             fsin=f_source,
         )
 
-        def make_filters_frame(EOS: bool, data: tuple | None):
+        def make_filters_frame(EOS: bool, data: tuple | None, **kwargs):
             # Handle case of no data left
             if data is None:
                 t0, params = 0, {"f_cutoff": f_cutoff1}
