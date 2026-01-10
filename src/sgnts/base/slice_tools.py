@@ -5,10 +5,11 @@ from __future__ import annotations
 import bisect
 import math
 from dataclasses import dataclass
+from typing import Optional, Union
 
 import numpy
 
-from sgnts.base.offset import Offset
+from sgnts.base.offset import Offset, TimeUnits
 
 # Define beginning / end of time as min / max int 64
 TIME_MIN = int(numpy.int64(numpy.iinfo(numpy.int64).min))
@@ -21,39 +22,111 @@ class TSSlice:
 
     Args:
         start:
-            int, The start of the TSSlice
+            Union[int, float], The start of the TSSlice. Must be int
+            unless units=SECONDS.
         stop:
-            int, The stop of the TSSlice
+            Union[int, float], The stop of the TSSlice. Must be int
+            unless units=SECONDS.
+        units:
+            TimeUnits, The unit of time for start and stop. Defaults to OFFSETS.
     """
 
-    start: int = TIME_MIN
-    stop: int = TIME_MAX
+    start: Union[int, float] = TIME_MIN
+    stop: Union[int, float] = TIME_MAX
+    units: TimeUnits = TimeUnits.OFFSETS
 
     def __post_init__(self):
         if (self.start is None and self.stop is not None) or (
             self.stop is None and self.start is not None
         ):
             raise ValueError("if one of start or stop is None, both must be")
+
         if self.start is not None:
-            if not isinstance(self.start, (int, numpy.int64)) or not isinstance(
-                self.stop, (int, numpy.int64)
-            ):
-                raise ValueError("if not None, start and stop must be integers")
+            # 2. Validate Types based on Units
+            if self.units == TimeUnits.SECONDS:
+                # Allow floats, ints, or numpy numerics for SECONDS
+                if not isinstance(
+                    self.start, (int, float, numpy.number)
+                ) or not isinstance(self.stop, (int, float, numpy.number)):
+                    raise ValueError("start and stop must be numeric for SECONDS")
+            else:
+                # OFFSETS, NANOSECONDS, SAMPLES must be integers
+                if not isinstance(self.start, (int, numpy.integer)) or not isinstance(
+                    self.stop, (int, numpy.integer)
+                ):
+                    raise ValueError(
+                        f"start and stop must be integers for unit {self.units}"
+                    )
+
+            # 3. Validate Order
             if not (self.stop >= self.start):
                 raise ValueError("stop must be greater than or equal to start")
 
-            if self.start < TIME_MIN:
-                raise ValueError(f"start must be greater than {TIME_MIN}")
-            if self.stop > TIME_MAX:
-                raise ValueError(f"stop must be less than {TIME_MAX}")
+            # 4. Validate Bounds (Skip for seconds as float bounds/precision differ)
+            if self.units != TimeUnits.SECONDS:
+                if self.start < TIME_MIN:
+                    raise ValueError(f"start must be greater than {TIME_MIN}")
+                if self.stop > TIME_MAX:
+                    raise ValueError(f"stop must be less than {TIME_MAX}")
+
+    def convert(
+        self,
+        target_unit: TimeUnits,
+        from_sample_rate: Optional[int] = None,
+        to_sample_rate: Optional[int] = None,
+    ) -> "TSSlice":
+        """Convert this TSSlice to a new TSSlice with different units.
+
+        Args:
+            target_unit: The unit to convert to.
+            from_sample_rate: Required if converting FROM samples.
+            to_sample_rate: Required if converting TO samples.
+
+        Returns:
+            A new TSSlice instance in the target units.
+        """
+        # Handle infinite/empty slices simply
+        if self.start is None:
+            return TSSlice(None, None, units=target_unit)
+
+        # Delegate the calculation strictly to Offset.convert
+        # Offset.convert handles validation of whether rates are required/forbidden
+        new_start = Offset.convert(
+            self.start,
+            from_unit=self.units,
+            to_unit=target_unit,
+            from_sample_rate=from_sample_rate,
+            to_sample_rate=to_sample_rate,
+        )
+
+        new_stop = Offset.convert(
+            self.stop,
+            from_unit=self.units,
+            to_unit=target_unit,
+            from_sample_rate=from_sample_rate,
+            to_sample_rate=to_sample_rate,
+        )
+
+        return TSSlice(new_start, new_stop, units=target_unit)
 
     @property
     def slice(self):
         """Convert to a python slice object with a stride of 1."""
+        if self.units == TimeUnits.SECONDS:
+            raise TypeError("Cannot create python slice from SECONDS units (float).")
+
         if self:
             return slice(self.start, self.stop, 1)
         else:
             return slice(-1, -1, 1)
+
+    def _ensure_compatible(self, other: "TSSlice"):
+        """Ensure two slices have compatible units before boolean operations."""
+        if self.units != other.units:
+            raise ValueError(
+                f"Cannot operate on mixed units: {self.units} vs {other.units}. "
+                "Convert one slice first."
+            )
 
     def __getitem__(self, item):
         assert item in (0, 1)
@@ -87,6 +160,7 @@ class TSSlice:
             >>> B&A
             TSSlice(start=None, stop=None)
         """
+        self._ensure_compatible(o)
         if self.start is None or self.stop is None or o.start is None or o.stop is None:
             return TSSlice(None, None)
         _start, _stop = max(self.start, o.start), min(self.stop, o.stop)
@@ -119,6 +193,7 @@ class TSSlice:
             >>> B|A
             TSSlice(start=None, stop=None)
         """
+        self._ensure_compatible(o)
         if self.start is None or self.stop is None or o.start is None or o.stop is None:
             return TSSlice(None, None)
         return TSSlice(min(self.start, o.start), max(self.stop, o.stop))
@@ -184,6 +259,7 @@ class TSSlice:
             >>> B+A
             [TSSlice(start=None, stop=None), TSSlice(start=0, stop=3)]
         """
+        self._ensure_compatible(o)
         if self & o:
             return [self | o]
         else:
@@ -214,19 +290,23 @@ class TSSlice:
             >>> B>A
             False
         """
+        self._ensure_compatible(o)
         if self.start is None or self.stop is None or o.start is None or o.stop is None:
             return False
         return self.start > o.start and self.stop > o.stop
 
     def __lt__(self, o):
+        self._ensure_compatible(o)
         if self.start is None or self.stop is None or o.start is None or o.stop is None:
             return False
         return self.start < o.start and self.stop < o.stop
 
     def __ge__(self, o):
+        self._ensure_compatible(o)
         return self.start >= o.start and self.stop >= o.stop
 
     def __le__(self, o):
+        self._ensure_compatible(o)
         return self.start <= o.start and self.stop <= o.stop
 
     def __sub__(self, o):
@@ -255,6 +335,7 @@ class TSSlice:
             >>> B-A
             []
         """
+        self._ensure_compatible(o)
         b = self | o
         i = self & o
         if not b or not i:
@@ -263,6 +344,7 @@ class TSSlice:
         return sorted(o for o in out if o.isfinite())
 
     def __contains__(self, o):
+        self._ensure_compatible(o)
         return o.start >= self.start and o.stop <= self.stop
 
     def split(self, o: int):
@@ -273,7 +355,10 @@ class TSSlice:
                 int, the boundary to split the tsslice
         """
         assert self.start <= o < self.stop
-        return [TSSlice(self.start, o), TSSlice(o, self.stop)]
+        return [
+            TSSlice(self.start, o, units=self.units),
+            TSSlice(o, self.stop, units=self.units),
+        ]
 
     def isfinite(self):
         if not self:
@@ -295,6 +380,13 @@ class TSSlices:
     slices: list
 
     def __post_init__(self):
+        # Validate unit consistency
+        if len(self.slices) > 0:
+            base_unit = self.slices[0].units
+            for s in self.slices[1:]:
+                if s.units != base_unit:
+                    raise ValueError("All slices in TSSlices must have the same units.")
+
         self.slices = sorted(self.slices)
 
     def __iadd__(self, other):
@@ -303,6 +395,19 @@ class TSSlices:
 
     def __iter__(self):
         return iter(self.slices)
+
+    def convert(
+        self,
+        target_unit: TimeUnits,
+        from_sample_rate: Optional[int] = None,
+        to_sample_rate: Optional[int] = None,
+    ) -> "TSSlices":
+        """Convert all contained slices to a new unit."""
+        new_slices = [
+            s.convert(target_unit, from_sample_rate, to_sample_rate)
+            for s in self.slices
+        ]
+        return TSSlices(new_slices)
 
     def simplify(self):
         """Merge overlapping slices and return a new instance of TSSlices.
@@ -332,7 +437,11 @@ class TSSlices:
     @property
     def slice(self):
         "Provide a slice that corresponds to the start and end offset"
-        return TSSlice(self.slices[0].start, self.slices[-1].stop)
+        return TSSlice(
+            self.slices[0].start,
+            self.slices[-1].stop,
+            units=self.slices[0].units,
+        )
 
     def intersection(self):
         """Find the intersection of all slices. Might be empty.
@@ -384,9 +493,20 @@ class TSSlices:
             TSSlices(slices=[TSSlice(start=0, stop=4), TSSlice(start=1, stop=3),
                 TSSlice(start=2, stop=6)])
         """
+        # Safety check: Search requires matching units
+        if self.slices and tsslice.units != self.slices[0].units:
+            raise ValueError(
+                f"Search slice units ({tsslice.units}) do not match TSSlices "
+                f"units ({self.slices[0].units}). "
+                "Convert search slice manually."
+            )
 
-        startix = bisect.bisect_left(self.slices, TSSlice(tsslice.start, tsslice.start))
-        stopix = bisect.bisect_right(self.slices, TSSlice(tsslice.stop, tsslice.stop))
+        startix = bisect.bisect_left(
+            self.slices, TSSlice(tsslice.start, tsslice.start, units=tsslice.units)
+        )
+        stopix = bisect.bisect_right(
+            self.slices, TSSlice(tsslice.stop, tsslice.stop, units=tsslice.units)
+        )
         if not align:
             return TSSlices(self.slices[startix:stopix])
         else:
@@ -416,18 +536,44 @@ class TSSlices:
             >>> slices.invert(TSSlice(2,4))
             TSSlices(slices=[TSSlice(start=6, stop=8)])
         """
+        # Check units
+        if self.slices and boundary_slice.units != self.slices[0].units:
+            raise ValueError(
+                f"Boundary slice units ({boundary_slice.units}) do not match "
+                f"TSSlices units ({self.slices[0].units}). "
+                "Convert boundary slice manually."
+            )
 
         if len(self.slices) == 0:
-            return TSSlices([TSSlice(boundary_slice.start, boundary_slice.stop)])
+            return TSSlices(
+                [
+                    TSSlice(
+                        boundary_slice.start,
+                        boundary_slice.stop,
+                        units=boundary_slice.units,
+                    )
+                ]
+            )
         _slices = self.simplify().slices
         out = []
         if boundary_slice.start < _slices[0].start:
-            out.append(TSSlice(boundary_slice.start, _slices[0].start))
+            out.append(
+                TSSlice(
+                    boundary_slice.start, _slices[0].start, units=boundary_slice.units
+                )
+            )
         out.extend(
-            [TSSlice(s1.stop, s2.start) for (s1, s2) in zip(_slices[:-1], _slices[1:])]
+            [
+                TSSlice(s1.stop, s2.start, units=boundary_slice.units)
+                for (s1, s2) in zip(_slices[:-1], _slices[1:])
+            ]
         )
         if boundary_slice.stop > _slices[-1].stop:
-            out.append(TSSlice(_slices[-1].stop, boundary_slice.stop))
+            out.append(
+                TSSlice(
+                    _slices[-1].stop, boundary_slice.stop, units=boundary_slice.units
+                )
+            )
         return TSSlices(out)
 
     @classmethod
@@ -488,61 +634,42 @@ class TSSlices:
 
     def align_to_rate(self, target_rate: int) -> TSSlices:
         """Align TSSlices to integer sample boundaries at a target sample rate.
-
-        This method is useful for downsampling representations by expanding gaps
-        and shrinking data slices to align with integer sample boundaries at a
-        lower sampling rate.
-
-        For each slice:
-        - The start boundary is rounded UP to the next integer sample
-        - The stop boundary is rounded DOWN to the previous integer sample
-        - This effectively expands gaps and shrinks data slices
-        - Slices that become zero-length or sub-sample are eliminated
-
-        Args:
-            target_rate: The target sample rate to align to. Must be in ALLOWED_RATES.
-
-        Returns:
-            New TSSlices with boundaries aligned to integer samples at target_rate.
-            Slices that become sub-sample at the target rate are eliminated.
-
-        Examples:
-            >>> from sgnts.base.offset import Offset
-            >>> Offset.set_max_rate(16384)
-            >>> # At 4 Hz, offsets are at multiples of 16384/4 = 4096
-            >>> # (0, 4096) = 1 sample at 4Hz, (8192, 16384) = 2 samples at 4Hz
-            >>> slices = TSSlices([TSSlice(0, 4096), TSSlice(8192, 16384)])
-            >>> # Downsample to 2 Hz (offsets at multiples of 8192)
-            >>> result = slices.align_to_rate(2)
-            >>> # First slice (0, 4096) becomes (0, 0) - eliminated
-            >>> # Second slice (8192, 16384) stays as (8192, 16384) - 1 sample at 2Hz
-            >>> result
-            TSSlices(slices=[TSSlice(start=8192, stop=16384)])
+        Forces conversion to OFFSETS to perform alignment logic.
         """
         assert (
             target_rate in Offset.ALLOWED_RATES
         ), f"Target rate {target_rate} not in ALLOWED_RATES: {Offset.ALLOWED_RATES}"
 
-        # Calculate the offset stride per sample at target rate
-        offset_per_sample = Offset.MAX_RATE // target_rate
+        # 1. Determine the source slices in OFFSETS units
+        if self.slices and self.slices[0].units != TimeUnits.OFFSETS:
+            # We can't auto-convert SAMPLES because we don't know the source rate here
+            if self.slices[0].units == TimeUnits.SAMPLES:
+                raise ValueError(
+                    "Cannot auto-align from SAMPLES units. Convert to OFFSETS first."
+                )
+            slices_to_process = self.convert(TimeUnits.OFFSETS).slices
+        else:
+            slices_to_process = self.slices
 
+        # 2. Perform alignment logic
+        offset_per_sample = Offset.MAX_RATE // target_rate
         aligned_slices = []
-        for slc in self.slices:
+
+        for slc in slices_to_process:
             if not slc or not slc.isfinite():
                 continue
 
-            # Convert to samples at target rate (may be fractional)
             start_samples = slc.start / offset_per_sample
             stop_samples = slc.stop / offset_per_sample
 
-            # Round start UP (expand gap before) and stop DOWN (expand gap after)
             aligned_start_samples = math.ceil(start_samples)
             aligned_stop_samples = math.floor(stop_samples)
 
-            # Only keep if the slice spans at least one full sample
             if aligned_start_samples < aligned_stop_samples:
                 aligned_start = aligned_start_samples * offset_per_sample
                 aligned_stop = aligned_stop_samples * offset_per_sample
-                aligned_slices.append(TSSlice(aligned_start, aligned_stop))
+                aligned_slices.append(
+                    TSSlice(aligned_start, aligned_stop, units=TimeUnits.OFFSETS)
+                )
 
         return TSSlices(aligned_slices)

@@ -1,10 +1,20 @@
 from __future__ import annotations
 
-from typing import Optional
+from enum import Enum
+from typing import Optional, Union
 
 import numpy
 
 from sgnts.base.time import Time
+
+
+class TimeUnits(str, Enum):
+    """Enumeration of available time units for TSSlices."""
+
+    OFFSETS = "offsets"
+    SECONDS = "seconds"
+    NANOSECONDS = "nanoseconds"
+    SAMPLES = "samples"
 
 
 class Offset:
@@ -74,6 +84,73 @@ class Offset:
     def set_max_rate(cls, max_rate):
         cls.MAX_RATE = max_rate
         cls.ALLOWED_RATES = set(2**x for x in range(1 + int(numpy.log2(cls.MAX_RATE))))
+
+    @classmethod
+    def convert(
+        cls,
+        value: Union[int, float],
+        from_unit: TimeUnits,
+        to_unit: TimeUnits,
+        from_sample_rate: Optional[int] = None,
+        to_sample_rate: Optional[int] = None,
+    ) -> Union[int, float]:
+        """Convert a value from one time unit to another.
+
+        Args:
+            value: The value to convert.
+            from_unit: The unit of the input value.
+            to_unit: The unit of the output value.
+            from_sample_rate: Required if from_unit is SAMPLES. Optional if
+                              from_unit is NANOSECONDS (used for alignment).
+            to_sample_rate: Required if to_unit is SAMPLES.
+
+        Returns:
+            The converted value in to_unit.
+        """
+        # 1. Optimize identity conversion
+        if from_unit == to_unit:
+            # Handle SAMPLES -> SAMPLES resampling
+            if from_unit == TimeUnits.SAMPLES:
+                if from_sample_rate == to_sample_rate:
+                    return value
+                # If rates differ, fall through to full conversion logic
+            else:
+                return value
+
+        # 2. Convert Source -> OFFSETS (Base Unit)
+        if from_unit == TimeUnits.SECONDS:
+            offset_val = cls.fromsec(value)
+        else:
+            assert isinstance(value, int), (
+                "Value must be an integer when " "converting from non-seconds units"
+            )
+            if from_unit == TimeUnits.OFFSETS:
+                offset_val = value
+            elif from_unit == TimeUnits.NANOSECONDS:
+                # fromns accepts a sample_rate for alignment purposes
+                offset_val = cls.fromns(value, sample_rate=from_sample_rate)
+            elif from_unit == TimeUnits.SAMPLES:
+                if from_sample_rate is None:
+                    raise ValueError(
+                        "from_sample_rate required when converting from SAMPLES"
+                    )
+                offset_val = cls.fromsamples(value, from_sample_rate)
+            else:
+                raise ValueError(f"Unknown from_unit: {from_unit}")
+
+        # 3. Convert OFFSETS -> Target
+        if to_unit == TimeUnits.OFFSETS:
+            return offset_val
+        elif to_unit == TimeUnits.SECONDS:
+            return cls.tosec(offset_val)
+        elif to_unit == TimeUnits.NANOSECONDS:
+            return cls.tons(offset_val)
+        elif to_unit == TimeUnits.SAMPLES:
+            if to_sample_rate is None:
+                raise ValueError("to_sample_rate required when converting to SAMPLES")
+            return cls.tosamples(offset_val, to_sample_rate)
+        else:
+            raise ValueError(f"Unknown to_unit: {to_unit}")
 
     @staticmethod
     def sample_stride(rate: int) -> int:

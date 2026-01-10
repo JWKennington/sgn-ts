@@ -17,7 +17,7 @@ from sgnts.base.array_ops import (
     TorchArray,
     TorchBackend,
 )
-from sgnts.base.offset import Offset
+from sgnts.base.offset import Offset, TimeUnits
 from sgnts.base.slice_tools import TSSlice, TSSlices
 from sgnts.base.time import Time
 
@@ -510,11 +510,14 @@ class SeriesBuffer(TimeSpanLike):
         Returns:
             SeriesBuffer, the buffer that spans the requested offset slice
         """
+        assert (
+            offslice.units == TimeUnits.OFFSETS
+        ), f"offset slice must be in offsets, got {offslice.units}"
         shape = channels + (
-            Offset.tosamples(offslice.stop - offslice.start, sample_rate),
+            Offset.tosamples(int(offslice.stop - offslice.start), sample_rate),
         )
         return SeriesBuffer(
-            offset=offslice.start, sample_rate=sample_rate, data=data, shape=shape
+            offset=int(offslice.start), sample_rate=sample_rate, data=data, shape=shape
         )
 
     def new(
@@ -813,15 +816,15 @@ class SeriesBuffer(TimeSpanLike):
             slc in self.slice
         ), f"Requested slice {slc} not contained in buffer slice {self.slice}"
         startsamples, stopsamples = Offset.tosamples(
-            slc.start - self.offset, self.sample_rate
-        ), Offset.tosamples(slc.stop - self.offset, self.sample_rate)
+            int(slc.start - self.offset), self.sample_rate
+        ), Offset.tosamples(int(slc.stop - self.offset), self.sample_rate)
         if not gap and self.data is not None and not isinstance(self.data, int):
             data = self.data[..., startsamples:stopsamples]
         else:
             data = None
 
         return SeriesBuffer(
-            offset=slc.start,
+            offset=int(slc.start),
             sample_rate=self.sample_rate,
             data=data,
             shape=self.shape[:-1] + (stopsamples - startsamples,),
