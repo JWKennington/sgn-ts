@@ -130,6 +130,45 @@ class TestCorrelate:
             res[0].data, numpy.array([[14, 20, 26, 32, 38]])
         )
 
+    def test_corr_null_ic(self):
+        """Test the corr method with null initial conditions (filters=None).
+        It should produce gap buffers without error.
+        """
+        # Create correlate element with no filters
+        crl = Correlate(
+            sample_rate=1,
+            filters=None,
+            source_pad_names=["O1"],
+            sink_pad_names=["I1"],
+        )
+
+        # Create SeriesBuffer
+        frame = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=0,
+                    data=numpy.array([1, 2, 3, 4, 5]),
+                    sample_rate=1,
+                    shape=(5,),
+                ),
+            ]
+        )
+
+        # Pull onto sink pad
+        crl.pull(pad=crl.snks["I1"], frame=frame)
+
+        # Call internal
+        crl.internal()
+
+        # Call new
+        res = crl.new(pad=crl.srcs["O1"])
+
+        # Expectation: Output is a Gap buffer because filters are None
+        assert res is not None
+        assert len(res) == 1
+        assert res[0].is_gap
+        assert res[0].data is None
+
 
 class TestAdaptiveCorrelate:
     """Unit tests for Correlate transform element"""
@@ -951,3 +990,77 @@ class TestAdaptiveCorrelate:
 
         # can_adapt should return False when not adapting
         assert not correlator.can_adapt(frame)
+
+    def test_adapt_null_ic_startup(self):
+        """Test AdaptiveCorrelate startup behavior with filters=None.
+        It should produce gaps until sufficient filters are provided to the sink pad.
+        """
+        # Initialize with None
+        crl = AdaptiveCorrelate(
+            filters=None,
+            sample_rate=1,
+            source_pad_names=["O1"],
+            sink_pad_names=["I1"],
+            filter_sink_name="filters",
+            adapter_config=AdapterConfig(
+                stride=Offset.fromsamples(10, sample_rate=1),
+            ),
+        )
+
+        # 1. Feed Data, No Filters -> Expect Gap output
+        # 10 samples at 1Hz = 10 * 16384 offsets (assuming MAX_RATE=16384)
+        data_frame = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=0,
+                    data=numpy.ones(10),
+                    sample_rate=1,
+                    shape=(10,),
+                ),
+            ]
+        )
+        crl.pull(pad=crl.snks["I1"], frame=data_frame)
+        crl.internal()
+        res = crl.new(pad=crl.srcs["O1"])
+        assert res[0].is_gap
+
+        # 2. Feed First Filter -> Primes the deque
+        filt_event = Event.from_time(time=0, data=numpy.array([[1, 1, 1]]))
+        filt_frame = EventFrame(
+            data=[EventBuffer.from_span(start=0, end=int(TIME_MAX), data=[filt_event])]
+        )
+        crl.pull(pad=crl.snks["filters"], frame=filt_frame)
+
+        # 3. Feed Second Filter -> Triggers adaptation
+        filt_event_2 = Event.from_time(time=0, data=numpy.array([[2, 2, 2]]))
+        filt_frame_2 = EventFrame(
+            data=[
+                EventBuffer.from_span(start=0, end=int(TIME_MAX), data=[filt_event_2])
+            ]
+        )
+        crl.pull(pad=crl.snks["filters"], frame=filt_frame_2)
+
+        # 4. Feed NEXT chunk of data to trigger processing
+        # We must respect continuity. Previous frame ended at offset
+        # corresponding to 10 samples.
+        next_offset = Offset.fromsamples(10, sample_rate=1)
+        data_frame_2 = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=next_offset,
+                    data=numpy.ones(10),
+                    sample_rate=1,
+                    shape=(10,),
+                ),
+            ]
+        )
+
+        crl.pull(pad=crl.snks["I1"], frame=data_frame_2)
+        crl.internal()
+        res = crl.new(pad=crl.srcs["O1"])
+
+        # Expectation: Now that we are adapting, we should have valid data
+        assert not res[0].is_gap
+        assert res[0].data is not None
+        # Verify simple correlation result occurred (all 1s data vs filters)
+        assert numpy.any(res[0].data != 0)

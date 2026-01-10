@@ -1,5 +1,7 @@
 import numpy
 import pytest
+
+from sgnts.base.offset import Offset, TimeUnits
 from sgnts.base.slice_tools import TIME_MAX, TIME_MIN, TSSlice, TSSlices
 
 
@@ -322,3 +324,119 @@ class TestTSSlices:
 
         expected = TSSlices([TSSlice(0, 16384)])
         assert result == expected
+
+
+class TestTSSliceUnits:
+    """
+    Tests specific to TSSlice unit handling, validation, and API integration.
+    Relies on TestOffsetConversion for verification of the arithmetic correctness.
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup_offset_constants(self):
+        Offset.set_max_rate(16384)
+        yield
+
+    def test_initialization_validation(self):
+        """Verify strict type checking enforced by __post_init__ based on units."""
+        # 1. Floating point values are strictly forbidden for integer-based units
+        with pytest.raises(ValueError, match="must be integers"):
+            TSSlice(1.5, 2.5, units=TimeUnits.OFFSETS)
+
+        with pytest.raises(ValueError, match="must be integers"):
+            TSSlice(1.5, 2.5, units=TimeUnits.NANOSECONDS)
+
+        # 2. SAMPLES unit is valid (no rate required at init anymore)
+        s = TSSlice(10, 20, units=TimeUnits.SAMPLES)
+        assert s.units == TimeUnits.SAMPLES
+
+        # 3. SECONDS unit allows floats
+        s = TSSlice(1.0, 2.0, units=TimeUnits.SECONDS)
+        assert s.units == TimeUnits.SECONDS
+
+    def test_conversion_api_integration(self):
+        """Verify the .convert() method returns correct TSSlice objects."""
+        # Setup: 1 second = 16384 offsets
+        s_sec = TSSlice(1.0, 2.0, units=TimeUnits.SECONDS)
+
+        # Convert to Offsets
+        s_off = s_sec.convert(TimeUnits.OFFSETS)
+
+        assert isinstance(s_off, TSSlice)
+        assert s_off.units == TimeUnits.OFFSETS
+        assert s_off.start == 16384
+        assert s_off.stop == 32768
+
+        # Check immutability
+        assert s_sec.units == TimeUnits.SECONDS
+
+    def test_sample_conversion_flow(self):
+        """Verify flow converting to/from SAMPLES requires passing
+        rates to convert()."""
+        s_off = TSSlice(16384, 32768, units=TimeUnits.OFFSETS)  # 1s to 2s
+
+        # Convert to SAMPLES at 4Hz
+        # 1s at 4Hz = sample 4. 2s at 4Hz = sample 8.
+        s_samp = s_off.convert(TimeUnits.SAMPLES, to_sample_rate=4)
+
+        assert s_samp.units == TimeUnits.SAMPLES
+        assert s_samp.start == 4
+        assert s_samp.stop == 8
+
+        # Convert back to OFFSETS (Must provide from_sample_rate)
+        s_rec = s_samp.convert(TimeUnits.OFFSETS, from_sample_rate=4)
+
+        assert s_rec.start == 16384
+        assert s_rec.stop == 32768
+
+        # Converting SAMPLES -> OFFSETS without rate fails
+        # (via Offset.convert validation)
+        # Note: Offset.convert raises ValueError if rate is missing
+        with pytest.raises(ValueError, match="from_sample_rate required"):
+            s_samp.convert(TimeUnits.OFFSETS)
+
+    def test_infinite_slice_conversion(self):
+        """Verify converting an infinite slice preserves None bounds
+        but updates units."""
+        s_inf = TSSlice(None, None, units=TimeUnits.SECONDS)
+
+        # Convert to Nanoseconds
+        s_ns = s_inf.convert(TimeUnits.NANOSECONDS)
+
+        assert s_ns.start is None
+        assert s_ns.stop is None
+        assert s_ns.units == TimeUnits.NANOSECONDS
+
+    def test_mixed_unit_operations_fail(self):
+        """
+        Verify that boolean operations (intersection, union, subtraction)
+        block interaction between different units.
+        """
+        s_off = TSSlice(0, 16384, units=TimeUnits.OFFSETS)
+        s_sec = TSSlice(0.0, 1.0, units=TimeUnits.SECONDS)
+
+        # Intersection
+        with pytest.raises(ValueError, match="Cannot operate on mixed units"):
+            _ = s_off & s_sec
+
+        # Union
+        with pytest.raises(ValueError, match="Cannot operate on mixed units"):
+            _ = s_off | s_sec
+
+        # Subtraction
+        with pytest.raises(ValueError, match="Cannot operate on mixed units"):
+            _ = s_off - s_sec
+
+    def test_python_slice_generation(self):
+        """Verify behavior of the .slice property."""
+        # Valid for integer units
+        s_off = TSSlice(10, 20, units=TimeUnits.OFFSETS)
+        p_slice = s_off.slice
+        assert p_slice.start == 10
+        assert p_slice.stop == 20
+        assert p_slice.step == 1
+
+        # Invalid for float units (SECONDS)
+        s_sec = TSSlice(1.0, 2.0, units=TimeUnits.SECONDS)
+        with pytest.raises(TypeError, match="Cannot create python slice"):
+            _ = s_sec.slice
