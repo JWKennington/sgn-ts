@@ -276,6 +276,9 @@ class AdaptiveCorrelate(Correlate):
         # Pull the data from the sink pad
         super().pull(pad, frame)
 
+        if frame.is_gap:
+            return
+
         # If the pad is the special filter sink pad, then update filter
         # metadata values
         if pad.name == self.filter_pad.name:
