@@ -160,6 +160,9 @@ class TestTSComposedSourceElement:
         assert all(h1_frame.filleddata() == 2.0)
         assert all(l1_frame.filleddata() == 3.0)
 
+    @pytest.mark.xfail(
+        reason="TS validation temporarily disabled to allow Latency element"
+    )
     def test_invalid_source_composition_non_ts_element(self):
         """Source composition with non-TS elements is rejected."""
         # Regular SGN source (not TS)
@@ -284,6 +287,9 @@ class TestTSComposedTransformElement:
         with pytest.raises(TypeError, match="can only contain TSTransform"):
             TSCompose().connect(transform, sink).as_transform()
 
+    @pytest.mark.xfail(
+        reason="TS validation temporarily disabled to allow Latency element"
+    )
     def test_invalid_transform_non_ts_element(self):
         """Transform composition with non-TS elements is rejected."""
         sgn_transform = CallableTransform.from_callable(
@@ -370,6 +376,9 @@ class TestTSComposedSinkElement:
         with pytest.raises(TypeError, match="requires at least one SinkElement"):
             TSCompose(transform).as_sink()
 
+    @pytest.mark.xfail(
+        reason="TS validation temporarily disabled to allow Latency element"
+    )
     def test_invalid_sink_non_ts_element(self):
         """Sink composition with non-TS elements is rejected."""
         sgn_sink = NullSink(name="sink", sink_pad_names=["data"])
