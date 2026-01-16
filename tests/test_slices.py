@@ -440,3 +440,103 @@ class TestTSSliceUnits:
         s_sec = TSSlice(1.0, 2.0, units=TimeUnits.SECONDS)
         with pytest.raises(TypeError, match="Cannot create python slice"):
             _ = s_sec.slice
+
+    def test_init_err_seconds_dtype(self):
+        """Test that initializing with SECONDS unit requires floats"""
+        with pytest.raises(
+            ValueError, match="start and stop must be numeric for SECONDS"
+        ):
+            TSSlice("a", "b", units=TimeUnits.SECONDS)
+
+    def test_init_err_non_seconds_dtype_float(self):
+        """Test that initializing with SECONDS unit requires floats"""
+        with pytest.raises(
+            ValueError, match="start and stop must be integers for unit"
+        ):
+            TSSlice(0.0, 1.0, units=TimeUnits.OFFSETS)
+
+
+class TestTSSlicesUnits:
+    """Tests for unit-related behavior in TSSlices class"""
+
+    def test_init_err_mixed_units(self):
+        """Test that initializing TSSlices with mixed units raises an error"""
+        with pytest.raises(
+            ValueError, match="All slices in TSSlices " "must have the same units."
+        ):
+            TSSlices(
+                [
+                    TSSlice(0, 10, units=TimeUnits.OFFSETS),
+                    TSSlice(0.0, 1.0, units=TimeUnits.SECONDS),
+                ]
+            )
+
+    def test_convert(self):
+        """Test converting TSSlices to a different unit"""
+        slices = TSSlices(
+            [
+                TSSlice(0, 16384, units=TimeUnits.OFFSETS),
+                TSSlice(16384, 32768, units=TimeUnits.OFFSETS),
+            ]
+        )
+        converted = slices.convert(TimeUnits.SECONDS)
+        assert all(s.units == TimeUnits.SECONDS for s in converted.slices)
+        assert converted.slices[0].start == 0.0
+        assert converted.slices[0].stop == 1.0
+        assert converted.slices[1].start == 1.0
+        assert converted.slices[1].stop == 2.0
+
+    def test_search_err_mixed_units(self):
+        """Test that searching with a slice of different units raises an error"""
+        slices = TSSlices(
+            [
+                TSSlice(0, 10, units=TimeUnits.OFFSETS),
+                TSSlice(10, 20, units=TimeUnits.OFFSETS),
+            ]
+        )
+        search_slice = TSSlice(0.0, 1.0, units=TimeUnits.SECONDS)
+        with pytest.raises(ValueError, match="Search slice units "):
+            slices.search(search_slice)
+
+    def test_invert_err_mixed_units(self):
+        """Test that inverting with a slice of different units raises an error"""
+        slices = TSSlices(
+            [
+                TSSlice(0, 10, units=TimeUnits.OFFSETS),
+                TSSlice(10, 20, units=TimeUnits.OFFSETS),
+            ]
+        )
+        invert_slice = TSSlice(0.0, 1.0, units=TimeUnits.SECONDS)
+        with pytest.raises(ValueError, match="Boundary slice units "):
+            slices.invert(invert_slice)
+
+    def test_align_to_rate_err_non_offset_units_missing_sample_rate(self):
+        """Test that align_to_rate raises an error if slices are not in OFFSETS"""
+        slices = TSSlices(
+            [
+                TSSlice(0, 16384, units=TimeUnits.SAMPLES),
+                TSSlice(16384, 32768, units=TimeUnits.SAMPLES),
+            ]
+        )
+        with pytest.raises(ValueError, match="Cannot auto-align from SAMPLES units"):
+            slices.align_to_rate(4)
+
+    def test_align_to_rate_non_offsets_acceptable(self):
+        """Test that align_to_rate works if slices are not in OFFSETS but
+        also not in SAMPLES"""
+        slices = TSSlices(
+            [
+                TSSlice(0.0, 1.0, units=TimeUnits.SECONDS),
+                TSSlice(1.0, 2.0, units=TimeUnits.SECONDS),
+            ]
+        )
+        # Should not raise an error since SECONDS is not SAMPLES
+        aligned = slices.align_to_rate(4)
+        # Make the expected result manually (manually converted to offsets)
+        expected = TSSlices(
+            [
+                TSSlice(0, 16384, units=TimeUnits.OFFSETS),
+                TSSlice(16384, 32768, units=TimeUnits.OFFSETS),
+            ]
+        )
+        assert aligned == expected

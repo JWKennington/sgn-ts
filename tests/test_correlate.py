@@ -169,6 +169,22 @@ class TestCorrelate:
         assert res[0].is_gap
         assert res[0].data is None
 
+    def test_corr_err_null_filteres(self):
+        """Test the corr method with null filters (filters=None).
+        It should raise an error if we try to correlate with null filters.
+        """
+        # Create correlate element with no filters
+        crl = Correlate(
+            sample_rate=1,
+            filters=None,
+            source_pad_names=["O1"],
+            sink_pad_names=["I1"],
+        )
+
+        # Call new and expect error
+        with pytest.raises(ValueError, match="Cannot correlate without filters"):
+            crl.corr(data=None)
+
 
 class TestAdaptiveCorrelate:
     """Unit tests for Correlate transform element"""
@@ -247,6 +263,7 @@ class TestAdaptiveCorrelate:
             sample_rate=1,
             source_pad_names=["O1"],
             sink_pad_names=["I1"],
+            verbose=True,
         )
 
         # Check intial filters
@@ -1064,3 +1081,84 @@ class TestAdaptiveCorrelate:
         assert res[0].data is not None
         # Verify simple correlation result occurred (all 1s data vs filters)
         assert numpy.any(res[0].data != 0)
+
+    def test_null_ic_filters_cur(self):
+        """Test that filters=None is handled correctly in corr()
+        when called from new()"""
+        crl = AdaptiveCorrelate(
+            filters=None,
+            sample_rate=1,
+            source_pad_names=["O1"],
+            sink_pad_names=["I1"],
+            filter_sink_name="filters",
+        )
+
+        # Call new without ever providing filters
+        assert crl.filters_cur is None
+        assert not crl.can_adapt(frame=TSFrame())
+
+    def test_pull_gap_frame(self):
+        """Test that pulling a gap frame on the filter sink pad is handled correctly"""
+        crl = AdaptiveCorrelate(
+            filters=None,
+            sample_rate=1,
+            source_pad_names=["O1"],
+            sink_pad_names=["I1"],
+            filter_sink_name="filters",
+        )
+
+        # Pull a gap frame on the filter sink pad
+        gap_frame = TSFrame(
+            buffers=[
+                SeriesBuffer(
+                    offset=0,
+                    data=None,
+                    sample_rate=1,
+                    shape=(0,),
+                )
+            ]
+        )
+        crl.pull(pad=crl.snks["filters"], frame=gap_frame)
+
+        # Expectation: filters_cur should be set to None, and we
+        # should not be able to adapt
+        assert crl.filters_cur is None
+        assert not crl.can_adapt(frame=TSFrame())
+
+    def test_ignore_rapid_updates_verbose(self):
+        """Test that rapid filter updates are ignored and logged when verbose=True"""
+        crl = AdaptiveCorrelate(
+            filters=numpy.array([[1, 2, 3]]),
+            sample_rate=1,
+            source_pad_names=["O1"],
+            sink_pad_names=["I1"],
+            filter_sink_name="filters",
+            adapter_config=AdapterConfig(
+                stride=Offset.fromsamples(10, sample_rate=1),
+            ),
+            verbose=True,
+            ignore_rapid_updates=True,
+        )
+
+        # Create two filter frames that arrive within the stride period
+        filt_event_1 = Event.from_time(time=0, data=numpy.array([[1, 2, 3]]))
+        filt_frame_1 = EventFrame(
+            data=[
+                EventBuffer.from_span(start=0, end=int(TIME_MAX), data=[filt_event_1])
+            ]
+        )
+
+        filt_event_2 = Event.from_time(time=5, data=numpy.array([[4, 5, 6]]))
+        filt_frame_2 = EventFrame(
+            data=[
+                EventBuffer.from_span(start=5, end=int(TIME_MAX), data=[filt_event_2])
+            ]
+        )
+
+        # Pull first filter frame (should be accepted)
+        crl.pull(pad=crl.snks["filters"], frame=filt_frame_1)
+        assert crl.filters_cur is not None
+
+        # Pull second filter frame (should be ignored due to rapid update)
+        with pytest.warns(RuntimeWarning, match="Ignoring rapid filter update at"):
+            crl.pull(pad=crl.snks["filters"], frame=filt_frame_2)
