@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections import deque
 from dataclasses import dataclass
 from typing import Deque, Optional
@@ -193,24 +194,18 @@ class AdaptiveCorrelate(Correlate):
 
         # If an initial filter bank is provided (legacy/compat), accept it.
         if self.filters is not None:
-            # If we're given initial filters, we require that they're in an
-            # EventFrame for consistency with the expected input on the filter sink
-            # pad, but the user-friendly constructor allows for directly passing an
-            # Array for ease of use, so we handle both cases here.
-            if isinstance(self.filters, EventFrame):
-                self.filter_deque.append(self.filters)
-            else:  # assume it's an Array
-                # Create a dummy event with the filter data and put it in an EventFrame
-                event_frame = EventFrame(
-                    data=[
-                        EventBuffer(
-                            offset=0,
-                            noffset=TIME_MAX,
-                            data=[self.filters],
-                        )
-                    ]
-                )
-                self.filter_deque.append(event_frame)
+            assert not isinstance(self.filters, EventFrame), "Filters should be Array"
+            # Create a dummy event with the filter data and put it in an EventFrame
+            event_frame = EventFrame(
+                data=[
+                    EventBuffer(
+                        offset=0,
+                        noffset=TIME_MAX,
+                        data=[self.filters],
+                    )
+                ]
+            )
+            self.filter_deque.append(event_frame)
 
     def validate(self) -> None:
         assert len(self.aligned_sink_pads) == 1 and len(self.source_pads) == 1, (
@@ -293,7 +288,11 @@ class AdaptiveCorrelate(Correlate):
             if len(self.filter_deque) > 1:
                 if self.ignore_rapid_updates:
                     if self.verbose:
-                        print(f"Ignoring rapid filter update at {input_frame.start}")
+                        warnings.warn(
+                            f"Ignoring rapid filter update at" f" {input_frame.start}",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
                     return
                 raise ValueError("Only one filter update per stride is supported")
 

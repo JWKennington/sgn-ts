@@ -272,3 +272,11 @@ class TestOffsetConversion:
             Offset.convert(0.25, TimeUnits.SECONDS, TimeUnits.NANOSECONDS)
             == 250_000_000
         )
+
+    def test_convert_err_invalid_unit(self):
+        """Verify error is raised for invalid unit types."""
+        with pytest.raises(ValueError, match="Unknown from_unit"):
+            Offset.convert(100, "INVALID_UNIT", TimeUnits.SECONDS)
+
+        with pytest.raises(ValueError, match="Unknown to_unit"):
+            Offset.convert(100, TimeUnits.SECONDS, "INVALID_UNIT")
