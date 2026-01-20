@@ -37,7 +37,7 @@ class NumpyBackend(ArrayBackend):
         Returns:
             NumpyArray, an array of evenly spaced values
         """
-        return numpy.arange(start=start, stop=stop, step=step)
+        return numpy.arange(start, stop, step)
 
     @staticmethod
     def cat(data: Sequence[NumpyArray], axis: Optional[int]) -> NumpyArray:
