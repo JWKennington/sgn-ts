@@ -45,7 +45,13 @@ from sgn.compose import (
 )
 
 # These imports are used by disabled validation code (see FIXME in _is_ts_element)
-from sgnts.base.base import TimeSeriesMixin, TSTransform, _TSSource  # noqa: F401
+# TSSink is also needed for TSComposedTransformElement validation
+from sgnts.base.base import (  # noqa: F401
+    TimeSeriesMixin,
+    TSSink,
+    TSTransform,
+    _TSSource,
+)
 from sgnts.sinks.collect import TSFrameCollectSink  # noqa: F401
 
 if TYPE_CHECKING:
@@ -170,30 +176,54 @@ class TSComposedTransformElement(ComposedTransformElement):
     multi-stage processing pipelines where each stage can have different
     overlap/stride requirements.
 
+    The `also_expose_source_pads` parameter (inherited from ComposedTransformElement)
+    allows source pads to be exposed externally even when they are also connected
+    to internal sinks. This enables multilink patterns where a single source
+    feeds both internal elements and external consumers.
+
     Example:
         >>> composed = TSComposedTransformElement(
         ...     name="my_processing_chain",
         ...     internal_elements=[transform1, transform2],
         ...     internal_links={"t2:snk:data": "t1:src:data"},
         ... )
+
+    Example with exposed internal source:
+        >>> # spectrum pad is connected internally but also exposed externally
+        >>> composed = TSComposedTransformElement(
+        ...     name="whitening_chain",
+        ...     internal_elements=[whiten, kernel, afir],
+        ...     internal_links={"kernel:snk:spectrum": "whiten:src:spectrum"},
+        ...     also_expose_source_pads=["whiten:src:spectrum"],
+        ... )
     """
 
     # Inherited from ComposedTransformElement:
     # internal_elements: list[Element]
     # internal_links: dict[str, str]
+    # also_expose_source_pads: list[str]
 
     def __post_init__(self) -> None:
         # Validate before parent init
         _validate_ts_elements(self.internal_elements, "TSComposedTransformElement")
 
-        # Additional validation: all must be transforms
-        # (TSTransform or TSComposedTransformElement)
+        # Additional validation: must be transforms or sinks
+        # (TSTransform, TSComposedTransformElement, TSSink, or TSComposedSinkElement)
+        # Sinks are allowed for patterns like discarding unused outputs via NullSink
         for elem in self.internal_elements:
-            if not isinstance(elem, (TSTransform, TSComposedTransformElement)):
+            if not isinstance(
+                elem,
+                (
+                    TSTransform,
+                    TSComposedTransformElement,
+                    TSSink,
+                    TSComposedSinkElement,
+                ),
+            ):
                 raise TypeError(
-                    f"TSComposedTransformElement can only contain TSTransform "
-                    f"or TSComposedTransformElement elements, "
-                    f"got {type(elem).__name__}: {elem.name}"
+                    f"TSComposedTransformElement can only contain TSTransform, "
+                    f"TSComposedTransformElement, TSSink, or TSComposedSinkElement "
+                    f"elements, got {type(elem).__name__}: {elem.name}"
                 )
         super().__post_init__()
 
@@ -315,7 +345,11 @@ class TSCompose(Compose):
             also_expose_source_pads=also_expose_source_pads or [],
         )
 
-    def as_transform(self, name: str = "") -> TSComposedTransformElement:
+    def as_transform(
+        self,
+        name: str = "",
+        also_expose_source_pads: list[str] | None = None,
+    ) -> TSComposedTransformElement:
         """Finalize the composition as a TSComposedTransformElement.
 
         The composition must contain only TSTransform elements
@@ -323,6 +357,9 @@ class TSCompose(Compose):
 
         Args:
             name: Optional name for the composed element
+            also_expose_source_pads: Optional list of internal source pad full names
+                (format: "element_name:src:pad_name") that should be exposed externally
+                even when connected internally. Enables multilink patterns.
 
         Returns:
             A new TSComposedTransformElement wrapping the composition
@@ -335,6 +372,7 @@ class TSCompose(Compose):
             name=name,
             internal_elements=self.elements.copy(),
             internal_links=self._build_link_dict(),
+            also_expose_source_pads=also_expose_source_pads or [],
         )
 
     def as_sink(self, name: str = "") -> TSComposedSinkElement:
