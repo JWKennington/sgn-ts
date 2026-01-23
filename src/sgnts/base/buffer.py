@@ -257,6 +257,13 @@ class EventFrame(TimeSpanFrame):
                     f"got {self.start} and {self.end}"
                 )
 
+            # Check for case of all buffers being gaps
+            all_gaps = all(buf.is_gap for buf in self.data)
+            self.is_gap = all_gaps
+
+        else:  # Case of no data, set is_gap to True
+            self.is_gap = True
+
     def __iter__(self):
         return iter(self.data)
 
