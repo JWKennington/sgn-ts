@@ -294,7 +294,18 @@ class AdaptiveCorrelate(Correlate):
                             stacklevel=2,
                         )
                     return
-                raise ValueError("Only one filter update per stride is supported")
+                # Format detailed error message from filters queue, showing the
+                #  time at which each filter update was received, and its slice
+                #  and minimal contents
+                msg = ""
+                for i, f in enumerate(self.filter_deque):
+                    msg += (
+                        f"Filter {i}: start={f.start}, end={f.end}, "
+                        f"slice={f.slice}, data_summary="
+                        f"{(f.events[0].data if len(f.events) > 0 else 'No events')}\n"
+                    )
+                raise ValueError("Only one filter update per stride is supported,"
+                                 " but multiple updates were received:\n" + msg)
 
             # Check that the new filters have the same shape as the existing filters
             if (
