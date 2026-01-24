@@ -265,7 +265,15 @@ class AdaptiveCorrelate(Correlate):
         new_slice = self.filters_new.slice
         frame_slice = frame.slice
         overlap = new_slice & frame_slice
-        return overlap.isfinite()
+        _can_adapt = overlap.isfinite()
+        if not _can_adapt and self.verbose:
+            warnings.warn(
+                f"Have a new filter but can't adapt, slices incompatible: "
+                f"filter slice {new_slice}, frame slice {frame_slice}, "
+                f"frame: {frame}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
     def pull(self, pad: SinkPad, frame: TimeSpanFrame) -> None:
         # Pull the data from the sink pad
@@ -289,7 +297,7 @@ class AdaptiveCorrelate(Correlate):
                 if self.ignore_rapid_updates:
                     if self.verbose:
                         warnings.warn(
-                            f"Ignoring rapid filter update at" f" {input_frame.start}",
+                            f"Ignoring rapid filter update at {input_frame.start}",
                             RuntimeWarning,
                             stacklevel=2,
                         )
