@@ -304,8 +304,10 @@ class AdaptiveCorrelate(Correlate):
                         f"slice={f.slice}, data_summary="
                         f"{(f.events[0].data if len(f.events) > 0 else 'No events')}\n"
                     )
-                raise ValueError("Only one filter update per stride is supported,"
-                                 " but multiple updates were received:\n" + msg)
+                raise ValueError(
+                    "Only one filter update per stride is supported,"
+                    " but multiple updates were received:\n" + msg
+                )
 
             # Check that the new filters have the same shape as the existing filters
             if (
