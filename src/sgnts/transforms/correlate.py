@@ -334,6 +334,10 @@ class AdaptiveCorrelate(Correlate):
         """Override internal to perform correlation with both current and
         new filters when adapting, and just current filters when not adapting.
         """
+        # Initial condition check: if we have new filter frame but not set yet
+        if self.filters is None and self.filters_cur is not None:
+            self.filters = self._extract_filter(self.filters_cur)
+
         # Check if we're adapting without needing frames
         if not self.is_adapting:
             # Just delegate to parent Correlate implementation
