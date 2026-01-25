@@ -274,6 +274,7 @@ class AdaptiveCorrelate(Correlate):
                 RuntimeWarning,
                 stacklevel=2,
             )
+        return _can_adapt
 
     def pull(self, pad: SinkPad, frame: TimeSpanFrame) -> None:
         # Pull the data from the sink pad
