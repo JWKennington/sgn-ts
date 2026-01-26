@@ -86,7 +86,8 @@ class Correlate(TSTransform):
             raise ValueError("Cannot correlate without filters")
 
         if len(self.filters.shape) == 1:
-            return scipy.signal.correlate(data, self.filters, mode="valid")
+            raw = scipy.signal.correlate(data, self.filters, mode="valid")
+            return raw[: self.sample_rate]
 
         # Skip the reshape for now
         os = []
