@@ -46,14 +46,16 @@ class Correlate(TSTransform):
     sample_rate: int
     filters: Optional[Array] = None
     latency: int = 0
+    shape: Optional[tuple[int, ...]] = None
 
     def configure(self) -> None:
         # If filters are not set yet (e.g., AdaptiveCorrelate startup), use a
         # placeholder shape and zero overlap; downstream corr() won't be called
         # until filters are provided.
         if self.filters is None:
-            self.shape = (1,)
-            overlap_samples = 0
+            if self.shape is None:
+                self.shape = (1,)
+            overlap_samples = max(0, self.shape[-1] - 1)
         else:
             self.shape = self.filters.shape
             overlap_samples = max(0, self.shape[-1] - 1)
@@ -87,6 +89,7 @@ class Correlate(TSTransform):
 
         if len(self.filters.shape) == 1:
             raw = scipy.signal.correlate(data, self.filters, mode="valid")
+            # return raw[: data.shape[0]]
             return raw[: self.sample_rate]
 
         # Skip the reshape for now
